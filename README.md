@@ -1,3 +1,3 @@
 # graphiant-playbooks
-Playbooks for [Graphiant](https://www.graphiant.com/) NaaS
+Playbooks for [Graphiant NaaS](https://www.graphiant.com)
 
