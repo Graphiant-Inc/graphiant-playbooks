@@ -1,2 +1,2 @@
-# Graphiant-Playbooks
+# graphiant-playbooks
 Playbooks for Graphiant NaaS
