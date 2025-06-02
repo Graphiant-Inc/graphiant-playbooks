@@ -16,15 +16,11 @@ graphiant-playbooks/
 ├── test.ini              # Sample Config file for test.py
 ├── test.py               # Sample Python test script
 ├── configs/              # Input YAML configuration files
-├── gcsdk_dist/           # GCSDK build (the package for Graphiant Cloud SDK)
 ├── libs/                 # Python libraries and modules required by the playbooks
 └── templates/            # Jinja2 configuration Templates
 
 # configs/
 Contains input configuration YAML files used to drive the execution of various playbooks.
-
-# gcsdk_dist/
-Contains the GCSDK build distributions(Pre-requiste for graphiant-playbooks)
 
 # libs/
 Includes all necessary Python libraries and helper modules required by the playbooks.
@@ -44,7 +40,7 @@ input from the configs/ directory to produce finalized configuration artifacts.
 
 ### 2. Create and activate python virtual environment
 ```sh
-python3.12 -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 ```
 

@@ -2,5 +2,4 @@
 PyYAML==6.0.1
 Jinja2==3.1.2
 future==0.18.3
-# Local package
-./gcsdk_dist/swagger-client-1.0.1.tar.gz
+graphiant-sdk==25.5.0
