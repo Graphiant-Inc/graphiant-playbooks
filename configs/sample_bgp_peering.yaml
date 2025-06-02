@@ -1,0 +1,54 @@
+bgp_peering:
+  - edge-1-test:
+      # BGP IPv4 peer configuration with Global routing policies attached 
+      route_policies:
+        - bgp_inbound_filter
+        - bgp_outbound_filter
+      segments:
+        - lan_segment: lan-7-test
+          local_ipv4_address: 10.2.7.1
+          local_interface: GigabitEthernet8/0/0.18
+          neighbors:
+            - remote_ipv4_address: 10.2.7.11
+              peer_as: 60011
+              ipv4_inbound_filter: bgp_inbound_filter
+              ipv4_outbound_filter: bgp_outbound_filter
+  - edge-2-test:
+      route_policies:
+        - bgp_inbound_filter
+        - bgp_outbound_filter
+      segments:
+        - lan_segment: lan-7-test
+          local_ipv4_address: 10.2.7.2
+          local_interface: GigabitEthernet8/0/0.28
+          neighbors:
+            - remote_ipv4_address: 10.2.7.12
+              peer_as: 60021
+              ipv4_inbound_filter: bgp_inbound_filter
+              ipv4_outbound_filter: bgp_outbound_filter
+        - lan_segment: lan-8-test
+          local_ipv4_address: 10.2.8.2
+          local_interface: GigabitEthernet8/0/0.29
+          neighbors:
+            - remote_ipv4_address: 10.2.8.12
+              peer_as: 60023
+              ipv4_inbound_filter: bgp_inbound_filter
+              ipv4_outbound_filter: bgp_outbound_filter
+  - edge-3-test:
+      # Multiple BGP IPv4 peers with Global routing policies attached 
+      route_policies:
+        - bgp_inbound_filter
+        - bgp_outbound_filter
+      segments:
+        - lan_segment: lan-7-test
+          local_ipv4_address: 10.2.7.3
+          local_interface: GigabitEthernet8/0/0
+          neighbors:
+            - remote_ipv4_address: 10.2.7.13
+              peer_as: 60031
+              ipv4_inbound_filter: bgp_inbound_filter
+              ipv4_outbound_filter: bgp_outbound_filter
+            - remote_ipv4_address: 10.2.7.14
+              peer_as: 60032
+              ipv4_inbound_filter: bgp_inbound_filter
+              ipv4_outbound_filter: bgp_outbound_filter

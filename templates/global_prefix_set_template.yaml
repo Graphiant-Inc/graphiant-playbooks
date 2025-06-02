@@ -1,0 +1,46 @@
+{
+    "{{ name }}": {
+        {% if action != "delete" %}
+            "prefixSet": {
+                "name": "{{ name }}",
+                "description": "{{ description | default(name) }}",
+                "mode": "{{ mode | default('ipv4') }}",
+                #"globalId": {{ global_id | default(0) }},
+                "entries": {
+                    {% for values in entries %}
+                        "{{ values.idx }}": {
+                            {% if values.rule == "exact" %}
+                            "entry": {
+                                "ipPrefix": "{{ values.ip_prefix }}",
+                                "maskLower": {{ values.prefix_length }},
+                                "maskUpper": {{ values.prefix_length }},
+                                "seq": {{ values.idx }}
+                            }
+                            {% elif values.rule == "range" %}
+                            "entry": {
+                                "ipPrefix": "{{ values.ip_prefix }}",
+                                "maskLower": {{ values.from_prefix }},
+                                "maskUpper": {{ values.to_prefix }},
+                                "seq": {{ values.idx }}
+                            }
+                            {% elif values.rule == "less_and_equal" %}
+                            "entry": {
+                                "ipPrefix": "{{ values.ip_prefix }}",
+                                "maskUpper": {{ values.prefix_length }},
+                                "seq": {{ values.idx }}
+                            }
+                            {% elif values.rule == "greater_and_equal" %}
+                            "entry": {
+                                "ipPrefix": "{{ values.ip_prefix }}",
+                                "maskLower": {{ values.prefix_length }},
+                                "maskUpper": 32,
+                                "seq": {{ values.idx }}
+                            }
+                            {% endif %}
+                        },
+                    {% endfor %}
+                }
+            }
+        {% endif %}
+    }
+}

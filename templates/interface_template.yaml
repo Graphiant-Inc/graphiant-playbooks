@@ -1,0 +1,116 @@
+{
+    {% if circuit and action != "default_lan" and action != "delete" %}
+        "circuits": {
+            "{{ circuit }}": {
+                "name": "{{ circuit }}",
+                "description": "{{ circuit_description | default(circuit) }}",
+                "linkUpSpeedMbps": "{{ circuit_upload_bandwidth | default(50) }}",
+                "linkDownSpeedMbps": "{{ circuit_download_bandwidth | default(100) }}",
+                "connectionType": "{{ circuit_connection_type | default('internet_dia') }}",
+                "label": "{{ circuit_label | default('internet_dia_4') }}",
+                "qosProfile": "{{ circuit_qos_profile | default('gold25') }}",
+                "qosProfileType": "{{ circuit_qos_profile_type | default('balanced') }}",
+                "diaEnabled": {{ circuit_dia | default(False) }},
+                "patAddresses": [],
+                "interfaceName": "",
+                "snmpIndex": 0,
+                "coreLogicalInterfaces": [],
+                "staticRoutes": [],
+                "diaSnmpIndex": 0
+            }
+        },
+    {% endif %}
+    "interfaces": {
+        "{{ interface_name }}": {
+            "interface": {
+                {% if not sub_interfaces %}
+                    {% if action == "default_lan" %}
+                        "lan": "{{ default_lan }}",
+                    {% elif action == "delete" %}
+                        "adminStatus": False,
+                        "description": "",
+                        "alias": "",
+                        "maxTransmissionUnit": 1500,
+                    {% else %}
+                        "adminStatus": {{ admin_status | default('true') }},
+                        "maxTransmissionUnit": {{ mtu | default(1500) }},
+                        {% if circuit %}
+                            "circuit": "{{ circuit }}",
+                            "description": "{{ description | default(circuit) }}",
+                            "alias": "{{ alias | default(circuit) }}",
+                        {% elif lan %}
+                            "lan": "{{ lan }}",
+                            "description": "{{ description | default(lan) }}",
+                            "alias": "{{ alias | default(lan) }}",
+                        {% endif %}
+                        "ipv4": {
+                            {% if ipv4_address %}
+                                "address": {
+                                    "address": "{{ ipv4_address }}"
+                                }
+                            {% else %}
+                                "dhcp": {
+                                    "dhcpClient": "{{ ipv4_dhcp | default('true') }}"
+                                }
+                            {% endif %}
+                        },
+                        "ipv6": {
+                            {% if ipv6_address %}
+                                "address": {
+                                    "address": "{{ ipv6_address }}"
+                                }
+                            {% else %}
+                                "dhcp": {
+                                    "dhcpClient": "{{ ipv6_dhcp | default('true') }}"
+                                }
+                            {% endif %}
+                        }
+                    {% endif %}
+                {% else %}
+                    {% if action == "default_lan" or action == "add" %}
+                        "subinterfaces": {
+                            {% for sub_interface in sub_interfaces %}
+                                "{{ sub_interface.vlan }}": {
+                                    {% if action == "default_lan" %}
+                                        "lan": "{{ default_lan }}",
+                                        "vlan": {{ sub_interface.vlan }}
+                                    {% elif action == "add" %}
+                                        "interface": {
+                                            "lan": "{{ sub_interface.lan }}",
+                                            "vlan": {{ sub_interface.vlan }},
+                                            "description": "{{ sub_interface.description | default(sub_interface.vlan ~ '_' ~ sub_interface.lan, true) }}",
+                                            "alias": "{{ sub_interface.alias | default(sub_interface.vlan ~ '_' ~ sub_interface.lan, true) }}",
+                                            "adminStatus": {{ sub_interface.admin_status | default('true') }},
+                                            "ipv4": {
+                                                {% if sub_interface.ipv4_address %}
+                                                    "address": {
+                                                        "address": "{{ sub_interface.ipv4_address }}"
+                                                    }
+                                                {% else %}
+                                                    "dhcp": {
+                                                        "dhcpClient": "{{ sub_interface.ipv4_dhcp | default('true') }}"
+                                                    }
+                                                {% endif %}
+                                            },
+                                            "ipv6": {
+                                                {% if sub_interface.ipv6_address %}
+                                                    "address": {
+                                                        "address": "{{ sub_interface.ipv6_address }}"
+                                                    }
+                                                {% else %}
+                                                    "dhcp": {
+                                                        "dhcpClient": "{{ sub_interface.ipv6_dhcp | default('true') }}"
+                                                    }
+                                                {% endif %}
+                                            }
+                                        }
+                                    {% endif %}
+                                },
+                            {% endfor %}
+                        }
+                    {% endif %}
+                {% endif %}
+            }
+        }
+    }
+}

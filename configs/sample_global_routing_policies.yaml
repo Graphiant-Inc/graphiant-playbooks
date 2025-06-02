@@ -1,0 +1,37 @@
+global_prefix_sets:
+  # Multiple IPv4 Global Prefix set configuration with exact match
+  - name: prefix_list_1
+    description: For_testing_prefix_list_1
+    mode: ipv4
+    entries:
+      - idx: 1
+        ip_prefix: 1.1.1.0/24
+        rule: exact
+        prefix_length: 24
+  - name: prefix_list_2
+    description: For_testing_prefix_list_2
+    mode: ipv4
+    entries:
+      - idx: 1
+        ip_prefix: 10.1.1.0/24
+        rule: exact
+        prefix_length: 24
+
+routing_policies:
+  # Global BGP Routing Inbound and Outbound IPv4 filters configuration with Global prefix set
+  - name: bgp_inbound_filter
+    direction: inbound
+    implicit_rule: Accept
+    policy_statements:
+      - sequence_number: 10
+        match_prefix_list: prefix_list_1
+        action_permit: accept
+        action_set_local_preference: 100
+  - name: bgp_outbound_filter
+    direction: outbound
+    implicit_rule: Accept
+    policy_statements:
+      - sequence_number: 10
+        match_prefix_list: prefix_list_2
+        action_permit: accept
+        action_set_local_preference: 300
