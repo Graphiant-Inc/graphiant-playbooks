@@ -7,7 +7,7 @@ LOG = setup_logger()
 
 def read_config():
     config = configparser.ConfigParser()
-    config.read('test.ini')
+    config.read('test/test.ini')
     username = config['credentials']['username']
     password = config['credentials']['password']
     host = config['host']['url']

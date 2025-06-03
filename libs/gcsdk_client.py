@@ -1,4 +1,4 @@
-import swagger_client
+import graphiant_sdk
 import json
 from libs.poller import poller
 import time
@@ -9,14 +9,14 @@ LOG = setup_logger()
 class GcsdkClient():
 
     def __init__(self, base_url=None, username=None, password=None):
-        self.swagger_client = swagger_client
-        self.config = self.swagger_client.Configuration()
+        self.graphiant_sdk = graphiant_sdk
+        self.config = self.graphiant_sdk.Configuration()
         self.config.host = base_url
         self.config.username = username
         self.config.password = password
-        self.api = self.swagger_client.DefaultApi(swagger_client.ApiClient(self.config))
-        auth_login_body = self.swagger_client.AuthLoginBody(username=self.config.username, 
-                                                            password=self.config.password)
+        self.api = self.graphiant_sdk.DefaultApi(graphiant_sdk.ApiClient(self.config))
+        auth_login_body = self.graphiant_sdk.AuthLoginBody(username=self.config.username,
+                                                           password=self.config.password)
         response = self.api.v1_auth_login_post(body=auth_login_body, _preload_content=False)
         self.token = json.loads(response.data).get("token")
         self.bearer_token = 'Bearer ' + self.token
@@ -70,7 +70,7 @@ class GcsdkClient():
             ApiException/AssertionError: If there is an API exception during the 
             config push after retries
         """
-        body = swagger_client.DeviceIdConfigBody(core=core, edge=edge)
+        body = graphiant_sdk.DeviceIdConfigBody(core=core, edge=edge)
         try:
             edge_summary = self.get_edges_summary(device_id=device_id)
             if edge_summary.portal_status == "Ready":
@@ -84,7 +84,7 @@ class GcsdkClient():
                          Portal Status: {edge_summary.portal_status} (Expected Ready)")
                 assert False, f"put_device_config : Retrying,  {device_id} \
                     Portal Status: {edge_summary.portal_status} (Expected Ready)"
-        except self.swagger_client.rest.ApiException as e:
+        except self.graphiant_sdk.rest.ApiException as e:
             LOG.warning(f"put_device_config : Exception While config push {e}")
             assert False, f"put_device_config : \
                 Retrying, Exception while config push to {device_id}"
@@ -137,7 +137,7 @@ class GcsdkClient():
             self.api.v1_devices_bringup_put(authorization=self.bearer_token, body=data)
             time.sleep(15)
             return True
-        except self.swagger_client.rest.ApiException:
+        except self.graphiant_sdk.rest.ApiException:
             return False
 
     @poller(retries=12, wait=10)
@@ -155,12 +155,12 @@ class GcsdkClient():
             ApiException: If the API call fails.
 
         """
-        body = swagger_client.GlobalConfigBody(**kwargs)
+        body = graphiant_sdk.GlobalConfigBody(**kwargs)
         try:
             LOG.info(f"patch_global_config : config to be pushed : \n{body}")
             response = self.api.v1_global_config_patch(authorization=self.bearer_token, body=body)
             return response
-        except self.swagger_client.rest.ApiException as e:
+        except self.graphiant_sdk.rest.ApiException as e:
             LOG.warning(f"patch_global_config : Exception While Global config patch {e}")
             assert False, "patch_global_config : Retrying, Exception while Global config patch"
     
@@ -177,11 +177,11 @@ class GcsdkClient():
         Raises:
             ApiException: If the API call fails.
         """
-        body = swagger_client.GlobalSummaryBody(**kwargs)
+        body = graphiant_sdk.GlobalSummaryBody(**kwargs)
         try:
             LOG.info(f"patch_global_config : config to be pushed : \n{body}")
             response = self.api.v1_global_summary_post(authorization=self.bearer_token, body=body)
             return response
-        except self.swagger_client.rest.ApiException as e:
+        except self.graphiant_sdk.rest.ApiException as e:
             LOG.warning(f"patch_global_config : Exception While Global config patch {e}")
             assert False, "patch_global_config : Retrying, Exception while Global config patch"

@@ -13,11 +13,10 @@ concurrently using GCSDK API.
 graphiant-playbooks/
 ├── README.md             # Project overview/documentation
 ├── requirements.txt      # Python dependencies
-├── test.ini              # Sample Config file for test.py
-├── test.py               # Sample Python test script
 ├── configs/              # Input YAML configuration files
 ├── libs/                 # Python libraries and modules required by the playbooks
-└── templates/            # Jinja2 configuration Templates
+├── templates/            # Jinja2 configuration template
+└── test/                 # Sample Python test scripts and Config file
 
 # configs/
 Contains input configuration YAML files used to drive the execution of various playbooks.
@@ -32,9 +31,16 @@ for auditability and debugging purposes.
 # templates/
 Contains Jinja2 config templates. These templates are dynamically rendered using the 
 input from the configs/ directory to produce finalized configuration artifacts.
+
+# test/
+Contains Sample Python test files to validate the packages are installed correctly.
 ```
 
 ## Pre-requisites
+
+```sh
+cd graphiant-playbooks/
+```
 
 ### 1. Install Python 3.12+
 
@@ -51,7 +57,12 @@ pip3 install -r requirements.txt
 
 ## Testing virtual environment
 
-### 1. Enter the host URL and credentials under test.ini
+### 1. Update the PYTHONPATH env variable
+```sh
+export PYTHONPATH=$PYTHONPATH:$(pwd)
+```
+
+### 2. Enter the host URL and credentials under test.ini
 ```sh
 [credentials]
 username = username
@@ -60,9 +71,9 @@ password = password
 url = https://api.graphiant.com
 ```
 
-### 2. Run the sample test and verify the enterprise ID is fetched
+### 3. Run the sample test and verify the enterprise ID is fetched
 ```sh
-python3.12 test.py
+python3 test/test.py
 ```
 
 ## Getting Started
