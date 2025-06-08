@@ -11,12 +11,14 @@ concurrently using GCSDK API.
 
 ```sh
 graphiant-playbooks/
+├── LICENSE               # Project License file
 ├── README.md             # Project overview/documentation
 ├── requirements.txt      # Python dependencies
 ├── configs/              # Input YAML configuration files
 ├── libs/                 # Python libraries and modules required by the playbooks
 ├── templates/            # Jinja2 configuration template
-└── test/                 # Sample Python test scripts and Config file
+├── test/                 # Sample Python test scripts and Config file 
+└── scripts/              # Standalone scripts e.g. cloud-init interactive generator 
 
 # configs/
 Contains input configuration YAML files used to drive the execution of various playbooks.
@@ -34,6 +36,9 @@ input from the configs/ directory to produce finalized configuration artifacts.
 
 # test/
 Contains Sample Python test files to validate the packages are installed correctly.
+
+# scripts/
+Standalone scripts e.g. cloud-init interactive generator.
 ```
 
 ## Pre-requisites
