@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/local/bin/bash
 
 function prompt() {
     local var_name=$1
@@ -30,7 +30,7 @@ function prompt_choice() {
     read -r -a options <<< "$valid_options"
 
     while true; do
-        read -rp "$prompt_text [$valid_options]: " input
+        read -rp "$prompt_text [$valid_options, default: $default_value]: " input
         input="${input:-$default_value}"
         for opt in "${options[@]}"; do
             if [[ "$input" == "$opt" ]]; then
@@ -42,7 +42,18 @@ function prompt_choice() {
     done
 }
 
+declare -A ONBOARDING_AUTH_URL
+ONBOARDING_AUTH_URL["test"]="https://api.test.graphiant.io/v1/devices/oauth"
+ONBOARDING_AUTH_URL["prod"]="https://api.graphiant.com/v1/devices/oauth"
+
+declare -A ONBOARDING_GW
+ONBOARDING_GW["test"]="onboarding-gateway.test.graphiant.io:16000"
+ONBOARDING_GW["prod"]="onboarding-gateway.graphiant.com:16000"
+
+
 echo "=== Cloud-Init local management and ztp Configurator ==="
+
+prompt_choice gcs_env "Enter onboarding environment" "prod,test" "prod"
 
 prompt_choice role "Enter device role" "cpe,gateway,core" "cpe"
 # Map 'gateway' to 'cpe' internally
@@ -54,7 +65,7 @@ prompt_choice use_token "Do you want to include an onboarding token?" "y,n" "n"
 include_token="false"
 
 if [[ "$use_token" == "y" ]]; then
-    prompt token "Enter onboarding token" "your-default-token"
+    prompt token "Enter onboarding token" "" false
     include_token="true"
 fi
 
@@ -63,7 +74,7 @@ default_mgmt_iface="GigabitEthernet2"
 prompt_choice change_mgmt_iface "Do you want to change the default local management interface from $default_mgmt_iface?" "y,n" "n"
 
 if [[ "$change_mgmt_iface" == "y" ]]; then
-    prompt local_mgmt_iface "Enter custom local management interface name" "$default_mgmt_iface"
+    prompt local_mgmt_iface "Enter custom local management interface name" "$default_mgmt_iface" true
 else
     local_mgmt_iface="$default_mgmt_iface"
 fi
@@ -71,7 +82,7 @@ fi
 default_wan_iface="GigabitEthernet1"
 prompt_choice change_wan_iface "Do you want to change the default onboarding WAN interface from $default_wan_iface?" "y,n" "n"
 if [[ "$change_wan_iface" == "y" ]]; then
-    prompt wan_iface "Enter custom onboarding WAN interface name" "$default_wan_iface"
+    prompt wan_iface "Enter custom onboarding WAN interface name" "$default_wan_iface" true
 else
     wan_iface="$default_wan_iface"
 fi
@@ -97,6 +108,12 @@ else
     dns2="1.1.1.1"
 fi
 
+# local web server password
+prompt lws_password "Enter local web server password" "" true
+
+# hostname
+prompt hostname "Enter custom hostname" "" true
+
 prompt disk "Enter output disk file name (e.g., cloud.iso, myimage.qcow2)" "cloud.iso"
 
 format="${disk##*.}"
@@ -108,9 +125,8 @@ cat > "$userdata" <<EOF
 #cloud-config
 graphnos:
   role: $role
-  devtest-port-enabled: true
-  onboarding-auth-url: https://api.test.graphiant.io/v1/devices/oauth
-  onboarding-gw: onboarding-gateway.test.graphiant.io:16000
+  onboarding-auth-url: ${ONBOARDING_AUTH_URL[${gcs_env}]}
+  onboarding-gw: ${ONBOARDING_GW[${gcs_env}]}
 EOF
 
 if [[ "$include_token" == "true" ]]; then
@@ -140,11 +156,10 @@ if [[ -n "$dns1" || -n "$dns2" ]]; then
     echo "      dns-servers: [${dns1:+\"$dns1\"}${dns1:+, }${dns2:+\"$dns2\"}]" >> "$userdata"
 fi
 
-cat >> "$userdata" <<'EOF'
+cat >> "$userdata" <<EOF
 
-  local-web-password: ""
-
-  start-service:
+  local-web-password: "$lws_password"
+  hostname: "$hostname"
 EOF
 
 echo -e "local-hostname: gnos\ninstance-id: gnos" > "$metadata"
