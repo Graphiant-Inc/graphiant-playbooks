@@ -1,0 +1,53 @@
+---
+stages:
+  - run
+
+default:
+  image: python:3.12-slim
+  tags:
+    - graphiant-default
+
+test:
+  stage: run
+  parallel:
+    matrix:
+      - ANSIBLE_CORE: ["2.17", "2.18", "2.19"]
+  script:
+    - apt-get update && apt-get install -y git
+    - python3.12 -m venv venv
+    - source venv/bin/activate
+    - pip3 install --upgrade pip
+    - pip3 install ansible-core~=${ANSIBLE_CORE}
+    - pip3 install -r ansible_collections/graphiant/graphiant_playbooks/requirements.txt
+    - ansible-galaxy collection install ansible_collections/graphiant/graphiant_playbooks/ --force
+    - export PYTHONPATH=${CI_PROJECT_DIR}/ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils
+    - cd ansible_collections/graphiant/graphiant_playbooks
+    - python tests/test.py
+    - python ../../scripts/validate_collection.py --full
+
+e2e-integration-test:
+  stage: run
+  script:
+    - apt-get update && apt-get install -y git
+    - python3.12 -m venv venv
+    - source venv/bin/activate
+    - pip3 install --upgrade pip
+    - pip3 install ansible-core~=2.19
+    - pip3 install -r ansible_collections/graphiant/graphiant_playbooks/requirements.txt
+    - ansible-galaxy collection install ansible_collections/graphiant/graphiant_playbooks/ --force
+    - |
+      if [ -n "$GRAPHIANT_HOST" ] && [ -n "$GRAPHIANT_USERNAME" ] && [ -n "$GRAPHIANT_PASSWORD" ]; then
+        echo "✅ GRAPHIANT credentials detected - running E2E integration test"
+        export ANSIBLE_STDOUT_CALLBACK=debug
+        ansible-playbook ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/playbooks/hello_test.yml
+      else
+        echo "ℹ️  Skipping E2E integration test - GRAPHIANT credentials not configured"
+        echo "   This is expected behavior when credentials are not set in GitLab CI/CD variables"
+        echo "   To enable the test, configure the following variables in GitLab:"
+        echo "   - GRAPHIANT_HOST (e.g., https://api.graphiant.com)"
+        echo "   - GRAPHIANT_USERNAME"
+        echo "   - GRAPHIANT_PASSWORD"
+        echo "   See .gitlab/pipelines/README.md for configuration instructions"
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"

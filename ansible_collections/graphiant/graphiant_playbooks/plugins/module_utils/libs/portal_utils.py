@@ -1,11 +1,26 @@
 import os
-import yaml
 from concurrent.futures import wait
 from concurrent.futures.thread import ThreadPoolExecutor
-from jinja2 import Template, TemplateError as Jinja2TemplateError
+
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
+try:
+    from jinja2 import Template, TemplateError as Jinja2TemplateError
+    HAS_JINJA2 = True
+except ImportError:
+    HAS_JINJA2 = False
+    TemplateError = Exception
+
 from .logger import setup_logger
 from .gcsdk_client import GraphiantPortalClient
 from .exceptions import ConfigurationError
+
+# Required dependencies - checked when functions are called
+# Don't raise at module level to allow import test to pass
 
 LOG = setup_logger()
 
@@ -21,19 +36,19 @@ class PortalUtils(object):
         # Priority 1: Check user-configured environment variables (highest priority)
         configs_path = os.environ.get('GRAPHIANT_CONFIGS_PATH')
         if configs_path and os.path.exists(configs_path):
-            LOG.info(f"PortalUtils : Using GRAPHIANT_CONFIGS_PATH: {configs_path}")
+            LOG.info("PortalUtils : Using GRAPHIANT_CONFIGS_PATH: %s", configs_path)
             self.config_path = configs_path if configs_path.endswith('/') else configs_path + "/"
 
         templates_path = os.environ.get('GRAPHIANT_TEMPLATES_PATH')
         if templates_path and os.path.exists(templates_path):
-            LOG.info(f"PortalUtils : Using GRAPHIANT_TEMPLATES_PATH: {templates_path}")
+            LOG.info("PortalUtils : Using GRAPHIANT_TEMPLATES_PATH: %s", templates_path)
             self.template_path = templates_path if templates_path.endswith('/') else templates_path + "/"
 
         # Priority 2: Find the collection root and set paths from there
         if not self.config_path or not self.template_path:
             collection_root = self._find_collection_root()
             if collection_root:
-                LOG.info(f"PortalUtils : collection_root : {collection_root}")
+                LOG.info("PortalUtils : collection_root : %s", collection_root)
                 if not self.config_path:
                     self.config_path = os.path.join(collection_root, "configs") + "/"
                 if not self.template_path:
@@ -41,15 +56,15 @@ class PortalUtils(object):
 
         # Priority 3: Fallback to the current working directory
         if not self.config_path:
-            LOG.warning(f"PortalUtils : config_path not found, using current working directory: {os.getcwd()}")
+            LOG.warning("PortalUtils : config_path not found, using current working directory: %s", os.getcwd())
             self.config_path = os.path.join(os.getcwd(), "configs") + "/"
         if not self.template_path:
-            LOG.warning(f"PortalUtils : template_path not found, using current working directory: {os.getcwd()}")
+            LOG.warning("PortalUtils : template_path not found, using current working directory: %s", os.getcwd())
             self.template_path = os.path.join(os.getcwd(), "templates") + "/"
 
-        LOG.info(f"PortalUtils : config_path : {self.config_path}")
-        LOG.info(f"PortalUtils : template_path : {self.template_path}")
-        LOG.info(f"PortalUtils : logs_path : {self.logs_path}")
+        LOG.info("PortalUtils : config_path : %s", self.config_path)
+        LOG.info("PortalUtils : template_path : %s", self.template_path)
+        LOG.info("PortalUtils : logs_path : %s", self.logs_path)
         self.gsdk = GraphiantPortalClient(base_url=base_url, username=username, password=password)
         self.gsdk.set_bearer_token()
 
@@ -85,7 +100,7 @@ class PortalUtils(object):
                 collection_check = os.path.join(collections_path,
                                                 'ansible_collections', 'graphiant', 'graphiant_playbooks')
                 if os.path.exists(collection_check):
-                    LOG.info(f"Found graphiant collection root via common path: {collection_check}")
+                    LOG.info("Found graphiant collection root via common path: %s", collection_check)
                     return collection_check
 
         # Method 2: Walk up from current file location to find collection root
@@ -94,16 +109,16 @@ class PortalUtils(object):
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         # Walk up: libs/ -> module_utils/ -> plugins/ -> collection_root/
         current_dir = current_file_dir
-        for _ in range(4):  # Walk up 4 levels max
+        for unused_level in range(4):  # Walk up 4 levels max  # pylint: disable=unused-variable
             # Check if this is the collection root (has plugins/module_utils/libs/)
             libs_check = os.path.join(current_dir, 'plugins', 'module_utils', 'libs')
             if os.path.exists(libs_check):
-                LOG.debug(f"Found collection root by walking up from file location: {current_dir}")
+                LOG.debug("Found collection root by walking up from file location: %s", current_dir)
                 return current_dir
             # Also check if we're at the repo root (has ansible_collections/graphiant/graphiant_playbooks/)
             collection_check = os.path.join(current_dir, 'ansible_collections', 'graphiant', 'graphiant_playbooks')
             if os.path.exists(collection_check):
-                LOG.debug(f"Found collection root at repo root: {collection_check}")
+                LOG.debug("Found collection root at repo root: %s", collection_check)
                 return collection_check
             current_dir = os.path.dirname(current_dir)
             if current_dir == os.path.dirname(current_dir):  # Reached filesystem root
@@ -138,11 +153,11 @@ class PortalUtils(object):
         :param possible_futures: List of futures (may include None)
         """
         futures = [item for item in posible_futures if item is not None]
-        LOG.debug(f"Waiting for futures {futures} to complete")
+        LOG.debug("Waiting for futures %s to complete", futures)
         (_done, not_done) = wait(futures)
 
         if not_done:
-            LOG.warning(f"{len(not_done)} futures did not finish running")
+            LOG.warning("%s futures did not finish running", len(not_done))
         failures = []
         for future in futures:
             try:
@@ -154,6 +169,10 @@ class PortalUtils(object):
             raise Exception(f"futures failed: {failures}")
 
     def render_config_file(self, yaml_file):
+        if not HAS_YAML:
+            raise ImportError("PyYAML is required for this module. Install it with: pip install PyYAML")
+        if not HAS_JINJA2:
+            raise ImportError("Jinja2 is required for this module. Install it with: pip install Jinja2")
         """
         Load a YAML configuration file from the config path.
         Supports both regular YAML files and Jinja2-templated YAML files.
@@ -191,7 +210,7 @@ class PortalUtils(object):
             try:
                 template = Template(file_content)
                 rendered_content = template.render()
-                LOG.debug(f"Successfully rendered Jinja2 template for '{input_file_path}'")
+                LOG.debug("Successfully rendered Jinja2 template for '%s'", input_file_path)
             except Jinja2TemplateError as e:
                 # If Jinja2 rendering fails, check if it's because of actual template syntax errors
                 # or just because the file doesn't contain Jinja2 syntax

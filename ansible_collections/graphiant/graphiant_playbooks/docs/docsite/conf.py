@@ -25,4 +25,3 @@ html_theme = 'sphinx_rtd_theme'  # or 'alabaster', 'sphinx_ansible_theme', etc.
 # Options
 html_static_path = ['_static']
 html_show_sphinx = False
-

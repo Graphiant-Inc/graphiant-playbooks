@@ -52,7 +52,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global prefix set: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global prefix set: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             result = self.template.render_global_prefix_set(action=action, **kwargs)
@@ -61,7 +61,7 @@ class ConfigUtils(PortalUtils):
             else:  # delete
                 config_payload['global_prefix_sets'][kwargs.get('name')] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global prefix set {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global prefix set %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global prefix set processing failed: {str(e)}")
 
     def global_bgp_filter(self, config_payload, action="add", **kwargs):
@@ -77,7 +77,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global BGP filter: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global BGP filter: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             result = self.template.render_global_bgp_filter(action=action, **kwargs)
@@ -86,7 +86,7 @@ class ConfigUtils(PortalUtils):
             else:  # delete
                 config_payload['routing_policies'][kwargs.get('name')] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global BGP filter {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global BGP filter %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global BGP filter processing failed: {str(e)}")
 
     def device_bgp_peering(self, config_payload, action="add", **kwargs):
@@ -102,7 +102,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['segments'])
-        LOG.debug(f"Edge BGP peering: {action.upper()} {kwargs.get('segments')}")
+        LOG.debug("Edge BGP peering: %s %s", action.upper(), kwargs.get('segments'))
 
         try:
             # Handle route policies global ID resolution
@@ -110,12 +110,12 @@ class ConfigUtils(PortalUtils):
             if kwargs.get("route_policies"):
                 for policy_name in kwargs.get("route_policies"):
                     global_ids[policy_name] = self.gsdk.get_global_routing_policy_id(policy_name)
-                    LOG.debug(f"Global ID for {policy_name}: {global_ids[policy_name]}")
+                    LOG.debug("Global ID for %s: %s", policy_name, global_ids[policy_name])
 
             result = self.template.render_bgp_peering(action=action, global_ids=global_ids, **kwargs)
             config_payload.update(result)
         except Exception as e:
-            LOG.error(f"Failed to process device BGP peering {kwargs.get('segments')}: {str(e)}")
+            LOG.error("Failed to process device BGP peering %s: %s", kwargs.get('segments'), str(e))
             raise ConfigurationError(f"Device BGP peering processing failed: {str(e)}")
 
     def device_interface(self, config_payload, action="add", **kwargs):
@@ -131,16 +131,16 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.info(f"Device interface: {action.upper()} {kwargs.get('name')}")
+        LOG.info("Device interface: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             result = self.template.render_interface(action=action, **kwargs)
             if "interfaces" in result:
                 config_payload["interfaces"].update(result["interfaces"])
             else:
-                LOG.warning(f"No interfaces found in template result for {kwargs.get('name')}")
+                LOG.warning("No interfaces found in template result for %s", kwargs.get('name'))
         except Exception as e:
-            LOG.error(f"Failed to process device interface {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process device interface %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Device interface processing failed: {str(e)}")
 
     def device_circuit(self, config_payload, action="add", **kwargs):
@@ -156,16 +156,16 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['circuit'])
-        LOG.debug(f"Device circuit: {action.upper()} {kwargs.get('circuit')}")
+        LOG.debug("Device circuit: %s %s", action.upper(), kwargs.get('circuit'))
 
         try:
             result = self.template.render_circuit(action=action, **kwargs)
             if "circuits" in result:
                 config_payload["circuits"].update(result["circuits"])
             else:
-                LOG.warning(f"No circuits found in template result for {kwargs.get('circuit')}")
+                LOG.warning("No circuits found in template result for %s", kwargs.get('circuit'))
         except Exception as e:
-            LOG.error(f"Failed to process device circuit {kwargs.get('circuit')}: {str(e)}")
+            LOG.error("Failed to process device circuit %s: %s", kwargs.get('circuit'), str(e))
             raise ConfigurationError(f"Device circuit processing failed: {str(e)}")
 
     def global_snmp(self, config_payload, action="add", **kwargs):
@@ -181,7 +181,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global SNMP service: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global SNMP service: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             result = self.template.render_snmp_service(action=action, **kwargs)
@@ -190,7 +190,7 @@ class ConfigUtils(PortalUtils):
             else:  # delete
                 config_payload['snmps'][kwargs.get('name')] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global SNMP service {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global SNMP service %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global SNMP service processing failed: {str(e)}")
 
     def global_syslog(self, config_payload, action="add", **kwargs):
@@ -206,7 +206,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global syslog service: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global syslog service: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             # Convert lanSegment to vrfId if present
@@ -215,7 +215,7 @@ class ConfigUtils(PortalUtils):
                 vrf_id = self.gsdk.get_lan_segment_id(lan_segment)
                 kwargs['target']['vrfId'] = vrf_id
                 del kwargs['target']['lanSegment']
-                LOG.debug(f"Converted lanSegment '{lan_segment}' to vrfId {vrf_id}")
+                LOG.debug("Converted lanSegment '%s' to vrfId %s", lan_segment, vrf_id)
 
             result = self.template.render_syslog_service(action=action, **kwargs)
             if action == "add":
@@ -223,7 +223,7 @@ class ConfigUtils(PortalUtils):
             else:  # delete
                 config_payload['syslog_servers'][kwargs.get('name')] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global syslog service {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global syslog service %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global syslog service processing failed: {str(e)}")
 
     def global_ipfix(self, config_payload, action="add", **kwargs):
@@ -239,7 +239,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global IPFIX service: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global IPFIX service: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             # Convert lanSegment to vrfId if present in exporter
@@ -248,7 +248,7 @@ class ConfigUtils(PortalUtils):
                 vrf_id = self.gsdk.get_lan_segment_id(lan_segment)
                 kwargs['exporter']['vrfId'] = vrf_id
                 del kwargs['exporter']['lanSegment']
-                LOG.debug(f"Converted lanSegment '{lan_segment}' to vrfId {vrf_id}")
+                LOG.debug("Converted lanSegment '%s' to vrfId %s", lan_segment, vrf_id)
 
             result = self.template.render_ipfix_service(action=action, **kwargs)
             if action == "add":
@@ -256,7 +256,7 @@ class ConfigUtils(PortalUtils):
             else:  # delete
                 config_payload['ipfix_exporters'][kwargs.get('name')] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global IPFIX service {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global IPFIX service %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global IPFIX service processing failed: {str(e)}")
 
     def global_vpn_profile(self, config_payload, action="add", **kwargs):
@@ -272,7 +272,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global VPN profile service: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global VPN profile service: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             # Pass the VPN config as a list to match the template expectation
@@ -284,13 +284,13 @@ class ConfigUtils(PortalUtils):
                 if 'vpn_profiles' in result:
                     config_payload['vpn_profiles'].update(result['vpn_profiles'])
                 else:
-                    LOG.warning(f"No vpn_profiles found in template result for {kwargs.get('name')}")
+                    LOG.warning("No vpn_profiles found in template result for %s", kwargs.get('name'))
             else:  # delete
                 name = kwargs.get('name')
                 if name:
                     config_payload['vpn_profiles'][name] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global VPN profile service {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global VPN profile service %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global VPN profile service processing failed: {str(e)}")
 
     def global_site_list(self, config_payload, action="add", **kwargs):
@@ -306,7 +306,7 @@ class ConfigUtils(PortalUtils):
             ConfigurationError: If required parameters are missing.
         """
         self._validate_required_params(kwargs, ['name'])
-        LOG.debug(f"Global site list: {action.upper()} {kwargs.get('name')}")
+        LOG.debug("Global site list: %s %s", action.upper(), kwargs.get('name'))
 
         try:
             if action == "add":
@@ -319,5 +319,5 @@ class ConfigUtils(PortalUtils):
                 if name:
                     config_payload['site_lists'][name] = {}
         except Exception as e:
-            LOG.error(f"Failed to process global site list {kwargs.get('name')}: {str(e)}")
+            LOG.error("Failed to process global site list %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global site list processing failed: {str(e)}")

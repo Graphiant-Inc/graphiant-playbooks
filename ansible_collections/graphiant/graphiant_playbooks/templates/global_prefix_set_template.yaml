@@ -1,4 +1,5 @@
-{ 
+# yamllint disable-file
+{
     "{{ name }}": {
         {% if action != "delete" %}
             "prefixSet": {

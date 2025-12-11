@@ -1,4 +1,5 @@
-{ 
+# yamllint disable-file
+{
     "interfaces": {
         "{{ name }}": {
             "interface": {

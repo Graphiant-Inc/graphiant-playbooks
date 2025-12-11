@@ -4,7 +4,7 @@
 # GitLab CI/CD pipeline as code
 #
 include:
-  - local: ${CI_PROJECT_DIR}/pipelines/docker.yml
+  - local: ${CI_PROJECT_DIR}/.gitlab/pipelines/docker.yml
     rules:
       - if: $DONT_INCLUDE_DOCKER == "true"
         when: never
@@ -13,7 +13,6 @@ include:
       - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       - if: $CI_COMMIT_BRANCH =~ /^(feature|hotfix)\/.*/
-  - local: ${CI_PROJECT_DIR}/pipelines/run.yml
 
 variables:
   RUNNER_TAG: gcp-run-small
@@ -21,17 +20,31 @@ variables:
 # Define all stages of CI/CD pipeline.
 stages:
   - lint
+  - run
   - build
   - publish
-  - run
 
 lint:
   stage: lint
   trigger:
-    include: pipelines/lint.yml
+    include: .gitlab/pipelines/lint.yml
     strategy: depend
   rules:
     - if: $DONT_INCLUDE_LINT == "true"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "schedule" || ($CI_PIPELINE_SOURCE == "pipeline" && $FROM_CRONUS == 'true') || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH =~ /^(feature|hotfix)\/.*/
+
+run:
+  stage: run
+  trigger:
+    include: .gitlab/pipelines/run.yml
+    strategy: depend
+  rules:
+    - if: $DONT_INCLUDE_RUN == "true"
       when: never
     - if: $CI_PIPELINE_SOURCE == "schedule" || ($CI_PIPELINE_SOURCE == "pipeline" && $FROM_CRONUS == 'true') || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"
       when: never

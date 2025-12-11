@@ -1,3 +1,4 @@
+# yamllint disable-file
 {
     "vpn_profiles": {
         {% for profile in vpn_profiles %}

@@ -72,10 +72,10 @@ class BaseManager(ABC):
                 raise ConfigurationError(f"Failed to load configuration file: {yaml_file}")
             return config_data
         except Exception as e:
-            LOG.error(f"Error rendering configuration file {yaml_file}: {str(e)}")
-            LOG.error(f"Exception type: {type(e).__name__}")
+            LOG.error("Error rendering configuration file %s: %s", yaml_file, str(e))
+            LOG.error("Exception type: %s", type(e).__name__)
             import traceback
-            LOG.error(f"Full traceback: {traceback.format_exc()}")
+            LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Error rendering configuration file {yaml_file}: {str(e)}")
 
     def execute_concurrent_tasks(self, function, config_dict: Dict[str, Any]) -> Dict[str, Any]:

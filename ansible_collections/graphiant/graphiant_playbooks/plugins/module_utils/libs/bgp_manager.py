@@ -36,7 +36,7 @@ class BGPManager(BaseManager):
             final_config_payload = {}
 
             if 'bgp_peering' not in config_data:
-                LOG.warning(f"No BGP peering configuration found in {config_yaml_file}")
+                LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return
 
             for device_config in config_data.get('bgp_peering'):
@@ -55,23 +55,23 @@ class BGPManager(BaseManager):
                             "edge": config_payload
                         }
 
-                        LOG.info(f"Configured BGP peering for device: {device_name} (ID: {device_id})")
+                        LOG.info("Configured BGP peering for device: %s (ID: %s)", device_name, device_id)
 
                     except DeviceNotFoundError:
-                        LOG.error(f"Device '{device_name}' not found, skipping BGP configuration")
+                        LOG.error("Device '%s' not found, skipping BGP configuration", device_name)
                         raise
                     except Exception as e:
-                        LOG.error(f"Error configuring BGP for device '{device_name}': {str(e)}")
+                        LOG.error("Error configuring BGP for device '%s': %s", device_name, str(e))
                         raise ConfigurationError(f"Failed to configure BGP for {device_name}: {str(e)}")
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
-                LOG.info(f"Successfully configured BGP peering for {len(final_config_payload)} devices")
+                LOG.info("Successfully configured BGP peering for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
 
         except Exception as e:
-            LOG.error(f"Error in BGP configuration: {str(e)}")
+            LOG.error("Error in BGP configuration: %s", str(e))
             raise ConfigurationError(f"BGP configuration failed: {str(e)}")
 
     def deconfigure(self, config_yaml_file: str) -> None:
@@ -90,7 +90,7 @@ class BGPManager(BaseManager):
             final_config_payload = {}
 
             if 'bgp_peering' not in config_data:
-                LOG.warning(f"No BGP peering configuration found in {config_yaml_file}")
+                LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return
 
             for device_config in config_data.get('bgp_peering'):
@@ -109,23 +109,23 @@ class BGPManager(BaseManager):
                             "edge": config_payload
                         }
 
-                        LOG.info(f"Deconfigured BGP peering for device: {device_name} (ID: {device_id})")
+                        LOG.info("Deconfigured BGP peering for device: %s (ID: %s)", device_name, device_id)
 
                     except DeviceNotFoundError:
-                        LOG.error(f"Device '{device_name}' not found, skipping BGP deconfiguration")
+                        LOG.error("Device '%s' not found, skipping BGP deconfiguration", device_name)
                         raise
                     except Exception as e:
-                        LOG.error(f"Error deconfiguring BGP for device '{device_name}': {str(e)}")
+                        LOG.error("Error deconfiguring BGP for device '%s': %s", device_name, str(e))
                         raise ConfigurationError(f"Failed to deconfigure BGP for {device_name}: {str(e)}")
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
-                LOG.info(f"Successfully deconfigured BGP peering for {len(final_config_payload)} devices")
+                LOG.info("Successfully deconfigured BGP peering for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
 
         except Exception as e:
-            LOG.error(f"Error in BGP deconfiguration: {str(e)}")
+            LOG.error("Error in BGP deconfiguration: %s", str(e))
             raise ConfigurationError(f"BGP deconfiguration failed: {str(e)}")
 
     def detach_policies(self, config_yaml_file: str) -> None:
@@ -144,7 +144,7 @@ class BGPManager(BaseManager):
             final_config_payload = {}
 
             if 'bgp_peering' not in config_data:
-                LOG.warning(f"No BGP peering configuration found in {config_yaml_file}")
+                LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return
 
             for device_config in config_data.get('bgp_peering'):
@@ -163,23 +163,23 @@ class BGPManager(BaseManager):
                             "edge": config_payload
                         }
 
-                        LOG.info(f"Detached policies from BGP peers for device: {device_name} (ID: {device_id})")
+                        LOG.info("Detached policies from BGP peers for device: %s (ID: %s)", device_name, device_id)
 
                     except DeviceNotFoundError:
-                        LOG.error(f"Device '{device_name}' not found, skipping policy detachment")
+                        LOG.error("Device '%s' not found, skipping policy detachment", device_name)
                         raise
                     except Exception as e:
-                        LOG.error(f"Error detaching policies for device '{device_name}': {str(e)}")
+                        LOG.error("Error detaching policies for device '%s': %s", device_name, str(e))
                         raise ConfigurationError(f"Failed to detach policies for {device_name}: {str(e)}")
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
-                LOG.info(f"Successfully detached policies from BGP peers for {len(final_config_payload)} devices")
+                LOG.info("Successfully detached policies from BGP peers for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
 
         except Exception as e:
-            LOG.error(f"Error in policy detachment: {str(e)}")
+            LOG.error("Error in policy detachment: %s", str(e))
             raise ConfigurationError(f"Policy detachment failed: {str(e)}")
 
     # Backward compatibility methods

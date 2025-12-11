@@ -5,7 +5,7 @@
     - echo "  login gitlab-ci-token" >> $HOME/.netrc
     - echo "  password ${GITLAB_CICD_TOKEN}" >> $HOME/.netrc
 
-.dind-vairables:
+.dind-variables:
   variables:
     # Set the Docker host to connect to the dind instance
     DOCKER_HOST: "tcp://docker:2376"
@@ -40,7 +40,7 @@
   services:
     - docker:24.0.2-dind
   extends:
-    - .dind-vairables
+    - .dind-variables
   before_script:
     - !reference [.gitlab-login, script]
     - !reference [.docker-registry-login, script]

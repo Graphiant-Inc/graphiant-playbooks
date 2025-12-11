@@ -1,6 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright: (c) 2025, Graphiant Team <support@graphiant.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 """
 Ansible module for managing Graphiant global configuration objects.
 
@@ -14,15 +17,6 @@ This module provides global configuration management capabilities including:
 - LAN segments management
 """
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
-    get_graphiant_connection,
-    handle_graphiant_exception
-)
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
-    capture_library_logs
-)
-
 DOCUMENTATION = r'''
 ---
 module: graphiant_global_config
@@ -34,7 +28,7 @@ description:
     syslog services, IPFIX services, VPN profiles, and LAN segments.
   - Can manage all object types together using general operations or specific object types individually.
   - All operations use Jinja2 templates for consistent configuration deployment.
-version_added: "1.0.0"
+version_added: "25.11.0"
 notes:
   - "Global Configuration Operations:"
   - "  - General operations (C(configure), C(deconfigure)):
@@ -73,7 +67,26 @@ options:
     type: str
     required: true
   operation:
-    description: "The specific global configuration operation to perform. C(configure): Configure all global objects (automatically detects all types in the file). C(deconfigure): Deconfigure all global objects (automatically detects all types in the file). C(configure_prefix_sets): Configure global prefix sets only. C(deconfigure_prefix_sets): Deconfigure global prefix sets only. C(configure_bgp_filters): Configure global BGP filters (routing policies) only. C(deconfigure_bgp_filters): Deconfigure global BGP filters only. C(configure_snmp_services): Configure global SNMP services only. C(deconfigure_snmp_services): Deconfigure global SNMP services only. C(configure_syslog_services): Configure global syslog services only. C(deconfigure_syslog_services): Deconfigure global syslog services only. C(configure_ipfix_services): Configure global IPFIX services only. C(deconfigure_ipfix_services): Deconfigure global IPFIX services only. C(configure_vpn_profiles): Configure global VPN profiles only. C(deconfigure_vpn_profiles): Deconfigure global VPN profiles only. C(configure_lan_segments): Configure global LAN segments only. C(deconfigure_lan_segments): Deconfigure global LAN segments only. C(configure_site_lists): Configure global site lists only. C(deconfigure_site_lists): Deconfigure global site lists only."
+    description:
+      - "The specific global configuration operation to perform."
+      - "C(configure): Configure all global objects (automatically detects all types in the file)."
+      - "C(deconfigure): Deconfigure all global objects (automatically detects all types in the file)."
+      - "C(configure_prefix_sets): Configure global prefix sets only."
+      - "C(deconfigure_prefix_sets): Deconfigure global prefix sets only."
+      - "C(configure_bgp_filters): Configure global BGP filters (routing policies) only."
+      - "C(deconfigure_bgp_filters): Deconfigure global BGP filters only."
+      - "C(configure_snmp_services): Configure global SNMP services only."
+      - "C(deconfigure_snmp_services): Deconfigure global SNMP services only."
+      - "C(configure_syslog_services): Configure global syslog services only."
+      - "C(deconfigure_syslog_services): Deconfigure global syslog services only."
+      - "C(configure_ipfix_services): Configure global IPFIX services only."
+      - "C(deconfigure_ipfix_services): Deconfigure global IPFIX services only."
+      - "C(configure_vpn_profiles): Configure global VPN profiles only."
+      - "C(deconfigure_vpn_profiles): Deconfigure global VPN profiles only."
+      - "C(configure_lan_segments): Configure global LAN segments only."
+      - "C(deconfigure_lan_segments): Deconfigure global LAN segments only."
+      - "C(configure_site_lists): Configure global site lists only."
+      - "C(deconfigure_site_lists): Deconfigure global site lists only."
     type: str
     choices:
       - configure
@@ -95,7 +108,10 @@ options:
       - configure_site_lists
       - deconfigure_site_lists
   state:
-    description: "The desired state of the global configuration objects. C(present): Maps to C(configure) when operation not specified. C(absent): Maps to C(deconfigure) when operation not specified."
+    description:
+      - "The desired state of the global configuration objects."
+      - "C(present): Maps to C(configure) when operation not specified."
+      - "C(absent): Maps to C(deconfigure) when operation not specified."
     type: str
     choices: [ present, absent ]
     default: present
@@ -108,7 +124,7 @@ options:
     default: false
 
 requirements:
-  - python >= 3.12
+  - python >= 3.10
   - graphiant-sdk >= 25.11.1
 
 seealso:
@@ -225,6 +241,15 @@ config_file:
   sample: "sample_global_prefix_lists.yaml"
 '''
 
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
+    get_graphiant_connection,
+    handle_graphiant_exception
+)
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
+    capture_library_logs
+)
+
 
 @capture_library_logs
 def execute_with_logging(module, func, *args, **kwargs):
@@ -297,8 +322,7 @@ def main():
         detailed_logs=dict(
             type='bool',
             required=False,
-            default=False,
-            description='Enable detailed logging output from library operations'
+            default=False
         )
     )
 

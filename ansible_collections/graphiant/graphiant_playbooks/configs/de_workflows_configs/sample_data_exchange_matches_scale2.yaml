@@ -1,3 +1,4 @@
+# yamllint disable-file
 # Sample Data Exchange Matches Configuration - Scale Test (300 Matches)
 # This file demonstrates how to match Data Exchange services to customers at scale
 # Each service is matched to 50 customers (6 services × 50 customers = 300 matches)

@@ -1,7 +1,7 @@
 # Graphiant Playbooks Ansible Collection
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Ansible](https://img.shields.io/badge/ansible--core-2.17+-green.svg)](https://docs.ansible.com/)
 
 The Ansible Graphiant Playbooks collection includes modules for automating the management of Graphiant NaaS (Network as a Service) infrastructure.
@@ -21,8 +21,10 @@ This collection requires **ansible-core >= 2.17.0**.
 
 ## Python Requirements
 
-- Python >= 3.12
+- Python >= 3.10
 - Graphiant SDK >= 25.11.1
+
+> **Note:** All dependency versions are managed centrally in `_version.py`. See [RELEASE.md](RELEASE.md) for version management details.
 
 ## Included Content
 
@@ -45,7 +47,7 @@ git clone https://github.com/Graphiant-Inc/graphiant-playbooks.git
 cd graphiant-playbooks
 
 # Create virtual environment or activate an existing virtual environment
-python3.12 -m venv venv
+python3.10 -m venv venv
 source venv/bin/activate
 
 # Install collection dependencies
@@ -71,9 +73,9 @@ ansible-galaxy collection install graphiant.graphiant_playbooks
 ansible-galaxy collection list graphiant.graphiant_playbooks
 ```
 
-### Test Installation
+### Test Installation (E2E Integration Test)
 
-Test the installed collection by running the `hello_test.yml` playbook:
+Test the installed collection by running the `hello_test.yml` playbook. This test is also run automatically in CI/CD as the E2E integration test when GRAPHIANT credentials are configured:
 
 ```bash
 # Set environment variables
@@ -98,7 +100,11 @@ The `hello_test.yml` playbook:
 
 **Validate collection structure:**
 ```bash
-python ansible_collections/graphiant/graphiant_playbooks/validate_collection.py
+# From repository root
+python scripts/validate_collection.py
+
+# Or from collection directory
+python ../../scripts/validate_collection.py
 ```
 
 **Build collection (for distribution):**
@@ -106,29 +112,31 @@ python ansible_collections/graphiant/graphiant_playbooks/validate_collection.py
 # Using ansible-galaxy
 ansible-galaxy collection build ansible_collections/graphiant/graphiant_playbooks/
 
-# Or using build script
-python ansible_collections/graphiant/graphiant_playbooks/build_collection.py
+# Or using build script (from repository root)
+python scripts/build_collection.py
 ```
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+read_file
 
-**Linting tools:**
+**Linting tools (run locally):**
 ```bash
-# Python linting with flake8
+# Python linting with flake8 (local development only, not in CI)
 flake8 ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils
 
-# Python linting with pylint (errors only)
+# Python linting with pylint (errors only, local development only, not in CI)
 export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils/libs
 pylint --errors-only ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils
 
-# Ansible playbook linting (requires collection to be installed first)
+# Ansible playbook linting (runs in CI, requires collection to be installed first)
 ansible-galaxy collection install ansible_collections/graphiant/graphiant_playbooks/ --force
 ansible-lint --config-file ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/.ansible-lint ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/playbooks/
 
-# YAML/Jinja template linting
+# YAML/Jinja template linting (runs in CI)
 djlint ansible_collections/graphiant/graphiant_playbooks/configs -e yaml
 djlint ansible_collections/graphiant/graphiant_playbooks/templates -e yaml
 ```
 
-**Antsibull documentation validation:**
+**Antsibull documentation validation (runs in CI):**
 ```bash
 # Install antsibull-docs
 pip install antsibull-docs
@@ -137,7 +145,7 @@ pip install antsibull-docs
 antsibull-docs lint-collection-docs ansible_collections/graphiant/graphiant_playbooks/
 ```
 
-See `pipelines/lint.yml` for CI/CD linting configuration
+**Note:** CI/CD pipelines run `ansible-lint`, `djlint`, and `antsibull-docs` linting. `flake8` and `pylint` are available for local development but are not part of the CI pipeline. See `.gitlab/pipelines/README.md` and `.github/workflows/README.md` for CI/CD configuration.
 
 ## Using This Collection
 
@@ -330,6 +338,22 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ## Release Notes
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+
+## Version Management
+
+Version information is centralized in `_version.py`. To bump versions or update dependencies, see [RELEASE.md](RELEASE.md) for detailed instructions.
+
+Quick version bump:
+```bash
+# Patch release (bug fixes)
+python bump_version.py patch
+
+# Minor release (new features)
+python scripts/bump_version.py minor
+
+# Major release (breaking changes)
+python scripts/bump_version.py major
+```
 
 ## Support
 

@@ -1,6 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright: (c) 2025, Graphiant Team <support@graphiant.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 """
 Ansible module for managing Graphiant Data Exchange services, customers, and matches.
 
@@ -11,15 +14,6 @@ This module provides Data Exchange management capabilities including:
 - Summary and query operations for services and customers
 """
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
-    get_graphiant_connection,
-    handle_graphiant_exception
-    )
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
-    capture_library_logs
-)
-
 DOCUMENTATION = r'''
 ---
 module: graphiant_data_exchange
@@ -29,7 +23,7 @@ description:
   - Enables creating, deleting, and querying Data Exchange services and customers.
   - Provides service-to-customer matching operations with automatic match response file management.
   - Supports invitation acceptance with gateway service deployment and VPN configuration.
-version_added: "1.0.0"
+version_added: "25.11.0"
 notes:
   - "Data Exchange Workflows:"
   - "  - Workflow 1 (Create Services): Create Data Exchange services that can be shared with customers."
@@ -41,6 +35,7 @@ notes:
   - "The module automatically resolves names to IDs for sites, LAN segments, services, customers, and regions."
   - "All operations are idempotent and safe to run multiple times without creating duplicates."
   - "For accept_invitation operation, minimum 2 gateways per region are required for redundancy."
+  - "Check mode (C(--check)) is not supported for this module. Data Exchange operations involve complex multi-step workflows with state changes that cannot be safely simulated. The C(accept_invitation) operation provides a C(dry_run) parameter for validation without API calls."
 options:
   operation:
     description: "The specific Data Exchange operation to perform. C(create_services): Create Data Exchange services from YAML configuration (Workflow 1). Configuration file must contain C(data_exchange_services) list with service definitions. Services define peering services with LAN segments, sites, and service prefixes. C(delete_services): Delete Data Exchange services from YAML configuration. Services must be deleted after customers that depend on them. C(get_services_summary): Get summary of all Data Exchange services with tabulated output. Returns service details including IDs, names, status, role, and matched customers count. C(create_customers): Create Data Exchange customers from YAML configuration (Workflow 2). Configuration file must contain C(data_exchange_customers) list with customer definitions. Customers can be non-Graphiant peers that can be invited to connect to services. C(delete_customers): Delete Data Exchange customers from YAML configuration. Customers must be deleted before services they depend on. C(get_customers_summary): Get summary of all Data Exchange customers with tabulated output. Returns customer details including IDs, names, type, status, and matched services count. C(match_service_to_customers): Match services to customers from YAML configuration (Workflow 3). Configuration file must contain C(data_exchange_matches) list with match definitions. Automatically saves match responses to JSON file for use in Workflow 4. Updates existing match entries or appends new ones based on customer_name and service_name. C(accept_invitation): Accept Data Exchange service invitation (Workflow 4). Configuration file must contain C(data_exchange_acceptances) list with acceptance details. Requires matches_file from Workflow 3 for match ID lookup. Supports dry-run mode for validation without API calls. Configures full IPSec gateway deployment with dual tunnels, static routing, and VPN profiles. C(get_service_health): Get service health monitoring information for all matched customers. Returns tabulated health status including overall health, producer prefix health, and customer prefix health. Supports both consumer and provider views."
@@ -108,6 +103,7 @@ options:
       - 'Example: "https://api.graphiant.com"'
     type: str
     required: true
+    aliases: [ base_url, host ]
   username:
     description:
       - Graphiant portal username for authentication.
@@ -134,7 +130,7 @@ options:
     default: false
 
 requirements:
-  - python >= 3.12
+  - python >= 3.10
   - graphiant-sdk >= 25.11.1
   - tabulate
 
@@ -429,6 +425,15 @@ config_file:
   sample: "de_workflows_configs/sample_data_exchange_services.yaml"
 '''
 
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
+    get_graphiant_connection,
+    handle_graphiant_exception
+)
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
+    capture_library_logs
+)
+
 
 @capture_library_logs
 def execute_with_logging(module, func, *args, **kwargs):
@@ -467,7 +472,7 @@ def main():
         password=dict(type='str', required=True, no_log=True),
         operation=dict(
             type='str',
-            required=False,
+            required=True,
             choices=[
                 'create_services',
                 'delete_services',
@@ -616,8 +621,8 @@ def main():
                 module.fail_json(msg="get_service_health operation requires service_name parameter")
 
             result = execute_with_logging(
-              module, graphiant_config.data_exchange.get_service_health, service_name, is_provider,
-              success_msg=f"Successfully retrieved service health for service {service_name}")
+                module, graphiant_config.data_exchange.get_service_health, service_name, is_provider,
+                success_msg=f"Successfully retrieved service health for service {service_name}")
             result_msg = result['result_msg']
             result_data = result.get('result_data', {})
 

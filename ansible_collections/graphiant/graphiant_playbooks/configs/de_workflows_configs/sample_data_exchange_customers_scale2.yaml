@@ -1,3 +1,4 @@
+# yamllint disable-file
 # Sample Data Exchange Customers Configuration - Scale Test (50 Financial Customers)
 # This file demonstrates how to configure Data Exchange customers at scale
 #

@@ -76,7 +76,7 @@ class GlobalConfigManager(BaseManager):
                 self.configure_site_lists(config_yaml_file)
 
         except Exception as e:
-            LOG.error(f"Error in global configuration: {str(e)}")
+            LOG.error("Error in global configuration: %s", str(e))
             raise ConfigurationError(f"Global configuration failed: {str(e)}")
 
     def deconfigure(self, config_yaml_file: str) -> None:
@@ -135,7 +135,7 @@ class GlobalConfigManager(BaseManager):
                 self.deconfigure_site_lists(config_yaml_file)
 
         except Exception as e:
-            LOG.error(f"Error in global deconfiguration: {str(e)}")
+            LOG.error("Error in global deconfiguration: %s", str(e))
             raise ConfigurationError(f"Global deconfiguration failed: {str(e)}")
 
     def configure_prefix_sets(self, config_yaml_file: str) -> None:
@@ -157,11 +157,11 @@ class GlobalConfigManager(BaseManager):
             for prefix_config in prefix_sets:
                 self.config_utils.global_prefix_set(config_payload, action="add", **prefix_config)
 
-            LOG.info(f"Configure prefix sets payload: {config_payload}")
+            LOG.info("Configure prefix sets payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully configured {len(prefix_sets)} prefix sets")
+            LOG.info("Successfully configured %s prefix sets", len(prefix_sets))
         except Exception as e:
-            LOG.error(f"Failed to configure prefix sets: {e}")
+            LOG.error("Failed to configure prefix sets: %s", e)
             raise ConfigurationError(f"Prefix sets configuration failed: {e}")
 
     def deconfigure_prefix_sets(self, config_yaml_file: str) -> None:
@@ -183,11 +183,11 @@ class GlobalConfigManager(BaseManager):
             for prefix_config in prefix_sets:
                 self.config_utils.global_prefix_set(config_payload, action="delete", **prefix_config)
 
-            LOG.info(f"Deconfigure prefix sets payload: {config_payload}")
+            LOG.info("Deconfigure prefix sets payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully deconfigured {len(prefix_sets)} prefix sets")
+            LOG.info("Successfully deconfigured %s prefix sets", len(prefix_sets))
         except Exception as e:
-            LOG.error(f"Failed to deconfigure prefix sets: {e}")
+            LOG.error("Failed to deconfigure prefix sets: %s", e)
             raise ConfigurationError(f"Prefix sets deconfiguration failed: {e}")
 
     def configure_bgp_filters(self, config_yaml_file: str) -> None:
@@ -209,11 +209,11 @@ class GlobalConfigManager(BaseManager):
             for policy_config in routing_policies:
                 self.config_utils.global_bgp_filter(config_payload, action="add", **policy_config)
 
-            LOG.info(f"Configure BGP filters payload: {config_payload}")
+            LOG.info("Configure BGP filters payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully configured {len(routing_policies)} BGP filters")
+            LOG.info("Successfully configured %s BGP filters", len(routing_policies))
         except Exception as e:
-            LOG.error(f"Failed to configure BGP filters: {e}")
+            LOG.error("Failed to configure BGP filters: %s", e)
             raise ConfigurationError(f"BGP filters configuration failed: {e}")
 
     def deconfigure_bgp_filters(self, config_yaml_file: str) -> None:
@@ -235,11 +235,11 @@ class GlobalConfigManager(BaseManager):
             for policy_config in routing_policies:
                 self.config_utils.global_bgp_filter(config_payload, action="delete", **policy_config)
 
-            LOG.info(f"Deconfigure BGP filters payload: {config_payload}")
+            LOG.info("Deconfigure BGP filters payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully deconfigured {len(routing_policies)} BGP filters")
+            LOG.info("Successfully deconfigured %s BGP filters", len(routing_policies))
         except Exception as e:
-            LOG.error(f"Failed to deconfigure BGP filters: {e}")
+            LOG.error("Failed to deconfigure BGP filters: %s", e)
             raise ConfigurationError(f"BGP filters deconfiguration failed: {e}")
 
     def configure_snmp_services(self, config_yaml_file: str) -> None:
@@ -261,11 +261,11 @@ class GlobalConfigManager(BaseManager):
             for snmp_config in snmp_services:
                 self.config_utils.global_snmp(config_payload, action="add", **snmp_config)
 
-            LOG.debug(f"Configure SNMP services payload: {config_payload}")
+            LOG.debug("Configure SNMP services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully configured {len(snmp_services)} SNMP global objects")
+            LOG.info("Successfully configured %s SNMP global objects", len(snmp_services))
         except Exception as e:
-            LOG.error(f"Failed to configure SNMP services: {e}")
+            LOG.error("Failed to configure SNMP services: %s", e)
             raise ConfigurationError(f"SNMP services configuration failed: {e}")
 
     def deconfigure_snmp_services(self, config_yaml_file: str) -> None:
@@ -287,11 +287,11 @@ class GlobalConfigManager(BaseManager):
             for snmp_config in snmp_services:
                 self.config_utils.global_snmp(config_payload, action="delete", **snmp_config)
 
-            LOG.debug(f"Deconfigure SNMP services payload: {config_payload}")
+            LOG.debug("Deconfigure SNMP services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully deconfigured {len(snmp_services)} SNMP global objects")
+            LOG.info("Successfully deconfigured %s SNMP global objects", len(snmp_services))
         except Exception as e:
-            LOG.error(f"Failed to deconfigure SNMP services: {e}")
+            LOG.error("Failed to deconfigure SNMP services: %s", e)
             raise ConfigurationError(f"SNMP services deconfiguration failed: {e}")
 
     def configure_syslog_services(self, config_yaml_file: str) -> None:
@@ -313,11 +313,11 @@ class GlobalConfigManager(BaseManager):
             for syslog_config in syslog_services:
                 self.config_utils.global_syslog(config_payload, action="add", **syslog_config)
 
-            LOG.debug(f"Configure syslog services payload: {config_payload}")
+            LOG.debug("Configure syslog services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully configured {len(syslog_services)} syslog global objects")
+            LOG.info("Successfully configured %s syslog global objects", len(syslog_services))
         except Exception as e:
-            LOG.error(f"Failed to configure syslog services: {e}")
+            LOG.error("Failed to configure syslog services: %s", e)
             raise ConfigurationError(f"Syslog services configuration failed: {e}")
 
     def deconfigure_syslog_services(self, config_yaml_file: str) -> None:
@@ -339,11 +339,11 @@ class GlobalConfigManager(BaseManager):
             for syslog_config in syslog_services:
                 self.config_utils.global_syslog(config_payload, action="delete", **syslog_config)
 
-            LOG.debug(f"Deconfigure syslog services payload: {config_payload}")
+            LOG.debug("Deconfigure syslog services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully deconfigured {len(syslog_services)} syslog global objects")
+            LOG.info("Successfully deconfigured %s syslog global objects", len(syslog_services))
         except Exception as e:
-            LOG.error(f"Failed to deconfigure syslog services: {e}")
+            LOG.error("Failed to deconfigure syslog services: %s", e)
             raise ConfigurationError(f"Syslog services deconfiguration failed: {e}")
 
     def configure_ipfix_services(self, config_yaml_file: str) -> None:
@@ -365,11 +365,11 @@ class GlobalConfigManager(BaseManager):
             for ipfix_config in ipfix_services:
                 self.config_utils.global_ipfix(config_payload, action="add", **ipfix_config)
 
-            LOG.debug(f"Configure IPFIX services payload: {config_payload}")
+            LOG.debug("Configure IPFIX services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully configured {len(ipfix_services)} IPFIX global objects")
+            LOG.info("Successfully configured %s IPFIX global objects", len(ipfix_services))
         except Exception as e:
-            LOG.error(f"Failed to configure IPFIX services: {e}")
+            LOG.error("Failed to configure IPFIX services: %s", e)
             raise ConfigurationError(f"IPFIX services configuration failed: {e}")
 
     def deconfigure_ipfix_services(self, config_yaml_file: str) -> None:
@@ -391,11 +391,11 @@ class GlobalConfigManager(BaseManager):
             for ipfix_config in ipfix_services:
                 self.config_utils.global_ipfix(config_payload, action="delete", **ipfix_config)
 
-            LOG.debug(f"Deconfigure IPFIX services payload: {config_payload}")
+            LOG.debug("Deconfigure IPFIX services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully deconfigured {len(ipfix_services)} IPFIX global objects")
+            LOG.info("Successfully deconfigured %s IPFIX global objects", len(ipfix_services))
         except Exception as e:
-            LOG.error(f"Failed to deconfigure IPFIX services: {e}")
+            LOG.error("Failed to deconfigure IPFIX services: %s", e)
             raise ConfigurationError(f"IPFIX services deconfiguration failed: {e}")
 
     def configure_vpn_profiles(self, config_yaml_file: str) -> None:
@@ -417,11 +417,11 @@ class GlobalConfigManager(BaseManager):
             for vpn_config in vpn_profiles:
                 self.config_utils.global_vpn_profile(config_payload, action="add", **vpn_config)
 
-            LOG.info(f"Configure VPN profiles payload: {config_payload}")
+            LOG.info("Configure VPN profiles payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully configured {len(vpn_profiles)} VPN profiles")
+            LOG.info("Successfully configured %s VPN profiles", len(vpn_profiles))
         except Exception as e:
-            LOG.error(f"Failed to configure VPN profiles: {e}")
+            LOG.error("Failed to configure VPN profiles: %s", e)
             raise ConfigurationError(f"VPN profiles configuration failed: {e}")
 
     def deconfigure_vpn_profiles(self, config_yaml_file: str) -> None:
@@ -443,11 +443,11 @@ class GlobalConfigManager(BaseManager):
             for vpn_config in vpn_profiles:
                 self.config_utils.global_vpn_profile(config_payload, action="delete", **vpn_config)
 
-            LOG.debug(f"Deconfigure VPN profiles payload: {config_payload}")
+            LOG.debug("Deconfigure VPN profiles payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
-            LOG.info(f"Successfully deconfigured {len(vpn_profiles)} VPN profiles")
+            LOG.info("Successfully deconfigured %s VPN profiles", len(vpn_profiles))
         except Exception as e:
-            LOG.error(f"Failed to deconfigure VPN profiles: {e}")
+            LOG.error("Failed to deconfigure VPN profiles: %s", e)
             raise ConfigurationError(f"VPN profiles deconfiguration failed: {e}")
 
     def configure_lan_segments(self, config_yaml_file: str) -> None:
@@ -473,18 +473,18 @@ class GlobalConfigManager(BaseManager):
                 segment_description = segment_config.get('description', '')
 
                 if segment_name in existing_names:
-                    LOG.info(f"LAN segment '{segment_name}' already exists, skipping creation")
+                    LOG.info("LAN segment '%s' already exists, skipping creation", segment_name)
                 else:
-                    LOG.info(f"Creating LAN segment: {segment_name}")
+                    LOG.info("Creating LAN segment: %s", segment_name)
                     response = self.gsdk.post_global_lan_segments(
                         name=segment_name,
                         description=segment_description
                     )
-                    LOG.info(f"Successfully created LAN segment '{segment_name}' with ID: {response.id}")
+                    LOG.info("Successfully created LAN segment '%s' with ID: %s", segment_name, response.id)
 
-            LOG.info(f"Successfully processed {len(lan_segments)} LAN segments")
+            LOG.info("Successfully processed %s LAN segments", len(lan_segments))
         except Exception as e:
-            LOG.error(f"Failed to configure LAN segments: {e}")
+            LOG.error("Failed to configure LAN segments: %s", e)
             raise ConfigurationError(f"LAN segment configuration failed: {e}")
 
     def deconfigure_lan_segments(self, config_yaml_file: str) -> None:
@@ -516,31 +516,29 @@ class GlobalConfigManager(BaseManager):
                     # Check if segment has any references before deletion
                     if segment.site_list_references == 0 and segment.edge_references == 0 and \
                             segment.associated_interfaces == 0:
-                        LOG.info(f"Deleting LAN segment '{segment_name}' (ID: {segment.id}) - no references found")
+                        LOG.info("Deleting LAN segment '%s' (ID: %s) - no references found", segment_name, segment.id)
                         try:
                             success = self.gsdk.delete_global_lan_segments(segment.id)
                             if success:
-                                LOG.info(f"Successfully deleted LAN segment '{segment_name}'")
+                                LOG.info("Successfully deleted LAN segment '%s'", segment_name)
                                 deleted_count += 1
                             else:
-                                LOG.warning(f"Failed to delete LAN segment '{segment_name}'")
+                                LOG.warning("Failed to delete LAN segment '%s'", segment_name)
                                 skipped_count += 1
                         except Exception as delete_error:
-                            LOG.warning(f"Failed to delete LAN segment '{segment_name}': {delete_error}")
+                            LOG.warning("Failed to delete LAN segment '%s': %s", segment_name, delete_error)
                             skipped_count += 1
                     else:
-                        LOG.error(f"Cannot delete LAN segment '{segment_name}' - has references: "
-                                  f"siteListReferences={segment.site_list_references}, "
-                                  f"edgeReferences={segment.edge_references}, "
-                                  f"associatedInterfaces={segment.associated_interfaces}")
+                        LOG.error("Cannot delete LAN segment '%s' - has references: siteListReferences=%s, edgeReferences=%s, associatedInterfaces=%s",
+                                  segment_name, segment.site_list_references, segment.edge_references, segment.associated_interfaces)
                         skipped_count += 1
                 else:
-                    LOG.info(f"LAN segment '{segment_name}' not found, skipping deletion")
+                    LOG.info("LAN segment '%s' not found, skipping deletion", segment_name)
                     skipped_count += 1
 
-            LOG.info(f"LAN segments deconfiguration completed: {deleted_count} deleted, {skipped_count} skipped")
+            LOG.info("LAN segments deconfiguration completed: %s deleted, %s skipped", deleted_count, skipped_count)
         except Exception as e:
-            LOG.error(f"Failed to deconfigure LAN segments: {e}")
+            LOG.error("Failed to deconfigure LAN segments: %s", e)
             raise ConfigurationError(f"LAN segment deconfiguration failed: {e}")
 
     def configure_site_lists(self, config_yaml_file: str) -> None:
@@ -550,7 +548,7 @@ class GlobalConfigManager(BaseManager):
             config_yaml_file: Path to the YAML file containing site list configurations
         """
         try:
-            LOG.info(f"Configuring global site lists from {config_yaml_file}")
+            LOG.info("Configuring global site lists from %s", config_yaml_file)
 
             # Load and parse YAML configuration
             try:
@@ -579,8 +577,7 @@ class GlobalConfigManager(BaseManager):
                 # Check if site list already exists
                 existing_site_list_id = self.gsdk.get_site_list_id(site_list_name)
                 if existing_site_list_id:
-                    LOG.info(f"Site list '{site_list_name}' already exists "
-                             f"(ID: {existing_site_list_id}), skipping creation")
+                    LOG.info("Site list '%s' already exists (ID: %s), skipping creation", site_list_name, existing_site_list_id)
                     skipped_count += 1
                     continue
 
@@ -592,13 +589,13 @@ class GlobalConfigManager(BaseManager):
                     site_id = self.gsdk.get_site_id(site_name)
                     if site_id:
                         site_ids.append(site_id)
-                        LOG.info(f"Added site '{site_name}' (ID: {site_id}) to site list '{site_list_name}'")
+                        LOG.info("Added site '%s' (ID: %s) to site list '%s'", site_name, site_id, site_list_name)
                     else:
                         raise ConfigurationError(f"Site '{site_name}' not found for site list '{site_list_name}'. "
                                                  "Please ensure all sites exist before creating site lists.")
 
                 if not site_ids:
-                    LOG.warning(f"No valid sites found for site list '{site_list_name}', skipping creation")
+                    LOG.warning("No valid sites found for site list '%s', skipping creation", site_list_name)
                     skipped_count += 1
                     continue
 
@@ -615,14 +612,14 @@ class GlobalConfigManager(BaseManager):
                 # Create the site list using the generated payload
                 site_list_payload = config_payload['site_lists'][site_list_name]
                 self.gsdk.create_global_site_list(site_list_payload)
-                LOG.info(f"Successfully created site list '{site_list_name}'")
+                LOG.info("Successfully created site list '%s'", site_list_name)
                 created_count += 1
 
-            LOG.info(f"Site lists configuration completed: {created_count} created, {skipped_count} skipped")
+            LOG.info("Site lists configuration completed: %s created, %s skipped", created_count, skipped_count)
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.error(f"Failed to configure site lists: {e}")
+            LOG.error("Failed to configure site lists: %s", e)
             raise ConfigurationError(f"Site list configuration failed: {e}")
 
     def deconfigure_site_lists(self, config_yaml_file: str) -> None:
@@ -630,7 +627,7 @@ class GlobalConfigManager(BaseManager):
         Deconfigure global site lists from YAML file.
         """
         try:
-            LOG.info(f"Deconfiguring global site lists from {config_yaml_file}")
+            LOG.info("Deconfiguring global site lists from %s", config_yaml_file)
 
             # Load and parse YAML configuration
             config_data = self.config_utils.render_config_file(config_yaml_file)
@@ -655,7 +652,7 @@ class GlobalConfigManager(BaseManager):
                 # Check if site list exists
                 site_list_id = self.gsdk.get_site_list_id(site_list_name)
                 if not site_list_id:
-                    LOG.info(f"Site list '{site_list_name}' not found, skipping deletion")
+                    LOG.info("Site list '%s' not found, skipping deletion", site_list_name)
                     skipped_count += 1
                     continue
 
@@ -665,23 +662,25 @@ class GlobalConfigManager(BaseManager):
                             'site_list_references') and site_list_details.site_list_references > 0) or \
                    (hasattr(site_list_details, 'edge_references') and site_list_details.edge_references > 0) or \
                    (hasattr(site_list_details, 'policy_references') and site_list_details.policy_references > 0):
-                    LOG.error(f"Cannot delete site list '{site_list_name}' - has references: "
-                              f"siteListReferences={getattr(site_list_details, 'site_list_references', 0)}, "
-                              f"edgeReferences={getattr(site_list_details, 'edge_references', 0)}, "
-                              f"policyReferences={getattr(site_list_details, 'policy_references', 0)}")
+                    LOG.error("Cannot delete site list '%s' - has references: "
+                              "siteListReferences=%s, edgeReferences=%s, policyReferences=%s",
+                              site_list_name,
+                              getattr(site_list_details, 'site_list_references', 0),
+                              getattr(site_list_details, 'edge_references', 0),
+                              getattr(site_list_details, 'policy_references', 0))
                     raise ConfigurationError(f"Site list '{site_list_name}' "
                                              "cannot be deleted because it has active references. "
                                              "Please remove all references before deletion.")
 
                 # Delete the site list
                 self.gsdk.delete_global_site_list(site_list_id)
-                LOG.info(f"Successfully deleted site list '{site_list_name}' (ID: {site_list_id})")
+                LOG.info("Successfully deleted site list '%s' (ID: %s)", site_list_name, site_list_id)
                 deleted_count += 1
 
-            LOG.info(f"Site lists deconfiguration completed: {deleted_count} deleted, {skipped_count} skipped")
+            LOG.info("Site lists deconfiguration completed: %s deleted, %s skipped", deleted_count, skipped_count)
         except ConfigurationError:
             # Re-raise configuration errors (reference issues, SDK errors)
             raise
         except Exception as e:
-            LOG.error(f"Unexpected error during site list deconfiguration: {e}")
+            LOG.error("Unexpected error during site list deconfiguration: %s", e)
             raise ConfigurationError(f"Site list deconfiguration failed: {e}")

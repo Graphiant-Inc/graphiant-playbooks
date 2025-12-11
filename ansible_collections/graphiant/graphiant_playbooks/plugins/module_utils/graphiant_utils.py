@@ -1,6 +1,3 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-
 """
 Graphiant Ansible Collection - Module Utilities
 
@@ -29,6 +26,7 @@ def _import_graphiant_libs():
 
     Returns:
         tuple: (GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError)
+        Returns (None, None, None, None, None) if imports fail (for ansible-test validate-modules)
     """
     # Strategy 1: Use Ansible FQCN import (required for Ansible module execution)
     # This tells Ansible to bundle the libs/ directory in the module payload
@@ -55,15 +53,38 @@ def _import_graphiant_libs():
         from libs.graphiant_config import GraphiantConfig
         from libs.exceptions import GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError
         return GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError
-    except ImportError as e:
-        raise ImportError(
-            f"Failed to import Graphiant libraries. "
-            f"Ensure the collection is properly installed and required dependencies are met. "
-            f"Error: {str(e)}"
-        ) from e
+    except ImportError:
+        # Return None values instead of raising to allow ansible-test validate-modules
+        # to introspect the module even when dependencies are not available
+        return None, None, None, None, None
 
 
-# Import the Graphiant library modules
+# Import the Graphiant library modules lazily
+# Use a function to get the imports so ansible-test validate-modules can introspect the module
+# even when dependencies are not available
+_GRAPHiant_LIBS_CACHE = None
+
+
+def _get_graphiant_libs():
+    """
+    Get Graphiant library modules, importing them if necessary.
+
+    This lazy import allows ansible-test validate-modules to introspect the module
+    even when dependencies are not available.
+
+    Returns:
+        tuple: (GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError)
+    """
+    global _GRAPHiant_LIBS_CACHE
+    if _GRAPHiant_LIBS_CACHE is None:
+        _GRAPHiant_LIBS_CACHE = _import_graphiant_libs()
+    return _GRAPHiant_LIBS_CACHE
+
+
+# For backward compatibility and type hints, import at module level
+# _import_graphiant_libs() returns None values if imports fail, allowing
+# ansible-test validate-modules to introspect the module even when dependencies are not available
+# The actual imports will happen lazily when functions are called via _get_graphiant_libs()
 GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError = _import_graphiant_libs()
 
 
@@ -87,13 +108,24 @@ class GraphiantConnection:
         self._graphiant_config = None
 
     @property
-    def graphiant_config(self) -> GraphiantConfig:
+    def graphiant_config(self):
         """
         Get or create GraphiantConfig instance.
 
         Returns:
             GraphiantConfig: Graphiant configuration instance
         """
+        # Lazy import to support ansible-test validate-modules
+        graphiant_libs = _get_graphiant_libs()
+        GraphiantConfig = graphiant_libs[0]
+        GraphiantPlaybookError = graphiant_libs[1]
+
+        if GraphiantConfig is None:
+            raise ImportError(
+                "Failed to import Graphiant libraries. "
+                "Ensure the collection is properly installed and required dependencies are met."
+            )
+
         if self._graphiant_config is None:
             try:
                 self._graphiant_config = GraphiantConfig(
@@ -154,6 +186,17 @@ def handle_graphiant_exception(exception: Exception, operation: str) -> str:
     Returns:
         str: User-friendly error message
     """
+    # Lazy import to support ansible-test validate-modules
+    graphiant_libs = _get_graphiant_libs()
+    GraphiantPlaybookError = graphiant_libs[1]
+    ConfigurationError = graphiant_libs[2]
+    APIError = graphiant_libs[3]
+    DeviceNotFoundError = graphiant_libs[4]
+
+    # If imports are not available, return a generic error message
+    if ConfigurationError is None or APIError is None or DeviceNotFoundError is None or GraphiantPlaybookError is None:
+        return f"Error during {operation}: {str(exception)}"
+
     if isinstance(exception, ConfigurationError):
         return f"Configuration error during {operation}: {str(exception)}"
     elif isinstance(exception, APIError):

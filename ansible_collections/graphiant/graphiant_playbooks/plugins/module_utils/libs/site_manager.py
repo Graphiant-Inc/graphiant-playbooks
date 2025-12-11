@@ -99,7 +99,7 @@ class SiteManager(BaseManager):
             config_data = self.render_config_file(config_yaml_file)
 
             if 'sites' not in config_data:
-                LOG.info(f"No sites configuration found in {config_yaml_file}, skipping site {operation}")
+                LOG.info("No sites configuration found in %s, skipping site %s", config_yaml_file, operation)
                 return
 
             processed_sites = 0
@@ -116,16 +116,16 @@ class SiteManager(BaseManager):
                         self._delete_site_if_exists(site_name)
 
                     processed_sites += 1
-                    LOG.info(f"Successfully {operation}d site: {site_name}")
+                    LOG.info("Successfully %sd site: %s", operation, site_name)
 
                 except Exception as e:
-                    LOG.error(f"Error {operation}ing site '{site_name}': {str(e)}")
+                    LOG.error("Error %sing site '%s': %s", operation, site_name, str(e))
                     raise ConfigurationError(f"Failed to {operation} site {site_name}: {str(e)}")
 
-            LOG.info(f"Successfully {operation}d {processed_sites} sites")
+            LOG.info("Successfully %sd %s sites", operation, processed_sites)
 
         except Exception as e:
-            LOG.error(f"Error in site {operation} operation: {str(e)}")
+            LOG.error("Error in site %s operation: %s", operation, str(e))
             raise ConfigurationError(f"Site {operation} operation failed: {str(e)}")
 
     def _create_site_if_not_exists(self, site_config: dict) -> None:
@@ -143,7 +143,7 @@ class SiteManager(BaseManager):
         # Check if site already exists using v1/sites/details
         if self.gsdk.site_exists(site_name):
             existing_site_id = self.gsdk.get_site_id(site_name)
-            LOG.info(f"Site '{site_name}' already exists with ID: {existing_site_id}, skipping creation")
+            LOG.info("Site '%s' already exists with ID: %s, skipping creation", site_name, existing_site_id)
             return
 
         try:
@@ -157,16 +157,16 @@ class SiteManager(BaseManager):
 
             # Create the site
             created_site = self.gsdk.create_site(site_data)
-            LOG.info(f"Successfully created site '{site_name}' with ID: {created_site.id}")
+            LOG.info("Successfully created site '%s' with ID: %s", site_name, created_site.id)
 
         except Exception as e:
             error_msg = str(e)
             # Handle "already exists" errors gracefully
             if "already exists" in error_msg.lower() or "already created" in error_msg.lower():
-                LOG.info(f"Site '{site_name}' already exists, skipping creation: {error_msg}")
+                LOG.info("Site '%s' already exists, skipping creation: %s", site_name, error_msg)
                 return
             else:
-                LOG.error(f"Failed to create site '{site_name}': {error_msg}")
+                LOG.error("Failed to create site '%s': %s", site_name, error_msg)
                 raise ConfigurationError(f"Site creation failed for {site_name}: {error_msg}")
 
     def _delete_site_if_exists(self, site_name: str) -> None:
@@ -182,7 +182,7 @@ class SiteManager(BaseManager):
         try:
             # Check if site exists using v1/sites/details
             if not self.gsdk.site_exists(site_name):
-                LOG.info(f"Site '{site_name}' does not exist, skipping deletion")
+                LOG.info("Site '%s' does not exist, skipping deletion", site_name)
                 return
 
             # Get site ID for deletion
@@ -191,12 +191,12 @@ class SiteManager(BaseManager):
             # Delete the site
             success = self.gsdk.delete_site(site_id)
             if success:
-                LOG.info(f"Successfully deleted site '{site_name}' with ID: {site_id}")
+                LOG.info("Successfully deleted site '%s' with ID: %s", site_name, site_id)
             else:
                 raise ConfigurationError(f"Failed to delete site '{site_name}' with ID: {site_id}")
 
         except Exception as e:
-            LOG.error(f"Failed to delete site '{site_name}': {str(e)}")
+            LOG.error("Failed to delete site '%s': %s", site_name, str(e))
             raise ConfigurationError(f"Site deletion failed for {site_name}: {str(e)}")
 
     def attach_objects(self, config_yaml_file: str) -> None:
@@ -234,7 +234,7 @@ class SiteManager(BaseManager):
             config_data = self.render_config_file(config_yaml_file)
 
             if 'site_attachments' not in config_data:
-                LOG.info(f"No site attachments configuration found in {config_yaml_file}, skipping object {operation}")
+                LOG.info("No site attachments configuration found in %s, skipping object %s", config_yaml_file, operation)
                 return
 
             default_operation = 'Attach' if operation.lower().startswith("attach") else 'Detach'
@@ -271,37 +271,37 @@ class SiteManager(BaseManager):
                     self.gsdk.post_site_config(site_id=site_id, site_config=site_payload)
                     processed_sites += 1
 
-                    LOG.info(f"Successfully {default_operation.lower()} global objects "
-                             f"for site: {site_name} (ID: {site_id})")
+                    LOG.info("Successfully %s global objects for site: %s (ID: %s)",
+                             default_operation.lower(), site_name, site_id)
 
                 except SiteNotFoundError:
-                    LOG.error(f"Site '{site_name}' not found, skipping {operation} operation")
+                    LOG.error("Site '%s' not found, skipping %s operation", site_name, operation)
                     raise
                 except Exception as e:
                     error_msg = str(e)
                     # Handle "already attached" errors gracefully
                     if operation.lower().startswith("attach") and (
-                          "already attached" in error_msg.lower() or "already exists" in error_msg.lower()):
-                        LOG.info(f"Object already {default_operation.lower()}ed to site '{site_name}', "
-                                 f"skipping: {error_msg}")
+                            "already attached" in error_msg.lower() or "already exists" in error_msg.lower()):
+                        LOG.info("Object already %sed to site '%s', skipping: %s",
+                                 default_operation.lower(), site_name, error_msg)
                         processed_sites += 1
                         continue
                     # Handle "already detached","not attached" and "not found" errors gracefully for detach operations
                     elif operation.lower().startswith("detach") and (
-                      "already detached" in error_msg.lower() or
-                      "not attached" in error_msg.lower() or "not found" in error_msg.lower()):
-                        LOG.info(f"Object not attached to site '{site_name}', "
-                                 f"skipping {default_operation.lower()}: {error_msg}")
+                            "already detached" in error_msg.lower() or
+                            "not attached" in error_msg.lower() or "not found" in error_msg.lower()):
+                        LOG.info("Object not attached to site '%s', skipping %s: %s",
+                                 site_name, default_operation.lower(), error_msg)
                         processed_sites += 1
                         continue
                     else:
-                        LOG.error(f"Error {default_operation.lower()}ing objects for site '{site_name}': {error_msg}")
+                        LOG.error("Error %sing objects for site '%s': %s", default_operation.lower(), site_name, error_msg)
                         raise ConfigurationError(f"Failed to {operation.lower()} objects for {site_name}: {error_msg}")
 
-            LOG.info(f"Successfully {default_operation.lower()}ed global objects for {processed_sites} sites")
+            LOG.info("Successfully %sed global objects for %s sites", default_operation.lower(), processed_sites)
 
         except Exception as e:
-            LOG.error(f"Error in site {operation} operation: {str(e)}")
+            LOG.error("Error in site %s operation: %s", operation, str(e))
             raise ConfigurationError(f"Site {operation} operation failed: {str(e)}")
 
     def _process_syslog_config(self, site_payload: Dict[str, Any],

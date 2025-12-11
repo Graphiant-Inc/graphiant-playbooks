@@ -1,0 +1,62 @@
+name: Build Collection
+
+on:
+  pull_request:
+    paths:
+      - 'ansible_collections/graphiant/graphiant_playbooks/**'
+      - '.github/workflows/build.yml'
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'ansible_collections/graphiant/graphiant_playbooks/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Collection
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible_collections/graphiant/graphiant_playbooks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create build directory
+        run: |
+          mkdir -p ../../build
+
+      - name: Build collection
+        run: |
+          python ../../scripts/build_collection.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-tarball
+          path: ../../build/graphiant-graphiant_playbooks-*.tar.gz
+          retention-days: 7
+
+      - name: Verify collection structure
+        run: |
+          COLLECTION_FILE=$(ls ../../build/graphiant-graphiant_playbooks-*.tar.gz | head -1)
+          if [ -z "$COLLECTION_FILE" ] || [ ! -f "$COLLECTION_FILE" ]; then
+            echo "Error: Collection file not found in build directory"
+            exit 1
+          fi
+          ansible-galaxy collection verify $COLLECTION_FILE
+

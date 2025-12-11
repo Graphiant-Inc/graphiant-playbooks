@@ -1,3 +1,4 @@
+# yamllint disable-file
 {
     "circuits": {
         {% if circuit and action == "add" %}   

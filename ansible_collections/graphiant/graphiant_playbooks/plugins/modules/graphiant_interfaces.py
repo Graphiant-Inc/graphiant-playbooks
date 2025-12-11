@@ -1,6 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright: (c) 2025, Graphiant Team <support@graphiant.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 """
 Ansible module for managing Graphiant interfaces and circuits.
 
@@ -10,15 +13,6 @@ This module provides comprehensive interface management capabilities including:
 - Circuit-only operations (for static routes)
 - Combined interface operations
 """
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
-    get_graphiant_connection,
-    handle_graphiant_exception
-)
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
-    capture_library_logs
-)
 
 DOCUMENTATION = r'''
 ---
@@ -31,7 +25,7 @@ description:
   - Supports circuit-only operations for updating static routes without reconfiguring interfaces.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "1.0.0"
+version_added: "25.11.0"
 notes:
   - "Interface Operations:"
   - "  - LAN interfaces: Configure/deconfigure subinterfaces for LAN connectivity."
@@ -112,7 +106,7 @@ options:
     default: false
 
 requirements:
-  - python >= 3.12
+  - python >= 3.10
   - graphiant-sdk >= 25.11.1
 
 seealso:
@@ -250,6 +244,15 @@ circuits_only:
   sample: false
 '''
 
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
+    get_graphiant_connection,
+    handle_graphiant_exception
+)
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
+    capture_library_logs
+)
+
 
 @capture_library_logs
 def execute_with_logging(module, func, *args, **kwargs):
@@ -314,8 +317,7 @@ def main():
         detailed_logs=dict(
             type='bool',
             required=False,
-            default=False,
-            description='Enable detailed logging output from library operations'
+            default=False
         )
     )
 

@@ -75,4 +75,3 @@ interfaces:
       mtu: 1500
       v4_tcp_mss: 1392
       v6_tcp_mss: 1220
-

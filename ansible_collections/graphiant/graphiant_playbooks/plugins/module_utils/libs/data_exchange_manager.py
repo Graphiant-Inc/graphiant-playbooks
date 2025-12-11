@@ -9,11 +9,19 @@ This module provides functionality for managing Data Exchange workflows includin
 
 import os
 from typing import Dict, Any, Optional
+
+try:
+    from tabulate import tabulate
+    HAS_TABULATE = True
+except ImportError:
+    HAS_TABULATE = False
+
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError
 
-from tabulate import tabulate
+# Required dependencies - checked when functions are called
+# Don't raise at module level to allow import test to pass
 
 LOG = setup_logger()
 
@@ -31,7 +39,7 @@ class DataExchangeManager(BaseManager):
         Args:
             config_yaml_file: Path to the YAML configuration file
         """
-        LOG.info(f"Configuring Data Exchange resources from {config_yaml_file}")
+        LOG.info("Configuring Data Exchange resources from %s", config_yaml_file)
 
         # Create services first
         self.create_services(config_yaml_file)
@@ -52,7 +60,7 @@ class DataExchangeManager(BaseManager):
         Args:
             config_yaml_file: Path to the YAML configuration file
         """
-        LOG.info(f"Deconfiguring Data Exchange resources from {config_yaml_file}")
+        LOG.info("Deconfiguring Data Exchange resources from %s", config_yaml_file)
 
         # Delete customers first (they depend on services)
         self.delete_customers(config_yaml_file)
@@ -70,7 +78,7 @@ class DataExchangeManager(BaseManager):
             config_yaml_file (str): Path to the YAML configuration file
         """
         try:
-            LOG.info(f"Creating Data Exchange service from {config_yaml_file}")
+            LOG.info("Creating Data Exchange service from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_services' not in config_data:
@@ -82,7 +90,7 @@ class DataExchangeManager(BaseManager):
                 raise ConfigurationError("Configuration error: 'data_exchange_services' must be a list.")
 
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             created_count = 0
             skipped_count = 0
@@ -90,14 +98,14 @@ class DataExchangeManager(BaseManager):
             for service_config in services:
                 service_name = service_config.get('serviceName')
                 LOG.info("--------------------------------")
-                LOG.info(f"create_services: Creating service '{service_name}'")
+                LOG.info("create_services: Creating service '%s'", service_name)
                 if not service_name:
                     raise ConfigurationError("Configuration error: Each service must have a 'serviceName' field.")
 
                 # Check if service already exists
                 existing_service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if existing_service:
-                    LOG.info(f"Service '{service_name}' already exists (ID: {existing_service.id}), skipping creation")
+                    LOG.info("Service '%s' already exists (ID: %s), skipping creation", service_name, existing_service.id)
                     skipped_count += 1
                     continue
 
@@ -118,18 +126,18 @@ class DataExchangeManager(BaseManager):
                     self._resolve_site_list_ids(service_config['policy'], service_name)
 
                 # Create service directly
-                LOG.info(f"Service configuration: {service_config}")
-                LOG.info(f"create_data_exchange_services: Creating service '{service_name}'")
+                LOG.info("Service configuration: %s", service_config)
+                LOG.info("create_data_exchange_services: Creating service '%s'", service_name)
                 self.gsdk.create_data_exchange_services(service_config)
-                LOG.info(f"Successfully created service '{service_name}'")
+                LOG.info("Successfully created service '%s'", service_name)
                 created_count += 1
 
-            LOG.info(f"Data Exchange service creation completed: {created_count} created, {skipped_count} skipped")
+            LOG.info("Data Exchange service creation completed: %s created, %s skipped", created_count, skipped_count)
 
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.error(f"Failed to create Data Exchange service: {e}")
+            LOG.error("Failed to create Data Exchange service: %s", e)
             raise ConfigurationError(f"Data Exchange service creation failed: {e}")
 
     def _resolve_site_ids(self, policy_config: dict, service_name: str) -> None:
@@ -188,7 +196,7 @@ class DataExchangeManager(BaseManager):
         """
         try:
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             LOG.info("Retrieving Data Exchange services summary")
             response = self.gsdk.get_data_exchange_services_summary()
@@ -211,15 +219,14 @@ class DataExchangeManager(BaseManager):
                         matched_customers
                     ])
 
-                LOG.info(
-                    f"Services Summary:\n"
-                    f"""{tabulate(service_table,
+                LOG.info("Services Summary:\n%s",
+                         tabulate(service_table,
                                   headers=['ID', 'Service Name', 'Status', 'Role', 'Matched Customers'],
-                                  tablefmt='grid')}""")
+                                  tablefmt='grid'))
 
             return response.to_dict()
         except Exception as e:
-            LOG.error(f"Failed to retrieve services summary: {e}")
+            LOG.error("Failed to retrieve services summary: %s", e)
             raise ConfigurationError(f"Failed to retrieve services summary: {e}")
 
     def get_service_by_name(self, service_name: str) -> Optional[Dict[str, Any]]:
@@ -233,11 +240,11 @@ class DataExchangeManager(BaseManager):
             dict or None: Service details if found, None otherwise
         """
         try:
-            LOG.info(f"Retrieving Data Exchange service '{service_name}'")
+            LOG.info("Retrieving Data Exchange service '%s'", service_name)
             service = self.gsdk.get_data_exchange_service_by_name(service_name)
             return service
         except Exception as e:
-            LOG.error(f"Failed to retrieve service '{service_name}': {e}")
+            LOG.error("Failed to retrieve service '%s': %s", service_name, e)
             raise ConfigurationError(f"Failed to retrieve service '{service_name}': {e}")
 
     def create_customers(self, config_yaml_file: str) -> None:
@@ -248,7 +255,7 @@ class DataExchangeManager(BaseManager):
             config_yaml_file (str): Path to the YAML configuration file
         """
         try:
-            LOG.info(f"Creating Data Exchange customer from {config_yaml_file}")
+            LOG.info("Creating Data Exchange customer from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_customers' not in config_data:
@@ -260,7 +267,7 @@ class DataExchangeManager(BaseManager):
                 raise ConfigurationError("Configuration error: 'data_exchange_customers' must be a list.")
 
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             created_count = 0
             skipped_count = 0
@@ -268,34 +275,36 @@ class DataExchangeManager(BaseManager):
             for customer_config in customers:
                 customer_name = customer_config.get('name')
                 LOG.info("--------------------------------")
-                LOG.info(f"create_customers: Creating customer '{customer_name}'")
+                LOG.info("create_customers: Creating customer '%s'", customer_name)
                 if not customer_name:
                     raise ConfigurationError("Configuration error: Each customer must have a 'name' field.")
 
                 # Check if customer already exists
                 existing_customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
                 if existing_customer:
-                    LOG.info(f"Customer '{customer_name}' already exists "
-                             f"(ID: {existing_customer.id}), skipping creation")
+                    LOG.info("Customer '%s' already exists (ID: %s), skipping creation",
+                             customer_name, existing_customer.id)
                     skipped_count += 1
                     continue
 
                 # Create customer directly
-                LOG.info(f"Customer configuration: {customer_config}")
-                LOG.info(f"create_data_exchange_customers: Creating customer '{customer_name}'")
+                LOG.info("Customer configuration: %s", customer_config)
+                LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_name)
                 self.gsdk.create_data_exchange_customers(customer_config)
-                LOG.info(f"Successfully created customer '{customer_name}'")
+                LOG.info("Successfully created customer '%s'", customer_name)
                 created_count += 1
 
-            LOG.info(f"Data Exchange customer creation completed: {created_count} created, {skipped_count} skipped")
+            LOG.info("Data Exchange customer creation completed: %s created, %s skipped", created_count, skipped_count)
 
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.error(f"Failed to create Data Exchange customer: {e}")
+            LOG.error("Failed to create Data Exchange customer: %s", e)
             raise ConfigurationError(f"Data Exchange customer creation failed: {e}")
 
     def get_customers_summary(self) -> Dict[str, Any]:
+        if not HAS_TABULATE:
+            raise ImportError("tabulate is required for this method. Install it with: pip install tabulate")
         """
         Get summary of all Data Exchange customers.
 
@@ -304,7 +313,7 @@ class DataExchangeManager(BaseManager):
         """
         try:
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             LOG.info("Retrieving Data Exchange customers summary")
             response = self.gsdk.get_data_exchange_customers_summary()
@@ -327,14 +336,14 @@ class DataExchangeManager(BaseManager):
                         matched_services
                     ])
 
-                LOG.info(f"Customers Summary:\n"
-                         f"""{tabulate(customer_table,
-                                       headers=['ID', 'Customer Name', 'Customer Type', 'Status', 'Matched Services'],
-                                       tablefmt='grid')}""")
+                LOG.info("Customers Summary:\n%s",
+                         tabulate(customer_table,
+                                  headers=['ID', 'Customer Name', 'Customer Type', 'Status', 'Matched Services'],
+                                  tablefmt='grid'))
 
             return response.to_dict()
         except Exception as e:
-            LOG.error(f"Failed to retrieve customers summary: {e}")
+            LOG.error("Failed to retrieve customers summary: %s", e)
             raise ConfigurationError(f"Failed to retrieve customers summary: {e}")
 
     def get_customer_by_name(self, customer_name: str) -> Optional[Dict[str, Any]]:
@@ -348,11 +357,11 @@ class DataExchangeManager(BaseManager):
             dict or None: Customer details if found, None otherwise
         """
         try:
-            LOG.info(f"Retrieving Data Exchange customer '{customer_name}'")
+            LOG.info("Retrieving Data Exchange customer '%s'", customer_name)
             customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
             return customer
         except Exception as e:
-            LOG.error(f"Failed to retrieve customer '{customer_name}': {e}")
+            LOG.error("Failed to retrieve customer '%s': %s", customer_name, e)
             raise ConfigurationError(f"Failed to retrieve customer '{customer_name}': {e}")
 
     def delete_customers(self, config_yaml_file: str) -> None:
@@ -363,7 +372,7 @@ class DataExchangeManager(BaseManager):
             config_yaml_file (str): Path to the YAML configuration file
         """
         try:
-            LOG.info(f"Deleting Data Exchange customers from {config_yaml_file}")
+            LOG.info("Deleting Data Exchange customers from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_customers' not in config_data:
@@ -375,7 +384,7 @@ class DataExchangeManager(BaseManager):
                 raise ConfigurationError("Configuration error: 'data_exchange_customers' must be a list.")
 
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             deleted_count = 0
             skipped_count = 0
@@ -383,29 +392,29 @@ class DataExchangeManager(BaseManager):
             for customer_config in customers:
                 customer_name = customer_config.get('name')
                 LOG.info("--------------------------------")
-                LOG.info(f"delete_customers: Deleting customer '{customer_name}'")
+                LOG.info("delete_customers: Deleting customer '%s'", customer_name)
                 if not customer_name:
                     raise ConfigurationError("Configuration error: Each customer must have a 'name' field.")
 
                 # Get customer ID
                 customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
                 if not customer:
-                    LOG.info(f"Customer '{customer_name}' not found, skipping deletion")
+                    LOG.info("Customer '%s' not found, skipping deletion", customer_name)
                     skipped_count += 1
                     continue
 
                 # Delete customer directly
-                LOG.info(f"delete_data_exchange_customer: Deleting customer '{customer_name}'")
+                LOG.info("delete_data_exchange_customer: Deleting customer '%s'", customer_name)
                 self.gsdk.delete_data_exchange_customer(customer.id)
-                LOG.info(f"Successfully deleted customer '{customer_name}' (ID: {customer.id})")
+                LOG.info("Successfully deleted customer '%s' (ID: %s)", customer_name, customer.id)
                 deleted_count += 1
 
-            LOG.info(f"Data Exchange customer deletion completed: {deleted_count} deleted, {skipped_count} skipped")
+            LOG.info("Data Exchange customer deletion completed: %s deleted, %s skipped", deleted_count, skipped_count)
 
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.error(f"Failed to delete Data Exchange customers: {e}")
+            LOG.error("Failed to delete Data Exchange customers: %s", e)
             raise ConfigurationError(f"Data Exchange customer deletion failed: {e}")
 
     def delete_services(self, config_yaml_file: str) -> None:
@@ -416,7 +425,7 @@ class DataExchangeManager(BaseManager):
             config_yaml_file (str): Path to the YAML configuration file
         """
         try:
-            LOG.info(f"Deleting Data Exchange services from {config_yaml_file}")
+            LOG.info("Deleting Data Exchange services from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_services' not in config_data:
@@ -428,7 +437,7 @@ class DataExchangeManager(BaseManager):
                 raise ConfigurationError("Configuration error: 'data_exchange_services' must be a list.")
 
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             deleted_count = 0
             skipped_count = 0
@@ -436,29 +445,29 @@ class DataExchangeManager(BaseManager):
             for service_config in services:
                 service_name = service_config.get('serviceName')
                 LOG.info("--------------------------------")
-                LOG.info(f"delete_services: Deleting service '{service_name}'")
+                LOG.info("delete_services: Deleting service '%s'", service_name)
                 if not service_name:
                     raise ConfigurationError("Configuration error: Each service must have a 'serviceName' field.")
 
                 # Get service ID
                 service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if not service:
-                    LOG.info(f"Service '{service_name}' not found, skipping deletion")
+                    LOG.info("Service '%s' not found, skipping deletion", service_name)
                     skipped_count += 1
                     continue
 
                 # Delete service directly
-                LOG.info(f"delete_data_exchange_service: Deleting service '{service_name}'")
+                LOG.info("delete_data_exchange_service: Deleting service '%s'", service_name)
                 self.gsdk.delete_data_exchange_service(service.id)
-                LOG.info(f"Successfully deleted service '{service_name}' (ID: {service.id})")
+                LOG.info("Successfully deleted service '%s' (ID: %s)", service_name, service.id)
                 deleted_count += 1
 
-            LOG.info(f"Data Exchange service deletion completed: {deleted_count} deleted, {skipped_count} skipped")
+            LOG.info("Data Exchange service deletion completed: %s deleted, %s skipped", deleted_count, skipped_count)
 
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.error(f"Failed to delete Data Exchange services: {e}")
+            LOG.error("Failed to delete Data Exchange services: %s", e)
             raise ConfigurationError(f"Data Exchange service deletion failed: {e}")
 
     def get_service_details(self, service_id: int) -> Dict[str, Any]:
@@ -472,11 +481,11 @@ class DataExchangeManager(BaseManager):
             dict: Service details response
         """
         try:
-            LOG.info(f"Retrieving Data Exchange service details for ID: {service_id}")
+            LOG.info("Retrieving Data Exchange service details for ID: %s", service_id)
             response = self.gsdk.get_data_exchange_service_details(service_id)
             return response
         except Exception as e:
-            LOG.error(f"Failed to retrieve service details for ID {service_id}: {e}")
+            LOG.error("Failed to retrieve service details for ID %s: %s", service_id, e)
             raise ConfigurationError(f"Failed to retrieve service details for ID {service_id}: {e}")
 
     def _save_match_service_to_customer_responses(self, match_responses: list, config_yaml_file: str) -> None:
@@ -529,9 +538,9 @@ class DataExchangeManager(BaseManager):
             try:
                 with open(latest_file, 'r') as f:
                     existing_responses = json.load(f)
-                LOG.info(f"Loaded {len(existing_responses)} existing entries from {latest_file}")
+                LOG.info("Loaded %s existing entries from %s", len(existing_responses), latest_file)
             except (json.JSONDecodeError, IOError) as e:
-                LOG.warning(f"Could not read existing latest file {latest_file}: {e}. Starting fresh.")
+                LOG.warning("Could not read existing latest file %s: %s. Starting fresh.", latest_file, e)
 
         # Create a dictionary for efficient lookup: key = (customer_name, service_name)
         # This allows us to update existing entries or add new ones
@@ -551,12 +560,12 @@ class DataExchangeManager(BaseManager):
                     # Update existing entry
                     response_dict[key].update(new_response)
                     updated_count += 1
-                    LOG.debug(f"Updated entry for customer '{key[0]}' and service '{key[1]}'")
+                    LOG.debug("Updated entry for customer '%s' and service '%s'", key[0], key[1])
                 else:
                     # Add new entry
                     response_dict[key] = new_response
                     added_count += 1
-                    LOG.debug(f"Added new entry for customer '{key[0]}' and service '{key[1]}'")
+                    LOG.debug("Added new entry for customer '%s' and service '%s'", key[0], key[1])
 
         # Convert back to list for JSON serialization
         merged_responses = list(response_dict.values())
@@ -568,10 +577,10 @@ class DataExchangeManager(BaseManager):
         with open(latest_file, 'w') as f:
             json.dump(merged_responses, f, indent=2)
 
-        LOG.info(f"Match responses saved to matches_file_with_timestamp: {timestamped_file}")
-        LOG.info(f"Latest match responses saved to matches_file: {latest_file}")
-        LOG.info(f"Updated {updated_count} existing entries, added {added_count} new entries. "
-                 f"Total entries in matches_file: {len(merged_responses)}")
+        LOG.info("Match responses saved to matches_file_with_timestamp: %s", timestamped_file)
+        LOG.info("Latest match responses saved to matches_file: %s", latest_file)
+        LOG.info("Updated %s existing entries, added %s new entries. Total entries in matches_file: %s",
+                 updated_count, added_count, len(merged_responses))
 
     def match_service_to_customers(self, config_yaml_file: str) -> None:
         """
@@ -581,7 +590,7 @@ class DataExchangeManager(BaseManager):
             config_yaml_file (str): Path to the YAML configuration file
         """
         try:
-            LOG.info(f"Matching Data Exchange services to customers from {config_yaml_file}")
+            LOG.info("Matching Data Exchange services to customers from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_matches' not in config_data:
@@ -593,7 +602,7 @@ class DataExchangeManager(BaseManager):
                 raise ConfigurationError("Configuration error: 'data_exchange_matches' must be a list.")
 
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             matched_count = 0
             skipped_count = 0
@@ -604,7 +613,7 @@ class DataExchangeManager(BaseManager):
                 customer_name = match_config.get('customerName')
                 service_name = match_config.get('serviceName')
                 LOG.info("--------------------------------")
-                LOG.info(f"match_service_to_customers: Matching service '{service_name}' to customer '{customer_name}'")
+                LOG.info("match_service_to_customers: Matching service '%s' to customer '%s'", service_name, customer_name)
                 if not customer_name or not service_name:
                     LOG.error("Configuration error: Each match must have 'customerName' and 'serviceName' fields.")
                     failed_count += 1
@@ -613,14 +622,14 @@ class DataExchangeManager(BaseManager):
                 # Get customer ID
                 customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
                 if not customer:
-                    LOG.error(f"Customer '{customer_name}' not found in the enterprise.")
+                    LOG.error("Customer '%s' not found in the enterprise.", customer_name)
                     failed_count += 1
                     continue
 
                 # Get service ID
                 service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if not service:
-                    LOG.error(f"Service '{service_name}' not found in the enterprise.")
+                    LOG.error("Service '%s' not found in the enterprise.", service_name)
                     failed_count += 1
                     continue
 
@@ -631,11 +640,11 @@ class DataExchangeManager(BaseManager):
                     already_matched = False
                     for matched_service in matched_services:
                         if matched_service.name == service_name:
-                            LOG.warning(
-                                f"Service '{service_name}' is already matched to customer '{customer_name}'. "
-                                f"Service ID: {matched_service.id}, "
-                                f"Matched Customers: {matched_service.matched_customers}. "
-                                f"Skipping to avoid 'match already exists' error.")
+                            LOG.warning("Service '%s' is already matched to customer '%s'. "
+                                        "Service ID: %s, Matched Customers: %s. "
+                                        "Skipping to avoid 'match already exists' error.",
+                                        service_name, customer_name, matched_service.id,
+                                        matched_service.matched_customers)
                             already_matched = True
                             skipped_count += 1
                             break
@@ -662,20 +671,20 @@ class DataExchangeManager(BaseManager):
 
                 try:
                     # Perform the match and capture response
-                    LOG.info(f"match_service_to_customer: Matching service '{service_name}' to "
-                             f"customer '{customer_name}'")
+                    LOG.info("match_service_to_customer: Matching service '%s' to customer '%s'",
+                             service_name, customer_name)
                     response = self.gsdk.match_service_to_customer(match_payload)
                 except Exception as e:
                     error_msg = str(e)
                     # Handle "match already exists" errors gracefully till new sdk version 25.11.1 is released.
                     if "match already exists" in error_msg.lower():
-                        LOG.info(f"Service '{service_name}' is already matched to customer '{customer_name}', "
-                                 f"skipping match as it already exists.")
+                        LOG.info("Service '%s' is already matched to customer '%s', skipping match as it already exists.",
+                                 service_name, customer_name)
                         skipped_count += 1
                         continue
                     else:
-                        LOG.error(f"Failed to match service '{service_name}' to customer '{customer_name}': "
-                                  f"{error_msg}")
+                        LOG.error("Failed to match service '%s' to customer '%s': %s",
+                                  service_name, customer_name, error_msg)
                         failed_count += 1
                         continue
 
@@ -690,20 +699,20 @@ class DataExchangeManager(BaseManager):
                     "status": "matched"
                 }
                 match_responses.append(match_response_data)
-                LOG.info(f"Successfully matched service '{service_name}' to customer '{customer_name}' "
-                         f"with match_id: {response.match_id}")
+                LOG.info("Successfully matched service '%s' to customer '%s' with match_id: %s",
+                         service_name, customer_name, response.match_id)
                 matched_count += 1
 
             # Save match responses to file for next workflow
             self._save_match_service_to_customer_responses(match_responses, config_yaml_file)
 
-            LOG.info(f"Data Exchange service matching completed: {matched_count} matched, "
-                     f"{skipped_count} skipped, {failed_count} failed")
+            LOG.info("Data Exchange service matching completed: %s matched, %s skipped, %s failed",
+                     matched_count, skipped_count, failed_count)
             if failed_count > 0:
                 raise ConfigurationError(f"Data Exchange service to customer matching had {failed_count} failures "
                                          f"out of {matched_count + skipped_count + failed_count} total")
         except Exception as e:
-            LOG.error(f"Failed to match Data Exchange services to customers: {e}")
+            LOG.error("Failed to match Data Exchange services to customers: %s", e)
             raise ConfigurationError(f"Data Exchange service to customer matching failed: {e}")
 
     def accept_invitation(self, config_yaml_file: str, matches_file: str = None, dry_run: bool = False) -> None:
@@ -716,7 +725,7 @@ class DataExchangeManager(BaseManager):
             dry_run (bool, optional): If True, skip the actual API call (validation only). Defaults to False.
         """
         try:
-            LOG.info(f"accept_invitation: Loading configuration from {config_yaml_file}")
+            LOG.info("accept_invitation: Loading configuration from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             # All configurations are under 'data_exchange_acceptances' key
@@ -730,7 +739,7 @@ class DataExchangeManager(BaseManager):
                 raise ConfigurationError("data_exchange_acceptances must be a list of acceptance configurations")
 
             # Print current enterprise info
-            LOG.info(f"DataExchangeManager: Current enterprise info: {self.gsdk.enterprise_info}")
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             # Log dry-run mode if enabled
             if dry_run:
@@ -750,26 +759,26 @@ class DataExchangeManager(BaseManager):
             total_successful = result.get('total_successful', 0)
             total_failed = total_processed - total_successful
 
-            LOG.info(f"Data Exchange invitation acceptance completed: {total_successful} accepted, "
-                     f"{total_failed} failed")
+            LOG.info("Data Exchange invitation acceptance completed: %s accepted, %s failed",
+                     total_successful, total_failed)
 
             # Check if there were any failures
             if total_failed > 0:
                 if dry_run:
-                    LOG.error(f"[DRY-RUN] accept_invitation: {total_failed} "
-                              f"out of {total_processed} invitation acceptances failed")
+                    LOG.error("[DRY-RUN] accept_invitation: %s out of %s invitation acceptances failed",
+                              total_failed, total_processed)
                     raise ConfigurationError(f"[DRY-RUN] Data Exchange invitation acceptance had {total_failed} "
                                              f"failures out of {total_processed} total")
                 else:
-                    LOG.error(f"accept_invitation: {total_failed} "
-                              f"out of {total_processed} invitation acceptances failed")
+                    LOG.error("accept_invitation: %s out of %s invitation acceptances failed",
+                              total_failed, total_processed)
                     raise ConfigurationError(f"Data Exchange invitation acceptance had {total_failed} failures "
                                              f"out of {total_processed} total")
             return result
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.error(f"Failed to accept Data Exchange service invitation: {e}")
+            LOG.error("Failed to accept Data Exchange service invitation: %s", e)
             raise ConfigurationError(f"Data Exchange service acceptance failed: {e}")
 
     def _validate_gateway_requirements_for_acceptances(self, acceptances, min_gateways=2):
@@ -781,8 +790,8 @@ class DataExchangeManager(BaseManager):
             min_gateways (int): Minimum number of gateways required per region
         """
         try:
-            LOG.info(f"_validate_gateway_requirements_for_acceptances: Validating gateway requirements for "
-                     f"{len(acceptances)} acceptances")
+            LOG.info("_validate_gateway_requirements_for_acceptances: Validating gateway requirements for %s acceptances",
+                     len(acceptances))
 
             # Collect unique regions from acceptances
             regions_to_validate = set()
@@ -795,39 +804,40 @@ class DataExchangeManager(BaseManager):
             for region_name in regions_to_validate:
                 edges_summary = self.gsdk.get_edges_summary_filter(region=region_name, role='gateway', status='active')
                 if not edges_summary:
-                    LOG.error(f"_validate_gateway_requirements_for_acceptances: "
-                              f"No active gateways found in region {region_name}")
+                    LOG.error("_validate_gateway_requirements_for_acceptances: No active gateways found in region %s",
+                              region_name)
                     raise ConfigurationError(f"No active gateways found in region {region_name}")
                 else:
-                    LOG.info(f"_validate_gateway_requirements_for_acceptances: Region {region_name} has "
-                             f"{len(edges_summary)} active gateways")
+                    LOG.info("_validate_gateway_requirements_for_acceptances: Region %s has %s active gateways",
+                             region_name, len(edges_summary))
                 if len(edges_summary) < min_gateways:
-                    LOG.error(f"_validate_gateway_requirements_for_acceptances: Region {region_name} has only "
-                              f"{len(edges_summary)} gateways, minimum {min_gateways} required")
+                    LOG.error("_validate_gateway_requirements_for_acceptances: Region %s has only %s gateways, minimum %s required",
+                              region_name, len(edges_summary), min_gateways)
                     raise ConfigurationError(f"Region {region_name} has only {len(edges_summary)} gateways,"
                                              f"minimum {min_gateways} required")
                 else:
-                    LOG.info(f"_validate_gateway_requirements_for_acceptances: Region {region_name} meets "
-                             f"minimum gateway requirements")
+                    LOG.info("_validate_gateway_requirements_for_acceptances: Region %s meets minimum gateway requirements",
+                             region_name)
                 # Validate tunnel terminator connection count for each gateway
                 for edge_summary in edges_summary:
-                    LOG.info(f"_validate_gateway_requirements_for_acceptances: Validating tunnel terminator "
-                             f"connection count for gateway {edge_summary.hostname}")
+                    LOG.info("_validate_gateway_requirements_for_acceptances: Validating tunnel terminator connection count for gateway %s",
+                             edge_summary.hostname)
                     if hasattr(edge_summary, 'tt_conn_count') and edge_summary.tt_conn_count:
                         if edge_summary.tt_conn_count < 2:
-                            LOG.error(f"_validate_gateway_requirements_for_acceptances: Gateway "
-                                      f"{edge_summary.hostname} has only {edge_summary.tt_conn_count} "
-                                      f"tunnel terminators, minimum 2 required")
+                            LOG.error("_validate_gateway_requirements_for_acceptances: Gateway %s has only %s tunnel terminators, minimum 2 required",
+                                      edge_summary.hostname, edge_summary.tt_conn_count)
                             raise ConfigurationError(f"Gateway {edge_summary.hostname} has only "
                                                      f"{edge_summary.tt_conn_count} tunnel terminators, "
                                                      f"minimum 2 required")
                     else:
-                        LOG.error(f"_validate_gateway_requirements_for_acceptances: Gateway {edge_summary.hostname} "
-                                  f"does not have any tunnel terminators connected, minimum 2 required")
+                        LOG.error("_validate_gateway_requirements_for_acceptances: "
+                                  "Gateway %s does not have any tunnel terminators connected, "
+                                  "minimum 2 required",
+                                  edge_summary.hostname)
                         raise ConfigurationError(f"Gateway {edge_summary.hostname} does not have any "
                                                  f"tunnel terminators connected, minimum 2 required")
         except Exception as e:
-            LOG.warning(f"_validate_gateway_requirements_for_acceptances: Gateway validation failed: {e}")
+            LOG.warning("_validate_gateway_requirements_for_acceptances: Gateway validation failed: %s", e)
             raise
             # TODO: Don't fail the entire operation for validation issues ?
 
@@ -839,8 +849,8 @@ class DataExchangeManager(BaseManager):
             acceptances (list): List of acceptance configurations
         """
         try:
-            LOG.info(f"_validate_vpn_profiles_for_acceptances: Validating VPN profiles for "
-                     f"{len(acceptances)} acceptances")
+            LOG.info("_validate_vpn_profiles_for_acceptances: Validating VPN profiles for %s acceptances",
+                     len(acceptances))
 
             # Collect unique VPN profile names from acceptances
             vpn_profiles_to_validate = set()
@@ -858,7 +868,7 @@ class DataExchangeManager(BaseManager):
                 LOG.info("_validate_vpn_profiles_for_acceptances: No VPN profiles found in acceptances")
                 raise ConfigurationError("No VPN profiles found in acceptances")
 
-            LOG.info(f"_validate_vpn_profiles_for_acceptances: Validating {len(vpn_profiles_to_validate)} VPN profiles")
+            LOG.info("_validate_vpn_profiles_for_acceptances: Validating %s VPN profiles", len(vpn_profiles_to_validate))
             # Get all VPN profiles from portal
             portal_vpn_profiles = self.gsdk.get_global_ipsec_profiles()
             if not portal_vpn_profiles:
@@ -869,25 +879,25 @@ class DataExchangeManager(BaseManager):
             missing_profiles = []
             for vpn_profile_name in vpn_profiles_to_validate:
                 if vpn_profile_name not in portal_vpn_profiles:
-                    LOG.error(f"_validate_vpn_profiles_for_acceptances: VPN profile "
-                              f"'{vpn_profile_name}' not found in portal")
+                    LOG.error("_validate_vpn_profiles_for_acceptances: VPN profile '%s' not found in portal",
+                              vpn_profile_name)
                     missing_profiles.append(vpn_profile_name)
                 else:
-                    LOG.info(f"_validate_vpn_profiles_for_acceptances: VPN profile "
-                             f"'{vpn_profile_name}' exists in portal")
+                    LOG.info("_validate_vpn_profiles_for_acceptances: VPN profile '%s' exists in portal",
+                             vpn_profile_name)
 
             if missing_profiles:
                 error_msg = (f"The following VPN profiles are not found in the portal: "
                              f"{', '.join(missing_profiles)}")
-                LOG.error(f"_validate_vpn_profiles_for_acceptances: {error_msg}")
+                LOG.error("_validate_vpn_profiles_for_acceptances: %s", error_msg)
                 raise ConfigurationError(error_msg)
 
-            LOG.info(f"_validate_vpn_profiles_for_acceptances: All VPN profiles existence validated successfully for "
-                     f"{len(acceptances)} acceptances")
+            LOG.info("_validate_vpn_profiles_for_acceptances: All VPN profiles existence validated successfully for %s acceptances",
+                     len(acceptances))
         except ConfigurationError:
             raise
         except Exception as e:
-            LOG.warning(f"_validate_vpn_profiles_for_acceptances: VPN profile validation failed: {e}")
+            LOG.warning("_validate_vpn_profiles_for_acceptances: VPN profile validation failed: %s", e)
             raise
 
     def _process_multiple_acceptances(self, acceptances_config, matches_file=None, dry_run=False):
@@ -907,7 +917,7 @@ class DataExchangeManager(BaseManager):
             total_processed = 0
             total_successful = 0
 
-            LOG.info(f"_process_multiple_acceptances: Processing {len(acceptances_config)} invitation acceptances")
+            LOG.info("_process_multiple_acceptances: Processing %s invitation acceptances", len(acceptances_config))
 
             # Pre-fetch all sites, site_lists, regions, and LAN segments once for faster lookups
             LOG.info("_process_multiple_acceptances: Pre-fetching sites, site_lists, regions, and LAN segments")
@@ -922,16 +932,15 @@ class DataExchangeManager(BaseManager):
             regions_lookup = {region.name: region.id for region in regions} if regions else {}
             lan_segments_lookup = {segment.name: segment.id for segment in lan_segments} if lan_segments else {}
 
-            LOG.info(f"_process_multiple_acceptances: Pre-fetched {len(sites_lookup)} sites, "
-                     f"{len(site_lists_lookup)} site_lists, {len(regions_lookup)} regions, "
-                     f"and {len(lan_segments_lookup)} LAN segments")
+            LOG.info("_process_multiple_acceptances: Pre-fetched %s sites, %s site_lists, %s regions, and %s LAN segments",
+                     len(sites_lookup), len(site_lists_lookup), len(regions_lookup), len(lan_segments_lookup))
 
             for i, acceptance_config in enumerate(acceptances_config):
                 try:
                     LOG.info("--------------------------------")
-                    LOG.info(f"_process_multiple_acceptances: Processing acceptance {i+1}/{len(acceptances_config)}")
-                    LOG.info(f"_process_multiple_acceptances: Customer: '{acceptance_config.get('customerName')}' "
-                             f"Service: '{acceptance_config.get('serviceName')}'")
+                    LOG.info("_process_multiple_acceptances: Processing acceptance %s/%s", i + 1, len(acceptances_config))
+                    LOG.info("_process_multiple_acceptances: Customer: '%s' Service: '%s'",
+                             acceptance_config.get('customerName'), acceptance_config.get('serviceName'))
                     # Resolve names to IDs (returns direct API payload structure)
                     resolved_config = self._resolve_acceptance_names_to_ids(
                         acceptance_config, matches_file,
@@ -954,16 +963,13 @@ class DataExchangeManager(BaseManager):
                     # Use the resolved configuration directly as the API payload
                     acceptance_payload = resolved_config
 
-                    LOG.info(f"_process_multiple_acceptances: Acceptance payload for "
-                             f"'{acceptance_config.get('customerName')}' and '{acceptance_config.get('serviceName')}'"
-                             f": {acceptance_payload}")
+                    LOG.info("_process_multiple_acceptances: Acceptance payload for '%s' and '%s': %s",
+                             acceptance_config.get('customerName'), acceptance_config.get('serviceName'), acceptance_payload)
 
                     # Check for dry-run mode
                     if dry_run:
-                        LOG.info(f"_process_multiple_acceptances: DRY-RUN - Skipping API call for "
-                                 f"'{acceptance_config.get('customerName')}' and "
-                                 f"'{acceptance_config.get('serviceName')}' "
-                                 f" with match_id: {match_id} and service_id: {service_id}")
+                        LOG.info("_process_multiple_acceptances: DRY-RUN - Skipping API call for '%s' and '%s' with match_id: %s and service_id: %s",
+                                 acceptance_config.get('customerName'), acceptance_config.get('serviceName'), match_id, service_id)
                         result = {
                             'dry_run': True,
                             'message': 'API call skipped in dry-run mode',
@@ -985,7 +991,7 @@ class DataExchangeManager(BaseManager):
                     total_successful += 1
 
                 except Exception as e:
-                    LOG.error(f"_process_multiple_acceptances: Failed to process acceptance {i+1}: {e}")
+                    LOG.error("_process_multiple_acceptances: Failed to process acceptance %s: %s", i + 1, e)
                     results.append({
                         'customer_name': acceptance_config.get('customerName'),
                         'service_name': acceptance_config.get('serviceName'),
@@ -995,8 +1001,8 @@ class DataExchangeManager(BaseManager):
 
                 total_processed += 1
 
-            LOG.info(f"_process_multiple_acceptances: Completed {total_successful}/{total_processed} "
-                     f"acceptances successfully")
+            LOG.info("_process_multiple_acceptances: Completed %s/%s acceptances successfully",
+                     total_successful, total_processed)
 
             return {
                 'total_processed': total_processed,
@@ -1005,7 +1011,7 @@ class DataExchangeManager(BaseManager):
             }
 
         except Exception as e:
-            LOG.error(f"Failed to process multiple acceptances: {e}")
+            LOG.error("Failed to process multiple acceptances: %s", e)
             raise ConfigurationError(f"Multiple acceptance processing failed: {e}")
 
     def _fill_missing_tunnel_values(self, acceptance_config, region_id, lan_segment_id):
@@ -1030,13 +1036,13 @@ class DataExchangeManager(BaseManager):
                 ipv4_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, 'ipv4')
                 if ipv4_subnet:
                     tunnel1['insideIpv4Cidr'] = ipv4_subnet
-                    LOG.info(f"_fill_missing_tunnel_values: Filled tunnel1 insideIpv4Cidr: {ipv4_subnet}")
+                    LOG.info("_fill_missing_tunnel_values: Filled tunnel1 insideIpv4Cidr: %s", ipv4_subnet)
 
             if 'insideIpv6Cidr' in tunnel1 and tunnel1['insideIpv6Cidr'] is None:
                 ipv6_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, 'ipv6')
                 if ipv6_subnet:
                     tunnel1['insideIpv6Cidr'] = ipv6_subnet
-                    LOG.info(f"_fill_missing_tunnel_values: Filled tunnel1 insideIpv6Cidr: {ipv6_subnet}")
+                    LOG.info("_fill_missing_tunnel_values: Filled tunnel1 insideIpv6Cidr: %s", ipv6_subnet)
 
             if tunnel1.get('psk') is None:
                 psk = self.gsdk.get_preshared_key()
@@ -1050,13 +1056,13 @@ class DataExchangeManager(BaseManager):
                 ipv4_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, 'ipv4')
                 if ipv4_subnet:
                     tunnel2['insideIpv4Cidr'] = ipv4_subnet
-                    LOG.info(f"_fill_missing_tunnel_values: Filled tunnel2 insideIpv4Cidr: {ipv4_subnet}")
+                    LOG.info("_fill_missing_tunnel_values: Filled tunnel2 insideIpv4Cidr: %s", ipv4_subnet)
 
             if 'insideIpv6Cidr' in tunnel2 and tunnel2['insideIpv6Cidr'] is None:
                 ipv6_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, 'ipv6')
                 if ipv6_subnet:
                     tunnel2['insideIpv6Cidr'] = ipv6_subnet
-                    LOG.info(f"_fill_missing_tunnel_values: Filled tunnel2 insideIpv6Cidr: {ipv6_subnet}")
+                    LOG.info("_fill_missing_tunnel_values: Filled tunnel2 insideIpv6Cidr: %s", ipv6_subnet)
 
             if tunnel2.get('psk') is None:
                 psk = self.gsdk.get_preshared_key()
@@ -1067,7 +1073,7 @@ class DataExchangeManager(BaseManager):
             return acceptance_config
 
         except Exception as e:
-            LOG.error(f"_fill_missing_tunnel_values: Error filling tunnel values: {e}")
+            LOG.error("_fill_missing_tunnel_values: Error filling tunnel values: %s", e)
             return acceptance_config
 
     def _resolve_acceptance_names_to_ids(self, acceptance_config, matches_file=None,
@@ -1094,8 +1100,8 @@ class DataExchangeManager(BaseManager):
             if not customer_name or not service_name:
                 raise ConfigurationError("customer_name and service_name are required in acceptance configuration")
 
-            LOG.info(f"_resolve_acceptance_names_to_ids: Resolving names for customer "
-                     f"'{customer_name}' and service '{service_name}'")
+            LOG.info("_resolve_acceptance_names_to_ids: Resolving names for customer '%s' and service '%s'",
+                     customer_name, service_name)
 
             # Get match ID and service ID from customer name and service name combination
             # This is important because a customer can be matched to multiple services
@@ -1188,12 +1194,12 @@ class DataExchangeManager(BaseManager):
             # Fill in missing tunnel values using Graphiant portal APIs
             resolved_config = self._fill_missing_tunnel_values(resolved_config, region_id, lan_segment_id)
 
-            LOG.info(f"_resolve_acceptance_names_to_ids: Resolved service_id={service_id}, match_id={match_id}, "
-                     f"region_id={region_id}")
+            LOG.info("_resolve_acceptance_names_to_ids: Resolved service_id=%s, match_id=%s, region_id=%s",
+                     service_id, match_id, region_id)
             return resolved_config
 
         except Exception as e:
-            LOG.error(f"Failed to resolve names to IDs: {e}")
+            LOG.error("Failed to resolve names to IDs: %s", e)
             raise ConfigurationError(f"Name resolution failed: {e}")
 
     def _get_match_id_from_customer_service(self, customer_name, service_name, matches_file=None):
@@ -1239,7 +1245,7 @@ class DataExchangeManager(BaseManager):
                         )
 
             if os.path.exists(matches_file):
-                LOG.info(f"_get_match_id_from_customer_service: Reading matches from {matches_file}")
+                LOG.info("_get_match_id_from_customer_service: Reading matches from %s", matches_file)
                 with open(matches_file, 'r') as f:
                     matches_data = json.load(f)
 
@@ -1249,23 +1255,22 @@ class DataExchangeManager(BaseManager):
                             match.get('service_name') == service_name):
                         match_id = match.get('match_id')
                         service_id = match.get('service_id')
-                        LOG.info(f"_get_match_id_from_customer_service: Found match_id {match_id} "
-                                 f"and service_id {service_id} for customer "
-                                 f"'{customer_name}' and service '{service_name}'")
+                        LOG.info("_get_match_id_from_customer_service: Found match_id %s and service_id %s for customer '%s' and service '%s'",
+                                 match_id, service_id, customer_name, service_name)
                         return {
                             'match_id': match_id,
                             'service_id': service_id
                         }
 
-                LOG.warning(f"_get_match_id_from_customer_service: No match found for customer "
-                            f"'{customer_name}' and service '{service_name}'")
+                LOG.warning("_get_match_id_from_customer_service: No match found for customer '%s' and service '%s'",
+                            customer_name, service_name)
                 return None
             else:
-                LOG.error(f"_get_match_id_from_customer_service: Matches file not found at {matches_file}")
+                LOG.error("_get_match_id_from_customer_service: Matches file not found at %s", matches_file)
                 return None
 
         except Exception as e:
-            LOG.error(f"_get_match_id_from_customer_service: Error reading matches file: {e}")
+            LOG.error("_get_match_id_from_customer_service: Error reading matches file: %s", e)
             return None
 
     def get_service_health(self, service_name, is_provider=False):
@@ -1280,14 +1285,14 @@ class DataExchangeManager(BaseManager):
             dict: Service health data
         """
         try:
-            LOG.info(f"get_service_health: Retrieving health for service {service_name}")
+            LOG.info("get_service_health: Retrieving health for service %s", service_name)
 
             # Get service ID from service name
             service_id = self.gsdk.get_data_exchange_service_id_by_name(service_name)
             if not service_id:
                 raise ConfigurationError(f"Service '{service_name}' not found")
 
-            LOG.info(f"get_service_health: Found service ID {service_id} for service '{service_name}'")
+            LOG.info("get_service_health: Found service ID %s for service '%s'", service_id, service_name)
             response = self.gsdk.get_service_health(service_id, is_provider)
 
             if response and hasattr(response, 'service_health'):
@@ -1300,14 +1305,13 @@ class DataExchangeManager(BaseManager):
                         health.customer_prefix_health.health
                     ])
 
-                LOG.info(
-                    f"Service Health:\n"
-                    f"""{tabulate(health_table,
+                LOG.info("Service Health:\n%s",
+                         tabulate(health_table,
                                   headers=['Customer', 'Overall', 'Producer Prefixes', 'Customer Prefixes'],
-                                  tablefmt='grid')}""")
+                                  tablefmt='grid'))
 
             return response.to_dict() if response else {}
 
         except Exception as e:
-            LOG.error(f"Failed to retrieve service health: {e}")
+            LOG.error("Failed to retrieve service health: %s", e)
             raise ConfigurationError(f"Service health retrieval failed: {e}")

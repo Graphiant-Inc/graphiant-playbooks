@@ -20,7 +20,7 @@ class InterfaceManager(BaseManager):
     including both regular interfaces and VLAN sub-interfaces.
     """
 
-    def configure(self, interface_config_file: str, circuit_config_file: str = None) -> None:
+    def configure(self, interface_config_file: str, circuit_config_file: str = None) -> None:  # pylint: disable=arguments-renamed
         """
         Configure interfaces and circuits for multiple devices concurrently.
         This method combines all interface and circuit configurations in a single API call per device.
@@ -44,7 +44,7 @@ class InterfaceManager(BaseManager):
                 circuit_config_data = self.render_config_file(circuit_config_file)
 
             if 'interfaces' not in interface_config_data:
-                LOG.warning(f"No interfaces configuration found in {interface_config_file}")
+                LOG.warning("No interfaces configuration found in %s", interface_config_file)
                 return
 
             # Collect all device configurations first
@@ -90,8 +90,8 @@ class InterfaceManager(BaseManager):
                                 if sub_interface.get('circuit'):
                                     referenced_circuits.add(sub_interface['circuit'])
 
-                    LOG.info(f"[configure] Processing device: {device_name} (ID: {device_id})")
-                    LOG.info(f"Referenced circuits: {list(referenced_circuits)}")
+                    LOG.info("[configure] Processing device: %s (ID: %s)", device_name, device_id)
+                    LOG.info("Referenced circuits: %s", list(referenced_circuits))
 
                     # Process circuits for this device
                     circuits_configured = 0
@@ -103,11 +103,9 @@ class InterfaceManager(BaseManager):
                                 **circuit_config
                             )
                             circuits_configured += 1
-                            LOG.info(f" ✓ To configure circuit '{circuit_config.get('circuit')}' "
-                                     f"for device: {device_name}")
+                            LOG.info(" ✓ To configure circuit '%s' for device: %s", circuit_config.get('circuit'), device_name)
                         else:
-                            LOG.info(f" ✗ Skipping circuit '{circuit_config.get('circuit')}' "
-                                     f"- not referenced in interface configs")
+                            LOG.info(" ✗ Skipping circuit '%s' - not referenced in interface configs", circuit_config.get('circuit'))
 
                     # Process all interfaces for this device (both LAN and WAN)
                     interfaces_configured = 0
@@ -140,8 +138,8 @@ class InterfaceManager(BaseManager):
                                     **combined_config
                                 )
                                 interfaces_configured += 1 + len(all_subinterfaces)
-                                LOG.info(f" ✓ To configure interface '{interface_config.get('name')}' "
-                                         f"with {len(all_subinterfaces)} subinterfaces for device: {device_name}")
+                                LOG.info(" ✓ To configure interface '%s' with %s subinterfaces for device: %s",
+                                         interface_config.get('name'), len(all_subinterfaces), device_name)
                             else:
                                 # Interface has no subinterfaces
                                 self.config_utils.device_interface(
@@ -150,34 +148,31 @@ class InterfaceManager(BaseManager):
                                     **interface_config
                                 )
                                 interfaces_configured += 1
-                                LOG.info(f" ✓ To configure interface '{interface_config.get('name')}' "
-                                         f"for device: {device_name}")
+                                LOG.info(" ✓ To configure interface '%s' for device: %s", interface_config.get('name'), device_name)
                         else:
-                            LOG.info(f" ✗ Skipping interface '{interface_config.get('name')}' "
-                                     f"- no configuration found")
+                            LOG.info(" ✗ Skipping interface '%s' - no configuration found", interface_config.get('name'))
 
-                    LOG.info(f"Device {device_name} summary: {circuits_configured} circuits, "
-                             f"{interfaces_configured} interfaces to be configured")
-                    LOG.info(f"Final config for {device_name}: {output_config[device_id]['edge']}")
+                    LOG.info("Device %s summary: %s circuits, %s interfaces to be configured", device_name, circuits_configured, interfaces_configured)
+                    LOG.info("Final config for %s: %s", device_name, output_config[device_id]['edge'])
 
                 except DeviceNotFoundError:
-                    LOG.error(f"Device not found: {device_name}")
+                    LOG.error("Device not found: %s", device_name)
                     raise
                 except Exception as e:
-                    LOG.error(f"Error configuring device {device_name}: {str(e)}")
+                    LOG.error("Error configuring device %s: %s", device_name, str(e))
                     raise ConfigurationError(f"Configuration failed for {device_name}: {str(e)}")
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
-                LOG.info(f"Successfully configured interfaces and circuits for {len(output_config)} devices")
+                LOG.info("Successfully configured interfaces and circuits for %s devices", len(output_config))
             else:
                 LOG.warning("No valid device configurations found")
 
         except Exception as e:
-            LOG.error(f"Error in interface and circuit configuration: {str(e)}")
+            LOG.error("Error in interface and circuit configuration: %s", str(e))
             raise ConfigurationError(f"Interface and circuit configuration failed: {str(e)}")
 
-    def deconfigure(self, interface_config_file: str, circuit_config_file: str = None,
+    def deconfigure(self, interface_config_file: str, circuit_config_file: str = None,  # pylint: disable=arguments-renamed
                     circuits_only: bool = False) -> None:
         """
         Deconfigure interfaces and circuits for multiple devices concurrently.
@@ -205,7 +200,7 @@ class InterfaceManager(BaseManager):
                 circuit_config_data = self.render_config_file(circuit_config_file)
 
             if 'interfaces' not in interface_config_data:
-                LOG.warning(f"No interfaces configuration found in {interface_config_file}")
+                LOG.warning("No interfaces configuration found in %s", interface_config_file)
                 return
 
             # Collect all device configurations first
@@ -251,8 +246,8 @@ class InterfaceManager(BaseManager):
                                 if sub_interface.get('circuit'):
                                     referenced_circuits.add(sub_interface['circuit'])
 
-                    LOG.info(f"[deconfigure] Processing device: {device_name} (ID: {device_id})")
-                    LOG.info(f"Referenced circuits: {list(referenced_circuits)}")
+                    LOG.info("[deconfigure] Processing device: %s (ID: %s)", device_name, device_id)
+                    LOG.info("Referenced circuits: %s", list(referenced_circuits))
 
                     # Process circuits for this device (explicit deconfiguration for circuits with staticRoutes)
                     circuits_deconfigured = 0
@@ -264,12 +259,9 @@ class InterfaceManager(BaseManager):
                                     action="delete",
                                     **circuit_config
                                 )
-                                circuits_deconfigured += 1
-                                LOG.info(f" ✓ To deconfigure circuit '{circuit_config.get('circuit')}' "
-                                         f"for device: {device_name}")
+                                LOG.info(" ✓ To deconfigure circuit '%s' for device: %s", circuit_config.get('circuit'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping circuit '{circuit_config.get('circuit')}' "
-                                         f"- not referenced in interface configs")
+                                LOG.info(" ✗ Skipping circuit '%s' - not referenced in interface configs", circuit_config.get('circuit'))
 
                     # Process all interfaces for this device (both LAN and WAN) - skip if circuits_only=True
                     interfaces_deconfigured = 0
@@ -304,8 +296,8 @@ class InterfaceManager(BaseManager):
                                         **combined_config
                                     )
                                     interfaces_deconfigured += 1 + len(all_subinterfaces)
-                                    LOG.info(f" ✓ To deconfigure interface '{interface_config.get('name')}' "
-                                             f"with {len(all_subinterfaces)} subinterfaces for device: {device_name}")
+                                    LOG.info(" ✓ To deconfigure interface '%s' with %s subinterfaces for device: %s",
+                                             interface_config.get('name'), len(all_subinterfaces), device_name)
                                 else:
                                     # Interface has no subinterfaces
                                     self.config_utils.device_interface(
@@ -315,41 +307,37 @@ class InterfaceManager(BaseManager):
                                         **interface_config
                                     )
                                     interfaces_deconfigured += 1
-                                    LOG.info(f" ✓ To deconfigure interface '{interface_config.get('name')}' "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To deconfigure interface '%s' for device: %s", interface_config.get('name'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping interface '{interface_config.get('name')}' "
-                                         f"- no configuration found")
+                                LOG.info(" ✗ Skipping interface '%s' - no configuration found", interface_config.get('name'))
                     else:
-                        LOG.info(" ✓ Skipping interface deconfiguration (circuits-only mode)")
+                        LOG.info(" ✗ Skipping interface '%s' - no configuration found", interface_config.get('name'))
 
                     if circuits_only:
-                        LOG.info(f"Device {device_name} "
-                                 f"summary: {circuits_deconfigured} circuits to be deconfigured (circuits-only mode)")
+                        LOG.info("Device %s summary: %s circuits to be deconfigured (circuits-only mode)",
+                                 device_name, circuits_deconfigured)
                     else:
-                        LOG.info(f"Device {device_name} "
-                                 f"summary: {circuits_deconfigured} circuits "
-                                 f"and {interfaces_deconfigured} interfaces to be deconfigured")
-                    LOG.info(f"Final config for {device_name}: {output_config[device_id]['edge']}")
+                        LOG.info("Device %s summary: %s circuits and %s interfaces to be deconfigured",
+                                 device_name, circuits_deconfigured, interfaces_deconfigured)
+                    LOG.info("Final config for %s: %s", device_name, output_config[device_id]['edge'])
 
                 except DeviceNotFoundError:
-                    LOG.error(f"Device not found: {device_name}")
+                    LOG.error("Device not found: %s", device_name)
                     raise
                 except Exception as e:
-                    LOG.error(f"Error deconfiguring device {device_name}: {str(e)}")
-                    LOG.error(f"Device ID: {device_id}, Device Name: {device_name}")
-                    LOG.error(f"Exception type: {type(e).__name__}")
+                    LOG.error("Error deconfiguring device %s: %s", device_name, str(e))
+                    LOG.error("Device ID: %s, Device Name: %s", device_id, device_name)
+                    LOG.error("Exception type: %s", type(e).__name__)
                     import traceback
-                    LOG.error(f"Full traceback: {traceback.format_exc()}")
+                    LOG.error("Full traceback: %s", traceback.format_exc())
                     raise ConfigurationError(f"Deconfiguration failed for {device_name}: {str(e)}")
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
                 if circuits_only:
-                    LOG.info(f"Successfully deconfigured circuits for {len(output_config)} "
-                             f"devices (circuits-only mode)")
+                    LOG.info("Successfully deconfigured circuits for %s devices (circuits-only mode)", len(output_config))
                 else:
-                    LOG.info(f"Successfully deconfigured interfaces and circuits for {len(output_config)} devices")
+                    LOG.info("Successfully deconfigured interfaces and circuits for %s devices", len(output_config))
             else:
                 if circuits_only:
                     LOG.warning("No valid circuit configurations found")
@@ -357,10 +345,10 @@ class InterfaceManager(BaseManager):
                     LOG.warning("No valid device configurations found")
 
         except Exception as e:
-            LOG.error(f"Error in interface and circuit deconfiguration: {str(e)}")
-            LOG.error(f"Exception type: {type(e).__name__}")
+            LOG.error("Error in interface and circuit deconfiguration: %s", str(e))
+            LOG.error("Exception type: %s", type(e).__name__)
             import traceback
-            LOG.error(f"Full traceback: {traceback.format_exc()}")
+            LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Interface and circuit deconfiguration failed: {str(e)}")
 
     def configure_interfaces(self, interface_config_file: str, circuit_config_file: str = None) -> None:
@@ -410,8 +398,7 @@ class InterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        LOG.info(f"Configuring circuits only using circuit config: {circuit_config_file} "
-                 f"and interface config: {interface_config_file}")
+        LOG.info("Configuring circuits only using circuit config: %s and interface config: %s", circuit_config_file, interface_config_file)
         self.configure_wan_circuits_interfaces(circuit_config_file, interface_config_file, circuits_only=True)
 
     def deconfigure_circuits(self, circuit_config_file: str, interface_config_file: str) -> None:
@@ -428,8 +415,7 @@ class InterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        LOG.info(f"Deconfiguring circuits only using circuit config: {circuit_config_file} "
-                 f"and interface config: {interface_config_file}")
+        LOG.info("Deconfiguring circuits only using circuit config: %s and interface config: %s", circuit_config_file, interface_config_file)
         self.deconfigure_wan_circuits_interfaces(interface_config_file, circuit_config_file, circuits_only=True)
 
     def configure_lan_interfaces(self, interface_config_file: str) -> None:
@@ -449,7 +435,7 @@ class InterfaceManager(BaseManager):
             output_config = {}
 
             if 'interfaces' not in config_data:
-                LOG.warning(f"No interfaces configuration found in {interface_config_file}")
+                LOG.warning("No interfaces configuration found in %s", interface_config_file)
                 return
 
             for device_info in config_data.get("interfaces"):
@@ -472,9 +458,7 @@ class InterfaceManager(BaseManager):
                                 for sub_interface in config.get('sub_interfaces', []):
                                     if sub_interface.get('lan'):
                                         lan_subinterfaces.append(sub_interface)
-                                        LOG.info(f" ✓ Found LAN subinterface "
-                                                 f"'{config.get('name')}.{sub_interface.get('vlan')}' "
-                                                 f"for device: {device_name}")
+                                        LOG.info(" ✓ Found LAN subinterface '%s.%s' for device: %s", config.get('name'), sub_interface.get('vlan'), device_name)
 
                             # Process this interface if it has any LAN configuration
                             if has_lan_main or lan_subinterfaces:
@@ -484,9 +468,8 @@ class InterfaceManager(BaseManager):
                                     combined_config['sub_interfaces'] = lan_subinterfaces
                                     self.config_utils.device_interface(device_config, action="add", **combined_config)
                                     lan_interfaces_configured += 1 + len(lan_subinterfaces)
-                                    LOG.info(f" ✓ To configure LAN main interface '{config.get('name')}' "
-                                             f"and {len(lan_subinterfaces)} LAN subinterfaces "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To configure LAN main interface '%s' and %s LAN subinterfaces for device: %s",
+                                             config.get('name'), len(lan_subinterfaces), device_name)
 
                                 elif has_lan_main:
                                     # Only main interface has LAN config
@@ -494,8 +477,7 @@ class InterfaceManager(BaseManager):
                                     main_config.pop('sub_interfaces', None)  # Remove subinterfaces
                                     self.config_utils.device_interface(device_config, action="add", **main_config)
                                     lan_interfaces_configured += 1
-                                    LOG.info(f" ✓ To configure LAN main interface '{config.get('name')}' "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To configure LAN main interface '%s' for device: %s", config.get('name'), device_name)
 
                                 elif lan_subinterfaces:
                                     # Only subinterfaces have LAN config - create minimal config
@@ -506,36 +488,37 @@ class InterfaceManager(BaseManager):
                                     self.config_utils.device_interface(device_config, action="add",
                                                                        **subinterface_config)
                                     lan_interfaces_configured += len(lan_subinterfaces)
-                                    LOG.info(f" ✓ Configure {len(lan_subinterfaces)} LAN subinterfaces for interface "
-                                             f"'{config.get('name')}' on device: {device_name}")
+                                    LOG.info(" ✓ Configure %s LAN subinterfaces for interface '%s' on device: %s",
+                                             len(lan_subinterfaces), config.get('name'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping interface '{config.get('name')}' - no LAN configuration found")
+                                LOG.info(" ✗ Skipping interface '%s' - no LAN configuration found", config.get('name'))
 
+                        # Check if any LAN interfaces were configured for this device
+                        # Note: This check is inside the loop to evaluate after processing all configs for this device
                         if lan_interfaces_configured > 0:
                             output_config[device_id] = {
                                 "device_id": device_id,
                                 "edge": device_config
                             }
-                            LOG.info(f"Device {device_name} "
-                                     f"summary: {lan_interfaces_configured} LAN interfaces to be configured")
+                            LOG.info("Device %s summary: %s LAN interfaces to be configured", device_name, lan_interfaces_configured)
                         else:
-                            LOG.info(f"Device {device_name}: No LAN interfaces found to configure")
+                            LOG.info("Device %s: No LAN interfaces found to configure", device_name)
 
                     except DeviceNotFoundError:
-                        LOG.error(f"Device not found: {device_name}")
+                        LOG.error("Device not found: %s", device_name)
                         raise
                     except Exception as e:
-                        LOG.error(f"Error configuring LAN interfaces for device {device_name}: {str(e)}")
+                        LOG.error("Error configuring LAN interfaces for device %s: %s", device_name, str(e))
                         raise ConfigurationError(f"LAN interface configuration failed for {device_name}: {str(e)}")
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
-                LOG.info(f"Successfully configured LAN interfaces for {len(output_config)} devices")
+                LOG.info("Successfully configured LAN interfaces for %s devices", len(output_config))
             else:
                 LOG.warning("No LAN interface configurations to apply")
 
         except Exception as e:
-            LOG.error(f"Error in LAN interface configuration: {str(e)}")
+            LOG.error("Error in LAN interface configuration: %s", str(e))
             raise ConfigurationError(f"LAN interface configuration failed: {str(e)}")
 
     def deconfigure_lan_interfaces(self, interface_config_file: str) -> None:
@@ -556,7 +539,7 @@ class InterfaceManager(BaseManager):
             default_lan = f'default-{self.gsdk.get_enterprise_id()}'
 
             if 'interfaces' not in config_data:
-                LOG.warning(f"No interfaces configuration found in {interface_config_file}")
+                LOG.warning("No interfaces configuration found in %s", interface_config_file)
                 return
 
             for device_info in config_data.get("interfaces"):
@@ -579,9 +562,7 @@ class InterfaceManager(BaseManager):
                                 for sub_interface in config.get('sub_interfaces', []):
                                     if sub_interface.get('lan'):
                                         lan_subinterfaces.append(sub_interface)
-                                        LOG.info(f" ✓ Found LAN subinterface "
-                                                 f"'{config.get('name')}.{sub_interface.get('vlan')}' "
-                                                 f"for device: {device_name}")
+                                        LOG.info(" ✓ Found LAN subinterface '%s.%s' for device: %s", config.get('name'), sub_interface.get('vlan'), device_name)
 
                             # Process this interface if it has any LAN configuration
                             if has_lan_main or lan_subinterfaces:
@@ -592,9 +573,8 @@ class InterfaceManager(BaseManager):
                                     self.config_utils.device_interface(device_config, action="delete",
                                                                        **combined_config, default_lan=default_lan)
                                     lan_interfaces_deconfigured += 1 + len(lan_subinterfaces)
-                                    LOG.info(f" ✓ To deconfigure LAN main interface '{config.get('name')}' "
-                                             f"and {len(lan_subinterfaces)} LAN subinterfaces "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To deconfigure LAN main interface '%s' and %s LAN subinterfaces for device: %s",
+                                             config.get('name'), len(lan_subinterfaces), device_name)
 
                                 elif has_lan_main:
                                     # Only main interface has LAN config
@@ -603,8 +583,7 @@ class InterfaceManager(BaseManager):
                                     self.config_utils.device_interface(device_config, action="delete", **main_config,
                                                                        default_lan=default_lan)
                                     lan_interfaces_deconfigured += 1
-                                    LOG.info(f" ✓ To deconfigure LAN main interface '{config.get('name')}' "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To deconfigure LAN main interface '%s' for device: %s", config.get('name'), device_name)
 
                                 elif lan_subinterfaces:
                                     # Only subinterfaces have LAN config - create minimal config
@@ -615,43 +594,42 @@ class InterfaceManager(BaseManager):
                                     self.config_utils.device_interface(device_config, action="delete",
                                                                        **subinterface_config, default_lan=default_lan)
                                     lan_interfaces_deconfigured += len(lan_subinterfaces)
-                                    LOG.info(f" ✓ Deconfigure {len(lan_subinterfaces)} LAN subinterfaces for interface"
-                                             f" '{config.get('name')}' on device: {device_name}")
+                                    LOG.info(" ✓ Deconfigure %s LAN subinterfaces for interface '%s' on device: %s",
+                                             len(lan_subinterfaces), config.get('name'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping interface '{config.get('name')}' - no LAN configuration found")
+                                LOG.info(" ✗ Skipping interface '%s' - no LAN configuration found", config.get('name'))
 
                         if lan_interfaces_deconfigured > 0:
                             output_config[device_id] = {
                                 "device_id": device_id,
                                 "edge": device_config
                             }
-                            LOG.info(f"Device {device_name} "
-                                     f"summary: {lan_interfaces_deconfigured} LAN interfaces to be deconfigured")
+                            LOG.info("Device %s summary: %s LAN interfaces to be deconfigured", device_name, lan_interfaces_deconfigured)
                         else:
-                            LOG.info(f"Device {device_name}: No LAN interfaces found to deconfigure")
+                            LOG.info("Device %s: No LAN interfaces found to deconfigure", device_name)
 
                     except DeviceNotFoundError:
-                        LOG.error(f"Device not found: {device_name}")
+                        LOG.error("Device not found: %s", device_name)
                         raise
                     except Exception as e:
-                        LOG.error(f"Error deconfiguring LAN interfaces for device {device_name}: {str(e)}")
-                        LOG.error(f"Device ID: {device_id}, Device Name: {device_name}")
-                        LOG.error(f"Exception type: {type(e).__name__}")
+                        LOG.error("Error deconfiguring LAN interfaces for device %s: %s", device_name, str(e))
+                        LOG.error("Device ID: %s, Device Name: %s", device_id, device_name)
+                        LOG.error("Exception type: %s", type(e).__name__)
                         import traceback
-                        LOG.error(f"Full traceback: {traceback.format_exc()}")
+                        LOG.error("Full traceback: %s", traceback.format_exc())
                         raise ConfigurationError(f"LAN interface deconfiguration failed for {device_name}: {str(e)}")
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
-                LOG.info(f"Successfully deconfigured LAN interfaces for {len(output_config)} devices")
+                LOG.info("Successfully deconfigured LAN interfaces for %s devices", len(output_config))
             else:
                 LOG.warning("No LAN interface configurations to remove")
 
         except Exception as e:
-            LOG.error(f"Error in LAN interface deconfiguration: {str(e)}")
-            LOG.error(f"Exception type: {type(e).__name__}")
+            LOG.error("Error in LAN interface deconfiguration: %s", str(e))
+            LOG.error("Exception type: %s", type(e).__name__)
             import traceback
-            LOG.error(f"Full traceback: {traceback.format_exc()}")
+            LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"LAN interface deconfiguration failed: {str(e)}")
 
     def configure_wan_circuits_interfaces(self, circuit_config_file: str, interface_config_file: str,
@@ -721,12 +699,10 @@ class InterfaceManager(BaseManager):
                                     referenced_circuits.add(sub_interface['circuit'])
 
                     if circuits_only:
-                        LOG.info(f"[configure_wan_circuits_interfaces] Processing device: {device_name} "
-                                 f"(ID: {device_id}) - CIRCUITS ONLY MODE")
+                        LOG.info("[configure_wan_circuits_interfaces] Processing device: %s (ID: %s) - CIRCUITS ONLY MODE", device_name, device_id)
                     else:
-                        LOG.info(f"[configure_wan_circuits_interfaces] Processing device: {device_name} "
-                                 f"(ID: {device_id})")
-                    LOG.info(f"Referenced circuits: {list(referenced_circuits)}")
+                        LOG.info("[configure_wan_circuits_interfaces] Processing device: %s (ID: %s)", device_name, device_id)
+                    LOG.info("Referenced circuits: %s", list(referenced_circuits))
 
                     # Process circuits for this device
                     circuits_configured = 0
@@ -738,11 +714,9 @@ class InterfaceManager(BaseManager):
                                 **circuit_config
                             )
                             circuits_configured += 1
-                            LOG.info(f" ✓ To configure circuit '{circuit_config.get('circuit')}' "
-                                     f"for device: {device_name}")
+                            LOG.info(" ✓ To configure circuit '%s' for device: %s", circuit_config.get('circuit'), device_name)
                         else:
-                            LOG.info(f" ✗ Skipping circuit '{circuit_config.get('circuit')}' "
-                                     f"- not referenced in interface configs")
+                            LOG.info(" ✗ Skipping circuit '%s' - not referenced in interface configs", circuit_config.get('circuit'))
 
                     # Process interfaces for this device (only if not circuits_only)
                     interfaces_configured = 0
@@ -756,10 +730,9 @@ class InterfaceManager(BaseManager):
                                 for sub_interface in interface_config.get('sub_interfaces', []):
                                     if sub_interface.get('circuit'):
                                         wan_subinterfaces.append(sub_interface)
-                                        LOG.info(f" ✓ Found WAN subinterface "
-                                                 f"'{interface_config.get('name')}.{sub_interface.get('vlan')}' "
-                                                 f"with circuit '{sub_interface.get('circuit')}' "
-                                                 f"for device: {device_name}")
+                                        LOG.info(" ✓ Found WAN subinterface '%s.%s' with circuit '%s' for device: %s",
+                                                 interface_config.get('name'), sub_interface.get('vlan'),
+                                                 sub_interface.get('circuit'), device_name)
 
                             # Process this interface if it has any WAN configuration
                             if has_wan_main or wan_subinterfaces:
@@ -773,10 +746,9 @@ class InterfaceManager(BaseManager):
                                         **combined_config
                                     )
                                     interfaces_configured += 1 + len(wan_subinterfaces)
-                                    LOG.info(f" ✓ To configure WAN main interface '{interface_config.get('name')}' "
-                                             f"with circuit '{interface_config.get('circuit')}' "
-                                             f"and {len(wan_subinterfaces)} WAN subinterfaces "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To configure WAN main interface '%s' with circuit '%s' and %s WAN subinterfaces for device: %s",
+                                             interface_config.get('name'), interface_config.get('circuit'),
+                                             len(wan_subinterfaces), device_name)
 
                                 elif has_wan_main:
                                     # Only main interface has WAN config
@@ -788,9 +760,8 @@ class InterfaceManager(BaseManager):
                                         **main_config
                                     )
                                     interfaces_configured += 1
-                                    LOG.info(f" ✓ To configure WAN main interface '{interface_config.get('name')}' "
-                                             f"with circuit '{interface_config.get('circuit')}' "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To configure WAN main interface '%s' with circuit '%s' for device: %s",
+                                             interface_config.get('name'), interface_config.get('circuit'), device_name)
 
                                 elif wan_subinterfaces:
                                     # Only subinterfaces have WAN config - create minimal config
@@ -804,33 +775,30 @@ class InterfaceManager(BaseManager):
                                         **subinterface_config
                                     )
                                     interfaces_configured += len(wan_subinterfaces)
-                                    LOG.info(f" ✓ Configure {len(wan_subinterfaces)} WAN subinterfaces for interface "
-                                             f"'{interface_config.get('name')}' on device: {device_name}")
+                                    LOG.info(" ✓ Configure %s WAN subinterfaces for interface '%s' on device: %s",
+                                             len(wan_subinterfaces), interface_config.get('name'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping interface '{interface_config.get('name')}' "
-                                         f"- no WAN configuration found")
+                                LOG.info(" ✗ Skipping interface '%s' - no configuration found", interface_config.get('name'))
 
                     if circuits_only:
-                        LOG.info(f"Device {device_name} summary: {circuits_configured} circuits configured "
-                                 f"(circuits-only mode)")
+                        LOG.info("Device %s summary: %s circuits configured (circuits-only mode)", device_name, circuits_configured)
                     else:
-                        LOG.info(f"Device {device_name} summary: {circuits_configured} circuits, "
-                                 f"{interfaces_configured} WAN interfaces to be configured")
-                    LOG.info(f"Final config for {device_name}: {output_config[device_id]['edge']}")
+                        LOG.info("Device %s summary: %s circuits, %s WAN interfaces to be configured", device_name, circuits_configured, interfaces_configured)
+                    LOG.info("Final config for %s: %s", device_name, output_config[device_id]['edge'])
 
                 except DeviceNotFoundError:
-                    LOG.error(f"Device not found: {device_name}")
+                    LOG.error("Device not found: %s", device_name)
                     raise
                 except Exception as e:
-                    LOG.error(f"Error configuring device {device_name}: {str(e)}")
+                    LOG.error("Error configuring device %s: %s", device_name, str(e))
                     raise ConfigurationError(f"Configuration failed for {device_name}: {str(e)}")
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
                 if circuits_only:
-                    LOG.info(f"Successfully configured circuits for {len(output_config)} devices (circuits-only mode)")
+                    LOG.info("Successfully configured circuits for %s devices (circuits-only mode)", len(output_config))
                 else:
-                    LOG.info(f"Successfully configured circuits and interfaces for {len(output_config)} devices")
+                    LOG.info("Successfully configured circuits and interfaces for %s devices", len(output_config))
             else:
                 if circuits_only:
                     LOG.warning("No circuit configurations to apply")
@@ -838,7 +806,7 @@ class InterfaceManager(BaseManager):
                     LOG.warning("No circuit or interface configurations to apply")
 
         except Exception as e:
-            LOG.error(f"Error in WAN circuits and interfaces configuration: {str(e)}")
+            LOG.error("Error in WAN circuits and interfaces configuration: %s", str(e))
             raise ConfigurationError(f"WAN circuits and interfaces configuration failed: {str(e)}")
 
     def deconfigure_wan_circuits_interfaces(self, interface_config_file: str, circuit_config_file: str = None,
@@ -914,9 +882,8 @@ class InterfaceManager(BaseManager):
                                 if sub_interface.get('circuit'):
                                     referenced_circuits.add(sub_interface['circuit'])
 
-                    LOG.info(f"[deconfigure_wan_circuits_interfaces] Processing device: {device_name} "
-                             f"(ID: {device_id})")
-                    LOG.info(f"Referenced circuits: {list(referenced_circuits)}")
+                    LOG.info("[deconfigure_wan_circuits_interfaces] Processing device: %s (ID: %s)", device_name, device_id)
+                    LOG.info("Referenced circuits: %s", list(referenced_circuits))
 
                     # Process circuits for this device (explicit deconfiguration for circuits with staticRoutes)
                     circuits_deconfigured = 0
@@ -929,11 +896,9 @@ class InterfaceManager(BaseManager):
                                     **circuit_config
                                 )
                                 circuits_deconfigured += 1
-                                LOG.info(f" ✓ To deconfigure circuit '{circuit_config.get('circuit')}' "
-                                         f"for device: {device_name}")
+                                LOG.info(" ✓ To deconfigure circuit '%s' for device: %s", circuit_config.get('circuit'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping circuit '{circuit_config.get('circuit')}' "
-                                         f"- not referenced in interface configs")
+                                LOG.info(" ✗ Skipping circuit '%s' - not referenced in interface configs", circuit_config.get('circuit'))
 
                     # Process interfaces for this device - skip if circuits_only=True
                     interfaces_deconfigured = 0
@@ -947,10 +912,9 @@ class InterfaceManager(BaseManager):
                                 for sub_interface in interface_config.get('sub_interfaces', []):
                                     if sub_interface.get('circuit'):
                                         wan_subinterfaces.append(sub_interface)
-                                        LOG.info(f" ✓ Found WAN subinterface "
-                                                 f"'{interface_config.get('name')}.{sub_interface.get('vlan')}' "
-                                                 f"with circuit '{sub_interface.get('circuit')}' "
-                                                 f"for device: {device_name}")
+                                        LOG.info(" ✓ Found WAN subinterface '%s.%s' with circuit '%s' for device: %s",
+                                                 interface_config.get('name'), sub_interface.get('vlan'),
+                                                 sub_interface.get('circuit'), device_name)
 
                             # Process this interface if it has any WAN configuration
                             if has_wan_main or wan_subinterfaces:
@@ -965,10 +929,9 @@ class InterfaceManager(BaseManager):
                                         **combined_config
                                     )
                                     interfaces_deconfigured += 1 + len(wan_subinterfaces)
-                                    LOG.info(f" ✓ To deconfigure WAN main interface '{interface_config.get('name')}' "
-                                             f"with circuit '{interface_config.get('circuit')}' "
-                                             f"and {len(wan_subinterfaces)} WAN subinterfaces "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To deconfigure WAN main interface '%s' with circuit '%s' and %s WAN subinterfaces for device: %s",
+                                             interface_config.get('name'), interface_config.get('circuit'),
+                                             len(wan_subinterfaces), device_name)
 
                                 elif has_wan_main:
                                     # Only main interface has WAN config
@@ -981,9 +944,8 @@ class InterfaceManager(BaseManager):
                                         **main_config
                                     )
                                     interfaces_deconfigured += 1
-                                    LOG.info(f" ✓ To deconfigure WAN main interface '{interface_config.get('name')}' "
-                                             f"with circuit '{interface_config.get('circuit')}' "
-                                             f"for device: {device_name}")
+                                    LOG.info(" ✓ To deconfigure WAN main interface '%s' with circuit '%s' for device: %s",
+                                             interface_config.get('name'), interface_config.get('circuit'), device_name)
 
                                 elif wan_subinterfaces:
                                     # Only subinterfaces have WAN config - create minimal config
@@ -998,41 +960,38 @@ class InterfaceManager(BaseManager):
                                         **subinterface_config
                                     )
                                     interfaces_deconfigured += len(wan_subinterfaces)
-                                    LOG.info(f" ✓ Deconfigure {len(wan_subinterfaces)} WAN subinterfaces for interface "
-                                             f"'{interface_config.get('name')}' on device: {device_name}")
+                                    LOG.info(" ✓ Deconfigure %s WAN subinterfaces for interface '%s' on device: %s",
+                                             len(wan_subinterfaces), interface_config.get('name'), device_name)
                             else:
-                                LOG.info(f" ✗ Skipping interface '{interface_config.get('name')}' "
-                                         f"- no WAN configuration found")
+                                LOG.info(" ✗ Skipping interface '%s' - no configuration found", interface_config.get('name'))
                     else:
                         LOG.info(" ✓ Skipping WAN interface deconfiguration (circuits-only mode)")
 
                     if circuits_only:
-                        LOG.info(f"Device {device_name} "
-                                 f"summary: {circuits_deconfigured} circuits to be deconfigured (circuits-only mode)")
+                        LOG.info("Device %s summary: %s circuits to be deconfigured (circuits-only mode)",
+                                 device_name, circuits_deconfigured)
                     else:
-                        LOG.info(f"Device {device_name} "
-                                 f"summary: {circuits_deconfigured} circuits "
-                                 f"and {interfaces_deconfigured} WAN interfaces to be deconfigured")
-                    LOG.info(f"Final config for {device_name}: {output_config[device_id]['edge']}")
+                        LOG.info("Device %s summary: %s circuits and %s WAN interfaces to be deconfigured",
+                                 device_name, circuits_deconfigured, interfaces_deconfigured)
+                    LOG.info("Final config for %s: %s", device_name, output_config[device_id]['edge'])
 
                 except DeviceNotFoundError:
-                    LOG.error(f"Device not found: {device_name}")
+                    LOG.error("Device not found: %s", device_name)
                     raise
                 except Exception as e:
-                    LOG.error(f"Error deconfiguring device {device_name}: {str(e)}")
-                    LOG.error(f"Device ID: {device_id}, Device Name: {device_name}")
-                    LOG.error(f"Exception type: {type(e).__name__}")
+                    LOG.error("Error deconfiguring device %s: %s", device_name, str(e))
+                    LOG.error("Device ID: %s, Device Name: %s", device_id, device_name)
+                    LOG.error("Exception type: %s", type(e).__name__)
                     import traceback
-                    LOG.error(f"Full traceback: {traceback.format_exc()}")
+                    LOG.error("Full traceback: %s", traceback.format_exc())
                     raise ConfigurationError(f"Deconfiguration failed for {device_name}: {str(e)}")
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
                 if circuits_only:
-                    LOG.info(f"Successfully deconfigured circuits for {len(output_config)} "
-                             f"devices (circuits-only mode)")
+                    LOG.info("Successfully deconfigured circuits for %s devices (circuits-only mode)", len(output_config))
                 else:
-                    LOG.info(f"Successfully deconfigured circuits and interfaces for {len(output_config)} devices")
+                    LOG.info("Successfully deconfigured circuits and interfaces for %s devices", len(output_config))
             else:
                 if circuits_only:
                     LOG.warning("No circuit configurations to remove")
@@ -1040,8 +999,8 @@ class InterfaceManager(BaseManager):
                     LOG.warning("No circuit or interface configurations to remove")
 
         except Exception as e:
-            LOG.error(f"Error in WAN circuits and interfaces deconfiguration: {str(e)}")
-            LOG.error(f"Exception type: {type(e).__name__}")
+            LOG.error("Error in WAN circuits and interfaces deconfiguration: %s", str(e))
+            LOG.error("Exception type: %s", type(e).__name__)
             import traceback
-            LOG.error(f"Full traceback: {traceback.format_exc()}")
+            LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"WAN circuits and interfaces deconfiguration failed: {str(e)}")

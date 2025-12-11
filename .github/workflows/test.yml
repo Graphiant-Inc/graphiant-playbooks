@@ -1,0 +1,116 @@
+name: Test Collection
+
+on:
+  pull_request:
+    paths:
+      - 'ansible_collections/graphiant/graphiant_playbooks/**'
+      - '.github/workflows/test.yml'
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'ansible_collections/graphiant/graphiant_playbooks/**'
+      - '.github/workflows/test.yml'
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    name: Run Tests (ansible-core ${{ matrix.ansible_core }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible_core:
+          - '2.17'
+          - '2.18'
+          - '2.19'
+    defaults:
+      run:
+        working-directory: ansible_collections/graphiant/graphiant_playbooks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install ansible-core
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core~=${{ matrix.ansible_core }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install collection
+        run: |
+          ansible-galaxy collection install . --force
+
+      - name: Set PYTHONPATH
+        run: |
+          echo "PYTHONPATH=${{ github.workspace }}/ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils" >> $GITHUB_ENV
+
+      - name: Run Python tests
+        run: |
+          python tests/test.py
+
+      - name: Validate collection
+        run: |
+          python ../../scripts/validate_collection.py --full
+
+  e2e-integration-test:
+    name: E2E Integration Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible_collections/graphiant/graphiant_playbooks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install ansible-core
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core~=2.19
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install collection
+        run: |
+          ansible-galaxy collection install . --force
+
+      - name: E2E Integration Test (hello_test.yml)
+        env:
+          GRAPHIANT_HOST: ${{ secrets.GRAPHIANT_HOST || vars.GRAPHIANT_HOST || '' }}
+          GRAPHIANT_USERNAME: ${{ secrets.GRAPHIANT_USERNAME || vars.GRAPHIANT_USERNAME || '' }}
+          GRAPHIANT_PASSWORD: ${{ secrets.GRAPHIANT_PASSWORD || vars.GRAPHIANT_PASSWORD || '' }}
+          ANSIBLE_STDOUT_CALLBACK: debug
+        run: |
+          if [ -n "$GRAPHIANT_HOST" ] && [ -n "$GRAPHIANT_USERNAME" ] && [ -n "$GRAPHIANT_PASSWORD" ]; then
+            echo "✅ GRAPHIANT credentials detected - running E2E integration test"
+            ansible-playbook ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/playbooks/hello_test.yml
+          else
+            echo "ℹ️  Skipping E2E integration test - GRAPHIANT credentials not configured"
+            echo "   This is expected behavior when credentials are not set in GitHub secrets/variables"
+            echo "   To enable the test, configure the following secrets/variables in GitHub:"
+            echo "   - GRAPHIANT_HOST (e.g., https://api.graphiant.com)"
+            echo "   - GRAPHIANT_USERNAME"
+            echo "   - GRAPHIANT_PASSWORD"
+          fi
+        continue-on-error: true
+

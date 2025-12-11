@@ -62,7 +62,7 @@ class GraphiantConfig:
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
         except Exception as e:
-            LOG.error(f"Failed to initialize GraphiantConfig class: {str(e)}")
+            LOG.error("Failed to initialize GraphiantConfig class: %s", str(e))
             raise GraphiantPlaybookError(f"GraphiantConfig initialization failed: {str(e)}")
 
     def get_manager_status(self) -> Dict[str, bool]:

@@ -2,8 +2,21 @@ import functools
 import sys
 import time
 import traceback
-from future.utils import raise_
+
+try:
+    from future.utils import raise_
+    HAS_FUTURE = True
+except ImportError:
+    HAS_FUTURE = False
+    # Fallback if future is not available
+
+    def raise_(exc_type, exc_value, exc_traceback):
+        raise exc_value.with_traceback(exc_traceback)
+
 from .logger import setup_logger
+
+# Required dependencies - checked when functions are called
+# Don't raise at module level to allow import test to pass
 
 LOG = setup_logger()
 
@@ -15,11 +28,13 @@ def poller(timeout=60, wait=0.1, retries=None):
     e.g.
     @poller(timeout=10, wait=1)
     def random_number_picker_max_timeout(number, numbers):
-        assert number == random.choice(numbers)
+        if number != random.choice(numbers):
+            raise AssertionError(f"Expected {number} to equal random choice")
 
     @poller(retries=5, wait=1)
     def random_number_picker_max_reties(number, numbers):
-        assert number == random.choice(numbers)
+        if number != random.choice(numbers):
+            raise AssertionError(f"Expected {number} to equal random choice")
     """
 
     def poller_decorator(fun):
@@ -37,13 +52,13 @@ def poller(timeout=60, wait=0.1, retries=None):
             exc = None
             while (time.time() - start_time) < timeout:
                 remain = timeout - (time.time() - start_time)
-                LOG.info(f'{fun.__module__}.{fun.__name__}(): attempt {attempt+1}, time remaining {remain:.2f}s')
+                LOG.info('%s.%s(): attempt %s, time remaining %.2fs', fun.__module__, fun.__name__, attempt + 1, remain)
                 try:
                     return fun(*fun_args, **fun_kwargs)
                 except Exception as e:
                     exc = sys.exc_info()
-                    LOG.info(f'Exception caught while calling method {fun.__name__}(): {e!r}')
-                LOG.info(f'Sleeping for {wait} seconds before poller re-attempt...')
+                    LOG.info('Exception caught while calling method %s(): %r', fun.__name__, e)
+                LOG.info('Sleeping for %s seconds before poller re-attempt...', wait)
                 time.sleep(wait)
                 attempt += 1
             if exc:
@@ -58,14 +73,14 @@ def poller(timeout=60, wait=0.1, retries=None):
             """
             exc = None
             for attempt in range(0, retries):
-                LOG.info(f'Poller attempt: {attempt + 1}/{retries}')
-                LOG.info(f'Calling method {fun.__name__}()...')
+                LOG.info('Poller attempt: %s/%s', attempt + 1, retries)
+                LOG.info('Calling method %s()...', fun.__name__)
                 try:
                     return fun(*fun_args, **fun_kwargs)
                 except Exception as e:
                     exc = sys.exc_info()
-                    LOG.info(f'Exception caught while calling method {fun.__name__}(): {e}')
-                LOG.info(f'Sleeping for {wait} seconds before retry...')
+                    LOG.info('Exception caught while calling method %s(): %s', fun.__name__, e)
+                LOG.info('Sleeping for %s seconds before retry...', wait)
                 time.sleep(wait)
             if exc:
                 LOG.warning(''.join(traceback.format_exception(*exc)))

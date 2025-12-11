@@ -1,6 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright: (c) 2025, Graphiant Team <support@graphiant.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 """
 Ansible module for managing Graphiant BGP peering and routing policies.
 
@@ -9,15 +12,6 @@ This module provides BGP management capabilities including:
 - Policy attachment and detachment
 - Routing policy management
 """
-
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
-    get_graphiant_connection,
-    handle_graphiant_exception
-)
-from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
-    capture_library_logs
-)
 
 DOCUMENTATION = r'''
 ---
@@ -29,7 +23,7 @@ description:
   - Enables attachment and detachment of global BGP routing policies (filters) to BGP peers.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "1.0.0"
+version_added: "25.11.0"
 notes:
   - "BGP Operations:"
   - "  - Configure: Create BGP peering neighbors and attach global BGP routing policies."
@@ -67,14 +61,21 @@ options:
     type: str
     required: true
   operation:
-    description: "The specific BGP operation to perform. C(configure): Configure BGP peering neighbors and attach global BGP routing policies. C(deconfigure): Deconfigure BGP peering neighbors. Policies are automatically detached. C(detach_policies): Detach global BGP routing policies from BGP peers without removing the peers."
+    description:
+      - "The specific BGP operation to perform."
+      - "C(configure): Configure BGP peering neighbors and attach global BGP routing policies."
+      - "C(deconfigure): Deconfigure BGP peering neighbors. Policies are automatically detached."
+      - "C(detach_policies): Detach global BGP routing policies from BGP peers without removing the peers."
     type: str
     choices:
       - configure
       - deconfigure
       - detach_policies
   state:
-    description: "The desired state of the BGP peering. C(present): Maps to C(configure) when operation not specified. C(absent): Maps to C(deconfigure) when operation not specified."
+    description:
+      - "The desired state of the BGP peering."
+      - "C(present): Maps to C(configure) when operation not specified."
+      - "C(absent): Maps to C(deconfigure) when operation not specified."
     type: str
     choices: [ present, absent ]
     default: present
@@ -87,7 +88,7 @@ options:
     default: false
 
 requirements:
-  - python >= 3.12
+  - python >= 3.10
   - graphiant-sdk >= 25.11.1
 
 seealso:
@@ -175,6 +176,15 @@ bgp_config_file:
   sample: "sample_bgp_peering.yaml"
 '''
 
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.graphiant_utils import (
+    get_graphiant_connection,
+    handle_graphiant_exception
+)
+from ansible_collections.graphiant.graphiant_playbooks.plugins.module_utils.logging_decorator import (
+    capture_library_logs
+)
+
 
 @capture_library_logs
 def execute_with_logging(module, func, *args, **kwargs):
@@ -232,8 +242,7 @@ def main():
         detailed_logs=dict(
             type='bool',
             required=False,
-            default=False,
-            description='Enable detailed logging output from library operations'
+            default=False
         )
     )
 

@@ -5,6 +5,9 @@ Build script for Graphiant Ansible Collection
 This script wraps ansible-galaxy collection build command.
 It's the industry standard way to build Ansible collections.
 
+Before building, ensure versions are up to date:
+    python generate_requirements.py  # Sync requirements.txt from _version.py
+
 Usage:
     python build_collection.py
 
@@ -20,14 +23,29 @@ from pathlib import Path
 
 def build_collection():
     """Build the Ansible collection using ansible-galaxy."""
+    # Ensure requirements.txt is in sync with _version.py
+    try:
+        # Add scripts directory to path to import generate_requirements
+        script_dir = Path(__file__).parent
+        sys.path.insert(0, str(script_dir))
+        from generate_requirements import generate_requirements_txt
+        print("🔄 Syncing requirements.txt from _version.py...")
+        generate_requirements_txt()
+        print()
+    except ImportError:
+        print("⚠️  Warning: Could not sync requirements.txt (generate_requirements.py not found)")
+        print()
+    """Build the Ansible collection using ansible-galaxy."""
     print("🚀 Building Graphiant Ansible Collection")
     print("=" * 50)
 
-    # Get the collection directory (where this script is located)
-    collection_dir = Path(__file__).parent
+    # Get the collection directory (scripts/ is at repo root, collection is in ansible_collections/graphiant/graphiant_playbooks)
+    script_dir = Path(__file__).parent
+    repo_root = script_dir.parent
+    collection_dir = repo_root / "ansible_collections" / "graphiant" / "graphiant_playbooks"
 
     # Create output directory at repo root
-    output_dir = collection_dir.parent.parent.parent / "build"
+    output_dir = repo_root / "build"
     output_dir.mkdir(exist_ok=True)
 
     print(f"Collection directory: {collection_dir}")

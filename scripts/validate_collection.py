@@ -179,7 +179,7 @@ def install_collection(collection_path):
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if result.returncode == 0:
             print("  ✅ Collection installed successfully")
             return True
@@ -214,7 +214,7 @@ def run_ansible_lint(collection_path):
     cmd.append(installed_playbooks)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if result.returncode == 0:
             print("  ✅ ansible-lint passed")
             return True
@@ -259,7 +259,7 @@ def run_docs_lint(collection_path):
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if result.returncode == 0:
             print("  ✅ Module documentation validation passed")
             return True
@@ -280,7 +280,7 @@ def run_docs_lint(collection_path):
         return True
 
 
-def print_summary(results, collection_path):
+def print_summary(results, collection_path, script_dir=None):
     """Print validation summary."""
     print("\n" + "=" * 60)
 
@@ -297,7 +297,10 @@ def print_summary(results, collection_path):
     print("\n📦 Next Steps:")
     print("-" * 50)
     print("1. Build collection:")
-    print(f"   python {collection_path}/build_collection.py")
+    if script_dir:
+        print(f"   python {script_dir}/build_collection.py")
+    else:
+        print(f"   python {collection_path}/build_collection.py")
     print("   # Or: ansible-galaxy collection build . --output-path ../../../build/")
     print()
     print("2. Install collection:")
@@ -336,8 +339,10 @@ Note: ansible-lint requires the collection to be installed to resolve module ref
     print("🚀 Graphiant Ansible Collection Validator")
     print("=" * 60)
 
-    # Get collection path
-    collection_path = Path(__file__).parent
+    # Get collection path (scripts/ is at repo root, collection is in ansible_collections/graphiant/graphiant_playbooks)
+    script_dir = Path(__file__).parent
+    repo_root = script_dir.parent
+    collection_path = repo_root / "ansible_collections" / "graphiant" / "graphiant_playbooks"
 
     results = {}
 
@@ -362,7 +367,7 @@ Note: ansible-lint requires the collection to be installed to resolve module ref
     if args.full or args.docs:
         results['Documentation'] = run_docs_lint(collection_path)
 
-    return print_summary(results, collection_path)
+    return print_summary(results, collection_path, script_dir)
 
 
 if __name__ == '__main__':

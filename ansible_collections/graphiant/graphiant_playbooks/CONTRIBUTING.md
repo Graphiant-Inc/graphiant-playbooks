@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing!
 
+> **Note:** Version management is centralized in `_version.py`. See [RELEASE.md](RELEASE.md) for version bumping and release procedures.
+
 ## Getting Started
 
 1. **Fork the repository** on GitHub
@@ -12,7 +14,7 @@ Thank you for your interest in contributing!
    ```
 3. **Set up development environment:**
    ```bash
-   python3.12 -m venv venv
+   python3.10 -m venv venv
    source venv/bin/activate
    pip install -r ansible_collections/graphiant/graphiant_playbooks/requirements.txt
    ```
@@ -26,7 +28,11 @@ Thank you for your interest in contributing!
 
 2. **Validate collection structure:**
    ```bash
-   python ansible_collections/graphiant/graphiant_playbooks/validate_collection.py
+   # From repository root
+   python scripts/validate_collection.py
+   
+   # Or from collection directory
+   python ../../scripts/validate_collection.py
    ```
 
 3. **Build and install collection:**
@@ -36,22 +42,22 @@ Thank you for your interest in contributing!
 
 4. **Run linting (before commit):**
    ```bash
-   # Python linting with flake8
+   # Python linting with flake8 (local development only, not in CI)
    flake8 ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils/libs
 
-   # Python linting with pylint (errors only)
+   # Python linting with pylint (errors only, local development only, not in CI)
    export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils/libs
    pylint --errors-only ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils/libs
 
-   # Ansible playbook linting (requires collection to be installed - step 3)
+   # Ansible playbook linting (runs in CI, requires collection to be installed - step 3)
    ansible-lint --config-file ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/.ansible-lint ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/playbooks/
 
-   # YAML/Jinja template linting with djlint
+   # YAML/Jinja template linting with djlint (runs in CI)
    djlint ansible_collections/graphiant/graphiant_playbooks/configs -e yaml
    djlint ansible_collections/graphiant/graphiant_playbooks/templates -e yaml
    ```
 
-5. **Run test playbook:**
+5. **Run E2E integration test (hello_test.yml):**
    ```bash
    # Set credentials
    export GRAPHIANT_HOST="https://api.graphiant.com"
@@ -61,7 +67,7 @@ Thank you for your interest in contributing!
    # Optional: Enable pretty output for detailed_logs
    export ANSIBLE_STDOUT_CALLBACK=debug
    
-   # Run hello_test.yml to verify collection works
+   # Run hello_test.yml to verify collection works (also runs in CI as e2e-integration-test)
    ansible-playbook ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/playbooks/hello_test.yml
    ```
 
@@ -76,16 +82,29 @@ Thank you for your interest in contributing!
 
 The project uses multiple linting tools to ensure code quality:
 
-| Tool | Purpose | Target |
-|------|---------|--------|
-| `flake8` | Python style guide (PEP 8) | `plugins/module_utils/libs/`, `tests/` |
-| `pylint` | Python code analysis | `plugins/module_utils/libs/` |
-| `ansible-lint` | Ansible playbook best practices | `playbooks/` |
-| `djlint` | Jinja2/YAML template linting | `configs/`, `templates/` |
+| Tool | Purpose | Target | CI/CD |
+|------|---------|--------|-------|
+| `flake8` | Python style guide (PEP 8) | `plugins/module_utils/libs/`, `tests/` | Local only |
+| `pylint` | Python code analysis | `plugins/module_utils/libs/` | Local only |
+| `ansible-lint` | Ansible playbook best practices | `playbooks/` | Yes (lint stage) |
+| `djlint` | Jinja2/YAML template linting | `configs/`, `templates/` | Yes (lint stage) |
+| `ansible-test sanity` | Ansible collection sanity tests | Collection | Yes (lint and test/run stages) |
 
 Configuration files:
 - `.ansible-lint` - Ansible lint rules
 - `setup.cfg` (root) - flake8/pylint configuration
+
+**Note:** `flake8` and `pylint` are available for local development but are not part of the CI/CD pipeline. The CI/CD pipeline runs `ansible-lint`, `djlint`, `antsibull-docs`, and `ansible-test sanity` for linting, and `ansible-test sanity` and E2E integration test for testing.
+
+### ansible-test Sanity Configuration
+
+The collection uses command-line exclusions and proper directory structure:
+
+1. **Yamllint exclusions** - Jinja2 template directories are excluded using `--exclude templates/ --exclude configs/de_workflows_configs/`, as these contain Jinja2 templates with syntax that yamllint cannot parse.
+
+2. **Utility scripts** - Utility scripts (build_collection.py, bump_version.py, generate_requirements.py, validate_collection.py, build_docsite.sh) are located in the `scripts/` directory at the repository root, outside the collection directory. This means they are not checked by `ansible-test sanity`, so the shebang test runs normally on collection files.
+
+This approach is cleaner and more maintainable than maintaining version-specific ignore files or configuration files.
 
 ## Code Standards
 
@@ -146,6 +165,35 @@ def main():
 if __name__ == '__main__':
     main()
 ```
+
+## Version Management
+
+All version information is centralized in `_version.py`. This ensures consistency across:
+- Collection version (`galaxy.yml`)
+- Module `version_added` fields
+- Dependency versions (`requirements.txt`)
+- Changelog entries
+
+### For Maintainers: Updating Versions
+
+Use the automated version bump script:
+
+```bash
+# Patch release (bug fixes) - from repository root
+python scripts/bump_version.py patch
+
+# Minor release (new features)  
+python scripts/bump_version.py minor
+
+# Major release (breaking changes)
+python scripts/bump_version.py major
+```
+
+The script automatically updates all version references. See [RELEASE.md](RELEASE.md) for complete release procedures.
+
+### For Contributors
+
+You typically don't need to update versions. Focus on your code changes, and maintainers will handle version bumps during releases.
 
 ## Pull Request Checklist
 

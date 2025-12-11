@@ -12,30 +12,6 @@ default:
 stages:
   - lint
 
-flake8:
-  stage: lint
-  script:
-    - pip install flake8
-    - flake8 ./ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils
-    - flake8 ./ansible_collections/graphiant/graphiant_playbooks/tests
-
-pylint:
-  stage: lint
-  variables:
-    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  image: python:3.12-slim
-  cache:
-    paths:
-      - .cache/pip/
-      - venv/
-      - .pylint_cache/
-  script:
-    - python3.12 -m venv venv
-    - source venv/bin/activate
-    - pip3 install -r ansible_collections/graphiant/graphiant_playbooks/requirements.txt
-    - export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils
-    - pylint --errors-only ./ansible_collections/graphiant/graphiant_playbooks/plugins/module_utils
-
 jinjalint:
   stage: lint
   script:
@@ -62,3 +38,18 @@ lint-collection-docs:
     - pip3 install -r ansible_collections/graphiant/graphiant_playbooks/requirements.txt
     - ansible-galaxy collection install ansible_collections/graphiant/graphiant_playbooks/ --force
     - antsibull-docs lint-collection-docs --plugin-docs ~/.ansible/collections/ansible_collections/graphiant/graphiant_playbooks/
+
+ansible-test-sanity:
+  stage: lint
+  parallel:
+    matrix:
+      - ANSIBLE_CORE: ["2.17", "2.18", "2.19"]
+  script:
+    - apt-get update && apt-get install -y git
+    - python3.12 -m venv venv
+    - source venv/bin/activate
+    - pip3 install --upgrade pip
+    - pip3 install ansible-core~=${ANSIBLE_CORE}
+    - pip3 install -r ansible_collections/graphiant/graphiant_playbooks/requirements.txt
+    - cd ansible_collections/graphiant/graphiant_playbooks
+    - ansible-test sanity --color --python 3.12 --exclude templates/ --exclude configs/de_workflows_configs/
