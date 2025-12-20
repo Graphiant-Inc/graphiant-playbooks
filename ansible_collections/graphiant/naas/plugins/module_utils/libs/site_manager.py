@@ -21,12 +21,15 @@ class SiteManager(BaseManager):
     (SNMP, Syslog, IPFIX, VPN profiles) to/from specific sites.
     """
 
-    def configure(self, config_yaml_file: str) -> None:
+    def configure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Configure sites: create sites and attach global system objects.
 
         Args:
             config_yaml_file: Path to the YAML file containing site configurations
+
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
 
         Raises:
             ConfigurationError: If configuration processing fails
@@ -34,17 +37,28 @@ class SiteManager(BaseManager):
             ValidationError: If configuration data is invalid
         """
         # Step 1: Create sites if they don't exist
-        self._manage_sites(config_yaml_file, operation="create")
+        sites_result = self._manage_sites(config_yaml_file, operation="create")
 
         # Step 2: Attach global objects to sites
-        self._manage_site_objects(config_yaml_file, operation="attach")
+        objects_result = self._manage_site_objects(config_yaml_file, operation="attach")
 
-    def deconfigure(self, config_yaml_file: str) -> None:
+        # Combine results
+        changed = sites_result.get('changed', False) or objects_result.get('changed', False)
+        return {
+            'changed': changed,
+            'sites': sites_result,
+            'objects': objects_result
+        }
+
+    def deconfigure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Deconfigure sites: detach global system objects and delete sites.
 
         Args:
             config_yaml_file: Path to the YAML file containing site configurations
+
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
 
         Raises:
             ConfigurationError: If configuration processing fails
@@ -52,38 +66,52 @@ class SiteManager(BaseManager):
             ValidationError: If configuration data is invalid
         """
         # Step 1: Detach global objects from sites
-        self._manage_site_objects(config_yaml_file, operation="detach")
+        objects_result = self._manage_site_objects(config_yaml_file, operation="detach")
 
         # Step 2: Delete sites
-        self._manage_sites(config_yaml_file, operation="delete")
+        sites_result = self._manage_sites(config_yaml_file, operation="delete")
 
-    def configure_sites(self, config_yaml_file: str) -> None:
+        # Combine results
+        changed = sites_result.get('changed', False) or objects_result.get('changed', False)
+        return {
+            'changed': changed,
+            'sites': sites_result,
+            'objects': objects_result
+        }
+
+    def configure_sites(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Create sites (idempotent - only creates if site doesn't exist).
 
         Args:
             config_yaml_file: Path to the YAML file containing site configurations
 
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
+
         Raises:
             ConfigurationError: If configuration processing fails
             ValidationError: If configuration data is invalid
         """
-        self._manage_sites(config_yaml_file, operation="create")
+        return self._manage_sites(config_yaml_file, operation="create")
 
-    def deconfigure_sites(self, config_yaml_file: str) -> None:
+    def deconfigure_sites(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Delete sites (idempotent - only deletes if site exists).
 
         Args:
             config_yaml_file: Path to the YAML file containing site configurations
 
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
+
         Raises:
             ConfigurationError: If configuration processing fails
             ValidationError: If configuration data is invalid
         """
-        self._manage_sites(config_yaml_file, operation="delete")
+        return self._manage_sites(config_yaml_file, operation="delete")
 
-    def _manage_sites(self, config_yaml_file: str, operation: str) -> None:
+    def _manage_sites(self, config_yaml_file: str, operation: str) -> Dict[str, Any]:
         """
         Manage sites (create or delete).
 
@@ -91,18 +119,26 @@ class SiteManager(BaseManager):
             config_yaml_file: Path to the YAML file containing site configurations
             operation: Operation to perform - "create" or "delete"
 
+        Returns:
+            dict: Result with 'changed' status and lists of created/deleted/skipped items
+
         Raises:
             ConfigurationError: If configuration processing fails
             ValidationError: If configuration data is invalid
         """
+        result = {
+            'changed': False,
+            'created': [],
+            'deleted': [],
+            'skipped': []
+        }
+
         try:
             config_data = self.render_config_file(config_yaml_file)
 
             if 'sites' not in config_data:
                 LOG.info("No sites configuration found in %s, skipping site %s", config_yaml_file, operation)
-                return
-
-            processed_sites = 0
+                return result
 
             for site_config in config_data.get('sites'):
                 try:
@@ -111,29 +147,45 @@ class SiteManager(BaseManager):
                         raise ValidationError("Site configuration must include 'name' field")
 
                     if operation == "create":
-                        self._create_site_if_not_exists(site_config)
+                        was_created = self._create_site_if_not_exists(site_config)
+                        if was_created:
+                            result['created'].append(site_name)
+                            result['changed'] = True
+                        else:
+                            result['skipped'].append(site_name)
                     elif operation == "delete":
-                        self._delete_site_if_exists(site_name)
+                        was_deleted = self._delete_site_if_exists(site_name)
+                        if was_deleted:
+                            result['deleted'].append(site_name)
+                            result['changed'] = True
+                        else:
+                            result['skipped'].append(site_name)
 
-                    processed_sites += 1
-                    LOG.info("Successfully %sd site: %s", operation, site_name)
+                    LOG.info("Successfully processed site: %s (operation: %s)", site_name, operation)
 
                 except Exception as e:
                     LOG.error("Error %sing site '%s': %s", operation, site_name, str(e))
                     raise ConfigurationError(f"Failed to {operation} site {site_name}: {str(e)}")
 
-            LOG.info("Successfully %sd %s sites", operation, processed_sites)
+            total_processed = len(result['created']) + len(result['deleted']) + len(result['skipped'])
+            LOG.info("Processed %s sites (operation: %s, changed: %s)",
+                     total_processed, operation, result['changed'])
+
+            return result
 
         except Exception as e:
             LOG.error("Error in site %s operation: %s", operation, str(e))
             raise ConfigurationError(f"Site {operation} operation failed: {str(e)}")
 
-    def _create_site_if_not_exists(self, site_config: dict) -> None:
+    def _create_site_if_not_exists(self, site_config: dict) -> bool:
         """
         Create a site if it doesn't already exist (idempotent).
 
         Args:
             site_config: Site configuration dictionary
+
+        Returns:
+            bool: True if site was created, False if it already existed
 
         Raises:
             ConfigurationError: If site creation fails
@@ -144,7 +196,7 @@ class SiteManager(BaseManager):
         if self.gsdk.site_exists(site_name):
             existing_site_id = self.gsdk.get_site_id(site_name)
             LOG.info("Site '%s' already exists with ID: %s, skipping creation", site_name, existing_site_id)
-            return
+            return False
 
         try:
             # Prepare site data for creation (simple site creation only)
@@ -158,23 +210,27 @@ class SiteManager(BaseManager):
             # Create the site
             created_site = self.gsdk.create_site(site_data)
             LOG.info("Successfully created site '%s' with ID: %s", site_name, created_site.id)
+            return True
 
         except Exception as e:
             error_msg = str(e)
             # Handle "already exists" errors gracefully
             if "already exists" in error_msg.lower() or "already created" in error_msg.lower():
                 LOG.info("Site '%s' already exists, skipping creation: %s", site_name, error_msg)
-                return
+                return False
             else:
                 LOG.error("Failed to create site '%s': %s", site_name, error_msg)
                 raise ConfigurationError(f"Site creation failed for {site_name}: {error_msg}")
 
-    def _delete_site_if_exists(self, site_name: str) -> None:
+    def _delete_site_if_exists(self, site_name: str) -> bool:
         """
         Delete a site if it exists (idempotent).
 
         Args:
             site_name: Name of the site to delete
+
+        Returns:
+            bool: True if site was deleted, False if it didn't exist
 
         Raises:
             ConfigurationError: If site deletion fails
@@ -183,7 +239,7 @@ class SiteManager(BaseManager):
             # Check if site exists using v1/sites/details
             if not self.gsdk.site_exists(site_name):
                 LOG.info("Site '%s' does not exist, skipping deletion", site_name)
-                return
+                return False
 
             # Get site ID for deletion
             site_id = self.gsdk.get_site_id(site_name)
@@ -192,6 +248,7 @@ class SiteManager(BaseManager):
             success = self.gsdk.delete_site(site_id)
             if success:
                 LOG.info("Successfully deleted site '%s' with ID: %s", site_name, site_id)
+                return True
             else:
                 raise ConfigurationError(f"Failed to delete site '{site_name}' with ID: {site_id}")
 
@@ -199,25 +256,31 @@ class SiteManager(BaseManager):
             LOG.error("Failed to delete site '%s': %s", site_name, str(e))
             raise ConfigurationError(f"Site deletion failed for {site_name}: {str(e)}")
 
-    def attach_objects(self, config_yaml_file: str) -> None:
+    def attach_objects(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Attach global system objects to sites.
 
         Args:
             config_yaml_file: Path to the YAML file containing site attachment configurations
-        """
-        self._manage_site_objects(config_yaml_file, operation="attach")
 
-    def detach_objects(self, config_yaml_file: str) -> None:
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
+        """
+        return self._manage_site_objects(config_yaml_file, operation="attach")
+
+    def detach_objects(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Detach global system objects from sites.
 
         Args:
             config_yaml_file: Path to the YAML file containing site attachment configurations
-        """
-        self._manage_site_objects(config_yaml_file, operation="detach")
 
-    def _manage_site_objects(self, config_yaml_file: str, operation: str) -> None:
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
+        """
+        return self._manage_site_objects(config_yaml_file, operation="detach")
+
+    def _manage_site_objects(self, config_yaml_file: str, operation: str) -> Dict[str, Any]:
         """
         Manage global system objects on sites (attach or detach).
 
@@ -225,20 +288,29 @@ class SiteManager(BaseManager):
             config_yaml_file: Path to the YAML file containing site management definitions
             operation: Operation to perform - "attach" or "detach"
 
+        Returns:
+            dict: Result with 'changed' status and lists of attached/detached/skipped items
+
         Raises:
             ConfigurationError: If configuration processing fails
             SiteNotFoundError: If any site cannot be found
             ValidationError: If configuration data is invalid
         """
+        result = {
+            'changed': False,
+            'attached': [],
+            'detached': [],
+            'skipped': []
+        }
+
         try:
             config_data = self.render_config_file(config_yaml_file)
 
             if 'site_attachments' not in config_data:
                 LOG.info("No site attachments configuration found in %s, skipping object %s", config_yaml_file, operation)
-                return
+                return result
 
             default_operation = 'Attach' if operation.lower().startswith("attach") else 'Detach'
-            processed_sites = 0
 
             for site_config in config_data.get('site_attachments'):
                 try:
@@ -269,14 +341,26 @@ class SiteManager(BaseManager):
 
                     # Execute the site configuration
                     self.gsdk.post_site_config(site_id=site_id, site_config=site_payload)
-                    processed_sites += 1
+
+                    # Mark as changed and track the operation
+                    result['changed'] = True
+                    if operation.lower().startswith("attach"):
+                        result['attached'].append(site_name)
+                    else:
+                        result['detached'].append(site_name)
 
                     LOG.info("Successfully %s global objects for site: %s (ID: %s)",
                              default_operation.lower(), site_name, site_id)
 
                 except SiteNotFoundError:
-                    LOG.error("Site '%s' not found, skipping %s operation", site_name, operation)
-                    raise
+                    # For detach operations, site not found is acceptable (idempotent)
+                    if operation.lower().startswith("detach"):
+                        LOG.info("Site '%s' not found, skipping %s operation (idempotent)", site_name, operation)
+                        result['skipped'].append(site_name)
+                        continue
+                    else:
+                        LOG.error("Site '%s' not found, cannot %s objects", site_name, operation)
+                        raise
                 except Exception as e:
                     error_msg = str(e)
                     # Handle "already attached" errors gracefully
@@ -284,7 +368,7 @@ class SiteManager(BaseManager):
                             "already attached" in error_msg.lower() or "already exists" in error_msg.lower()):
                         LOG.info("Object already %sed to site '%s', skipping: %s",
                                  default_operation.lower(), site_name, error_msg)
-                        processed_sites += 1
+                        result['skipped'].append(site_name)
                         continue
                     # Handle "already detached","not attached" and "not found" errors gracefully for detach operations
                     elif operation.lower().startswith("detach") and (
@@ -292,13 +376,17 @@ class SiteManager(BaseManager):
                             "not attached" in error_msg.lower() or "not found" in error_msg.lower()):
                         LOG.info("Object not attached to site '%s', skipping %s: %s",
                                  site_name, default_operation.lower(), error_msg)
-                        processed_sites += 1
+                        result['skipped'].append(site_name)
                         continue
                     else:
                         LOG.error("Error %sing objects for site '%s': %s", default_operation.lower(), site_name, error_msg)
                         raise ConfigurationError(f"Failed to {operation.lower()} objects for {site_name}: {error_msg}")
 
-            LOG.info("Successfully %sed global objects for %s sites", default_operation.lower(), processed_sites)
+            total_processed = len(result['attached']) + len(result['detached']) + len(result['skipped'])
+            LOG.info("Processed %s sites for object %s (changed: %s)",
+                     total_processed, operation, result['changed'])
+
+            return result
 
         except Exception as e:
             LOG.error("Error in site %s operation: %s", operation, str(e))
