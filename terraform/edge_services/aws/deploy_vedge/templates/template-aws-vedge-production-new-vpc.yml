@@ -1,0 +1,390 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template for the Graphiant vEdge as an EC2 instance.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: AWS Marketplace Parameters
+        Parameters:
+          - ImageId
+
+Parameters:
+  AvailabilityZone:
+    Description: Availability zone to create network resources in
+    Type: AWS::EC2::AvailabilityZone::Name
+  VPCAddressRange:
+    Description: The block of addresses that the deployed VPC owns
+    Type: String
+    Default: 10.0.0.0/16
+  ImageId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0e6c9aef7f9c78d0e
+    Description: The AMI that will be used to launch the instance.
+  InstanceType:
+    Description: Graphiant vEdge Production Instance Type
+    Type: String
+    Default: c5.large
+    AllowedValues:
+      - c5.large
+      - c5.xlarge
+      - m5.large
+      - m5.xlarge
+      - r5.large
+      - r5.xlarge
+      - c6i.4xlarge
+      - c6in.8xlarge
+  InstanceName:
+    Description: Name of the instance
+    Type: String
+    Default: vEdgeEC2
+  Token:
+    Description: Graphiant vEdge onboarding authentication token
+    Type: String
+
+Resources:
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          InstanceMetadataTags: enabled
+  vEdgeInstance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - AssociateMgmtEIP
+      - AssociateWanEIP
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+        - Key: "Vendor"
+          Value: "Graphiant"
+      AvailabilityZone: !Ref AvailabilityZone
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref InterfaceMgmt
+          DeviceIndex: 0
+        - NetworkInterfaceId: !Ref InterfaceWan
+          DeviceIndex: 1
+        - NetworkInterfaceId: !Ref InterfaceLan
+          DeviceIndex: 2
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+
+          graphnos:
+            token: ${Token}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCAddressRange
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  IGWRouteV4:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  IGWRouteV6:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationIpv6CidrBlock: ::/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  SecurityGroupMgmt:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Graphiant Device Management Interface
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          Description: Allow all outgoing IPv4 TCP traffic
+          IpProtocol: "tcp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIpv6: "::/0"
+          Description: Allow all outgoing IPv6 TCP traffic
+          IpProtocol: "tcp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: "0.0.0.0/0"
+          Description: Allow all outgoing IPv4 UDP traffic
+          IpProtocol: "udp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIpv6: "::/0"
+          Description: Allow all outgoing IPv6 UDP traffic
+          IpProtocol: "udp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: "0.0.0.0/0"
+          Description: Allow all outgoing IPv4 ICMP traffic
+          IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+        - CidrIpv6: "::/0"
+          Description: Allow all outgoing IPv6 ICMP traffic
+          IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+
+  SecurityGroupWan:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Graphiant WAN Connectivity Interface
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: "udp"
+          FromPort: 53
+          ToPort: 53
+          CidrIp: "0.0.0.0/0"
+          Description: For DNS resolution
+        - IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+          Description: For HTTPS between Graphiant network onboarding services
+        - IpProtocol: "udp"
+          FromPort: 500
+          ToPort: 500
+          CidrIp: "0.0.0.0/0"
+          Description: For IKEv2 exchanges for setting up tunnels
+        - IpProtocol: "udp"
+          FromPort: 4500
+          ToPort: 4500
+          CidrIp: "0.0.0.0/0"
+          Description: For IPSec NAT Traversal
+        - IpProtocol: "tcp"
+          FromPort: 16000
+          ToPort: 16000
+          CidrIp: "0.0.0.0/0"
+          Description: For TLS between Graphiant network onboarding services
+        - IpProtocol: "udp"
+          FromPort: 53
+          ToPort: 53
+          CidrIpv6: "::/0"
+          Description: For DNS resolution
+        - IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: "::/0"
+          Description: For HTTPS between Graphiant network onboarding services
+        - IpProtocol: "udp"
+          FromPort: 500
+          ToPort: 500
+          CidrIpv6: "::/0"
+          Description: For IKEv2 exchanges for setting up tunnels
+        - IpProtocol: "udp"
+          FromPort: 4500
+          ToPort: 4500
+          CidrIpv6: "::/0"
+          Description: For IPSec NAT Traversal
+        - IpProtocol: "tcp"
+          FromPort: 16000
+          ToPort: 16000
+          CidrIpv6: "::/0"
+          Description: For TLS between Graphiant network onboarding services
+
+  SecurityGroupLan:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Customer Connectivity Interface
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          Description: Allow all outgoing IPv4 TCP traffic
+          IpProtocol: "tcp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIpv6: "::/0"
+          Description: Allow all outgoing IPv6 TCP traffic
+          IpProtocol: "tcp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: "0.0.0.0/0"
+          Description: Allow all outgoing IPv4 UDP traffic
+          IpProtocol: "udp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIpv6: "::/0"
+          Description: Allow all outgoing IPv6 UDP traffic
+          IpProtocol: "udp"
+          FromPort: 0
+          ToPort: 65535
+        - CidrIp: "0.0.0.0/0"
+          Description: Allow all outgoing IPv4 ICMP traffic
+          IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+        - CidrIpv6: "::/0"
+          Description: Allow all outgoing IPv6 ICMP traffic
+          IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+
+  IPv6CidrBlock:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      AmazonProvidedIpv6CidrBlock: true
+      VpcId: !Ref VPC
+
+  SubnetMgmt:
+    Type: AWS::EC2::Subnet
+    DependsOn: IPv6CidrBlock
+    Properties:
+      AvailabilityZone: !Ref AvailabilityZone
+      AssignIpv6AddressOnCreation: true
+      CidrBlock: !Select [0, Fn::Cidr: [!GetAtt VPC.CidrBlock, 3, 8]]
+      Ipv6CidrBlock:
+        !Select [0, Fn::Cidr: [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 3, 64]]
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  RouteTableAssociationMgmt:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetMgmt
+
+  MgmtEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  InterfaceMgmt:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Graphiant local management
+      GroupSet:
+        - !Ref SecurityGroupMgmt
+      SubnetId: !Ref SubnetMgmt
+      Tags:
+        - Key: Name
+          Value: LocalManagement
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  AssociateMgmtEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt MgmtEIP.AllocationId
+      NetworkInterfaceId: !Ref InterfaceMgmt
+
+  SubnetWan:
+    Type: AWS::EC2::Subnet
+    DependsOn: IPv6CidrBlock
+    Properties:
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Ref AvailabilityZone
+      CidrBlock: !Select [1, Fn::Cidr: [!GetAtt VPC.CidrBlock, 3, 8]]
+      Ipv6CidrBlock:
+        !Select [1, Fn::Cidr: [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 3, 64]]
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  RouteTableAssociationWan:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetWan
+
+  WanEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  InterfaceWan:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Graphiant Network
+      GroupSet:
+        - !Ref SecurityGroupWan
+      SubnetId: !Ref SubnetWan
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: WanDefault
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  AssociateWanEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt WanEIP.AllocationId
+      NetworkInterfaceId: !Ref InterfaceWan
+
+  SubnetLan:
+    Type: AWS::EC2::Subnet
+    DependsOn: IPv6CidrBlock
+    Properties:
+      AssignIpv6AddressOnCreation: true
+      AvailabilityZone: !Ref AvailabilityZone
+      CidrBlock: !Select [2, Fn::Cidr: [!GetAtt VPC.CidrBlock, 3, 8]]
+      Ipv6CidrBlock:
+        !Select [2, Fn::Cidr: [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 3, 64]]
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Vendor"
+          Value: "Graphiant"
+
+  InterfaceLan:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Customer ingress
+      GroupSet:
+        - !Ref SecurityGroupLan
+      SubnetId: !Ref SubnetLan
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: LanDefault
+        - Key: "Vendor"
+          Value: "Graphiant"

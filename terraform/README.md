@@ -33,6 +33,19 @@ Provider versions are specified in each module's `terraform {}` block and are in
 
 ```
 terraform/
+├── edge_services/                 # Cloud edge service modules
+│   └── aws/                       # AWS edge modules
+│       ├── deploy_vedge/          # Deploy Graphiant vEdge
+│       │   ├── main.tf
+│       │   ├── variables.tf
+│       │   ├── outputs.tf
+│       │   └── templates/
+│       └── deploy_vpc/            # Deploy AWS VPC (for edge connectivity)
+│           ├── main.tf
+│           ├── variables.tf
+│           ├── outputs.tf
+│           └── templates/
+│
 ├── gateway_services/              # Cloud gateway service modules
 │   ├── azure/                    # Azure ExpressRoute modules
 │   │   ├── main.tf              # Main Terraform configuration
@@ -48,6 +61,9 @@ terraform/
 │       └── outputs.tf           # Output values
 │
 └── configs/
+    ├── edge_services/            # Edge service configuration files
+    │   ├── aws_deploy_vedge_config.tfvars
+    │   └── aws_deploy_vpc_config.tfvars
     └── gateway_services/        # Configuration files
         ├── azure_config.tfvars  # Azure variable configuration
         ├── aws_config.tfvars    # AWS variable configuration
@@ -131,6 +147,68 @@ terraform output cloud_router_id
 ```
 
 ---
+
+# Edge Services 
+
+# AWS
+
+These modules deploy Graphiant edge components in AWS by launching AWS CloudFormation stacks.
+
+**Workflow**
+- **Create/update**: set `action = "create"` (default)
+- **Delete**: set `action = "delete"` (uses the AWS CLI to delete the CloudFormation stack)
+
+## AWS Deploy VPC (`edge_services/aws/deploy_vpc`)
+
+1. Update the config file: `terraform/configs/edge_services/aws_deploy_vpc_config.tfvars`
+2. Deploy:
+
+```bash
+cd terraform/edge_services/aws/deploy_vpc
+terraform init
+terraform plan -var-file="../../../configs/edge_services/aws_deploy_vpc_config.tfvars" -out=tfplan
+terraform apply tfplan
+```
+
+3. Destroy:
+
+```bash
+cd terraform/edge_services/aws/deploy_vpc
+terraform apply -var-file="../../../configs/edge_services/aws_deploy_vpc_config.tfvars" -var="action=delete"
+```
+
+## AWS Deploy vEdge (`edge_services/aws/deploy_vedge`)
+
+1. Update the config file: `terraform/configs/edge_services/aws_deploy_vedge_config.tfvars`
+   - Choose a CloudFormation template via `template_path`:
+     - `templates/template-aws-vedge-production-new-vpc.yml`
+     - `templates/template-aws-vedge-production-existing-vpc.yml`
+     - Dev/test templates are for internal use
+2. Deploy:
+
+```bash
+cd terraform/edge_services/aws/deploy_vedge
+terraform init
+terraform plan -var-file="../../../configs/edge_services/aws_deploy_vedge_config.tfvars" -out=tfplan
+terraform apply tfplan
+```
+
+3. Destroy:
+
+```bash
+cd terraform/edge_services/aws/deploy_vedge
+terraform apply -var-file="../../../configs/edge_services/aws_deploy_vedge_config.tfvars" -var="action=delete"
+```
+
+## Notes
+
+- These modules create CloudFormation stacks and may shell out to `aws cloudformation delete-stack` for deletion.
+- Ensure your AWS credentials and region are configured so the AWS CLI can delete the stack successfully.
+
+---
+
+
+# Gateway Services
 
 # Azure ExpressRoute
 
