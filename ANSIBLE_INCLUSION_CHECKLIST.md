@@ -1,8 +1,8 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2025-12-18  
-**Collection Version:** 25.12.1  
+**Review Date:** 2025-12-22  
+**Collection Version:** 25.12.2  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.10  
 
@@ -14,7 +14,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `25.12.1` (meets requirement: >= 1.0.0)
+  - Collection version: `25.12.2` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -47,7 +47,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `25.12.1` is specified in `galaxy.yml`
+  - Version `25.12.2` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -58,7 +58,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `25.12.1` (follows semantic versioning)
+  - Current version: `25.12.2` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py` line 9
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -417,7 +417,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 25.12.1  
+**Collection Version:** 25.12.2  
 **Review Date:** 2025-12-18  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.10

@@ -28,7 +28,7 @@ description:
     syslog services, IPFIX services, VPN profiles, and LAN segments.
   - Can manage all object types together using general operations or specific object types individually.
   - All operations use Jinja2 templates for consistent configuration deployment.
-version_added: "25.11.0"
+version_added: "25.12.0"
 notes:
   - "Global Configuration Operations:"
   - "  - General operations (C(configure), C(deconfigure)):

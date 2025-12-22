@@ -12,16 +12,18 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 ## 📚 Documentation
 
-- **Official Documentation**: [Graphiant Plybooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
+- **Official Documentation**: [Graphiant Playbooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
 - **Ansible Collection**: [Ansible Galaxy Collection - graphiant.naas](https://galaxy.ansible.com/ui/repo/published/graphiant/naas)
+- **Changelog**: [CHANGELOG.md](ansible_collections/graphiant/naas/CHANGELOG.md) - Version history and release notes
+- **Security Policy**: [SECURITY.md](SECURITY.md) - Security best practices and vulnerability reporting
 
 ## Components
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation | [📖 Documentation](ansible_collections/graphiant/naas/README.md) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v25.12.2) | [📖 Documentation](ansible_collections/graphiant/naas/README.md) |
 | **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](terraform/README.md) |
-| **CI/CD Pipelines** | Automated testing, linting, and Docker builds | [📖 GitHub](.github/workflows/README.md) |
+| **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](.github/workflows/README.md) |
 | **Docker Support** | Containerized execution environment | [📖 Documentation](Docker.md) |
 
 ## Quick Start
@@ -76,6 +78,15 @@ ansible-galaxy collection install graphiant.naas
 
 **See the [Ansible Collection README](ansible_collections/graphiant/naas/README.md) for complete documentation and [Examples Guide](ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md) for detailed usage examples.**
 
+### Key Features
+
+- **Idempotent Operations**: All modules correctly report `changed: false` when no modifications occur
+- **Structured Results**: Manager methods return detailed results with `changed`, `created`, `skipped`, and `deleted` fields
+- **Graceful Error Handling**: Handles "object not found" errors gracefully in deconfigure operations
+- **Jinja2 Template Support**: Configuration files support Jinja2 templating for dynamic generation
+- **Comprehensive Logging**: Optional detailed logging for debugging and troubleshooting
+- **Automated Releases**: GitHub Actions workflow for building, publishing, and creating releases
+
 ### Python Library
 
 The collection can also be used as a Python library:
@@ -128,21 +139,35 @@ terraform apply -var-file="../../configs/gateway_services/gcp_config.tfvars"
 
 ```
 graphiant-playbooks/
-├── ansible_collections/graphiant/naas/  # Ansible collection
-├── terraform/                                          # Terraform modules
-├── scripts/                                            # Utility scripts (version management, validation, building)
-│   ├── build_collection.py                           # Collection build script
-│   ├── bump_version.py                               # Version bumping script
-│   ├── generate_requirements.py                      # Requirements generator
-│   ├── validate_collection.py                        # Collection validation script
-│   └── build_docsite.sh                              # Documentation build script
-├── .github/workflows/                                 # GitHub Actions workflows
-│   ├── lint.yml                                       # Linting workflow
-│   ├── test.yml                                       # Test workflow
-│   ├── build.yml                                      # Build workflow
-│   ├── release.yml                                    # Release workflow
-│   └── README.md                                      # GitHub documentation
-└── README.md                                           # This file
+├── ansible_collections/graphiant/naas/                # Ansible collection (v25.12.2)
+│   ├── plugins/modules/                              # Ansible modules (6 modules)
+│   ├── plugins/module_utils/                         # Python library code
+│   ├── playbooks/                                    # Example playbooks
+│   ├── configs/                                      # Configuration templates
+│   ├── templates/                                    # Jinja2 templates
+│   ├── docs/                                         # Documentation
+│   ├── CHANGELOG.md                                  # Version history
+│   ├── README.md                                     # Collection documentation
+│   └── _version.py                                   # Centralized version management
+├── terraform/                                        # Terraform modules
+│   ├── gateway_services/                             # Cloud gateway services (AWS/Azure/GCP)
+│   └── edge_services/                                # Edge services
+├── scripts/                                          # Utility scripts
+│   ├── build_collection.py                          # Collection build script
+│   ├── bump_version.py                              # Version bumping script
+│   ├── generate_requirements.py                     # Requirements generator
+│   ├── validate_collection.py                       # Collection validation script
+│   └── build_docsite.sh                             # Documentation build script
+├── .github/workflows/                                # GitHub Actions workflows
+│   ├── lint.yml                                     # Linting workflow
+│   ├── test.yml                                     # Test workflow (multi-version testing)
+│   ├── build.yml                                    # Build workflow
+│   ├── release.yml                                  # Release workflow (auto-tag/release)
+│   └── README.md                                    # GitHub documentation
+├── SECURITY.md                                       # Security policy
+├── CONTRIBUTING.md                                   # Contribution guidelines
+├── CODE_OF_CONDUCT.md                               # Code of conduct
+└── README.md                                         # This file
 ```
 
 ## 🤝 Contributing
@@ -152,6 +177,10 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - Code standards
 - Testing requirements
 - Pull request process
+- Branch protection requirements
+- GPG signing requirements
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community guidelines.
 
 ## 📄 License
 
@@ -159,7 +188,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Official Documentation**: [Graphiant Plybooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
+- **Official Documentation**: [Graphiant Playbooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
+- **Changelog**: [CHANGELOG.md](ansible_collections/graphiant/naas/CHANGELOG.md) - Version history and release notes
+- **Security**: [SECURITY.md](SECURITY.md) - Security policy and vulnerability reporting
 - **Issues**: [GitHub Issues](https://github.com/Graphiant-Inc/graphiant-playbooks/issues)
 - **Email**: support@graphiant.com
 

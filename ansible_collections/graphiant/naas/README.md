@@ -14,6 +14,15 @@ This collection provides Ansible modules to automate:
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
 - Site management and object attachments
 - Data Exchange workflows
+- Raw device configuration deployment (Edge, Gateway, and Core devices)
+
+### Key Features
+
+- **Idempotent Operations**: All modules correctly report `changed: false` when no modifications occur
+- **Structured Results**: Manager methods return detailed results with `changed`, `created`, `skipped`, and `deleted` fields
+- **Graceful Error Handling**: Handles "object not found" errors gracefully in deconfigure operations
+- **Jinja2 Template Support**: Configuration files support Jinja2 templating for dynamic generation
+- **Comprehensive Logging**: Optional detailed logging for debugging and troubleshooting
 
 ## Ansible Version Compatibility
 
@@ -195,6 +204,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 
 | Playbook | Description |
 |----------|-------------|
+| `hello_test.yml` | E2E integration test playbook (used in CI/CD) |
 | `complete_network_setup.yml` | Full network configuration workflow |
 | `interface_management.yml` | Interface and circuit operations |
 | `circuit_management.yml` | Circuit-specific operations |
@@ -203,6 +213,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `site_lists_management.yml` | Site list operations |
 | `credential_examples.yml` | Credential management examples |
 | `device_config_management.yml` | Push raw device configurations (Edge/Gateway/Core) |
+| `test_collection.yml` | Collection validation and testing |
 
 #### Data Exchange Workflows
 
@@ -282,6 +293,16 @@ All modules support `state` parameter:
 - `present`: Configure/create resources (maps to `configure` operation)
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
+
+### Idempotency
+
+All modules are idempotent and correctly report `changed: false` when no modifications occur:
+- Modules track whether actual changes were made to the system
+- `changed: false` is reported when configurations already match the desired state
+- Manager methods return structured results with `changed`, `created`, `skipped`, and `deleted` fields
+- Graceful error handling for "object not found" errors in deconfigure operations
+
+**Note:** PUT/PATCH operations (`configure_interfaces`, `configure_bgp`, etc.) always report `changed: true` as state comparison is not currently implemented for these operations.
 
 ### Detailed Logging
 
@@ -390,15 +411,24 @@ Version information is centralized in `_version.py`. To bump versions or update 
 
 Quick version bump:
 ```bash
+# From repository root
 # Patch release (bug fixes)
-python bump_version.py patch
+python scripts/bump_version.py patch
 
 # Minor release (new features)
 python scripts/bump_version.py minor
 
 # Major release (breaking changes)
 python scripts/bump_version.py major
+
+# Set specific version
+python scripts/bump_version.py 25.12.2
 ```
+
+After bumping version, remember to:
+1. Update CHANGELOG.md with actual changes
+2. Run `python scripts/generate_requirements.py` to sync requirements.txt
+3. Review and commit changes
 
 ## Support
 

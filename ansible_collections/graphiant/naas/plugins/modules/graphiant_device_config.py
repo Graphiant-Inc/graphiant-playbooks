@@ -24,7 +24,7 @@ description:
   - Supports optional user-defined Jinja2 templates for configuration generation.
   - Configuration files support Jinja2 templating syntax for dynamic configuration generation.
   - Provides dry-run validation mode to validate configurations before deployment.
-version_added: "25.11.0"
+version_added: "25.12.0"
 notes:
   - "Supported Device Types:"
   - "  - Edge devices: Use 'edge' key in payload"
