@@ -23,7 +23,7 @@ description:
   - Enables creating, deleting, and querying Data Exchange services and customers.
   - Provides service-to-customer matching operations with automatic match response file management.
   - Supports invitation acceptance with gateway service deployment and VPN configuration.
-version_added: "25.11.0"
+version_added: "25.12.0"
 notes:
   - "Data Exchange Workflows:"
   - "  - Workflow 1 (Create Services): Create Data Exchange services that can be shared with customers."

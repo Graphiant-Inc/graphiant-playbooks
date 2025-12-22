@@ -36,8 +36,10 @@ except ImportError:
 
 
 # Get the collection root directory
-COLLECTION_ROOT = Path(__file__).parent
-REPO_ROOT = COLLECTION_ROOT.parent.parent
+# Script is at scripts/bump_version.py, collection is at ansible_collections/graphiant/naas/
+SCRIPT_DIR = Path(__file__).parent  # scripts/
+REPO_ROOT = SCRIPT_DIR.parent  # repository root
+COLLECTION_ROOT = REPO_ROOT / "ansible_collections" / "graphiant" / "naas"
 
 
 def load_version() -> str:
@@ -147,28 +149,54 @@ def update_changelog(new_version: str, old_version: str) -> None:
 
 def update_module_version_added(new_version: str) -> None:
     """Update version_added in all module files"""
-    # Extract major.minor from version (e.g., 25.11.1 -> 25.11.0)
+    # Extract major.minor from version (e.g., 25.12.2 -> 25.12.0)
     major, minor, patch = new_version.split('.')
     del patch  # Unused, but needed for unpacking
     module_version = f"{major}.{minor}.0"
 
     modules_dir = COLLECTION_ROOT / "plugins" / "modules"
-    module_files = list(modules_dir.glob("graphiant_*.py"))
+    if not modules_dir.exists():
+        print(f"⚠️  Warning: Modules directory not found: {modules_dir}")
+        return
 
+    module_files = list(modules_dir.glob("graphiant_*.py"))
+    
+    if not module_files:
+        print(f"⚠️  Warning: No module files found in {modules_dir}")
+        return
+
+    updated_count = 0
     for module_file in module_files:
-        with open(module_file, 'r') as f:
+        with open(module_file, 'r', encoding='utf-8') as f:
             content = f.read()
 
+        # Check if version_added exists in the file
+        if 'version_added' not in content:
+            print(f"⚠️  Warning: {module_file.name} does not contain version_added field")
+            continue
+
         # Update version_added in DOCUMENTATION section
+        # Match: version_added: "25.11.0" or version_added: '25.11.0'
+        old_content = content
         content = re.sub(
             r'version_added:\s*["\'][^"\']+["\']',
             f'version_added: "{module_version}"',
             content
         )
 
-        with open(module_file, 'w') as f:
-            f.write(content)
-        print(f"✅ Updated {module_file.name}: version_added = {module_version}")
+        # Only write if content changed
+        if content != old_content:
+            with open(module_file, 'w', encoding='utf-8') as f:
+                f.write(content)
+            print(f"✅ Updated {module_file.name}: version_added = {module_version}")
+            updated_count += 1
+        else:
+            print(f"ℹ️  {module_file.name}: version_added already set to {module_version}")
+
+    if updated_count > 0:
+        print(f"✅ Updated version_added in {updated_count} module(s)")
+    else:
+        print(f"ℹ️  No modules needed version_added updates")
 
 
 def update_requirements_txt(dependency_updates: Optional[dict] = None) -> None:
