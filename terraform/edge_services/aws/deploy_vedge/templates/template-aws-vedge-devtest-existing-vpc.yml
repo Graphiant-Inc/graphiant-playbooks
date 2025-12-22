@@ -1,0 +1,354 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template for the Graphiant vEgde as an EC2 instance within an existing VPC.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: AWS Marketplace Parameters
+        Parameters:
+          - ImageId
+
+Parameters:
+  AvailabilityZone:
+    Description: Availability zone to create network resources in
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1a
+  ImageId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0e6c9aef7f9c78d0e
+    Description: The AMI that will be used to launch the instance.
+  InstanceType:
+    Description: Graphiant vEgde Devtest Instance Type
+    Type: String
+    Default: c5.xlarge
+    AllowedValues:
+      - c5.xlarge
+      - m5.xlarge
+      - r5.xlarge
+      - c6i.8xlarge
+      - c6i.4xlarge
+      - c6in.8xlarge
+  InstanceName:
+    Description: Name of the instance
+    Type: String
+    Default: vEdgeEC2
+  AllowedCidr:
+    Description: A public IPv4 address (/32) which is allowed to connect to the instance mgmt port
+    Type: String
+    Default: 127.0.0.1/32
+  AllowedCidrV6:
+    Description: A public IPv6 address (/128) which is allowed to connect to the instance mgmt port
+    Type: String
+    Default: ::1/128
+  Token:
+    Description: Graphiant vEdge onboarding authentication token
+    Type: String
+  OnboardingAuthUrl:
+    Description: Graphiant onboarding authentication URL
+    Type: String
+    Default: https://api.graphiant.com/v1/devices/oauth
+  OnboardingGateway:
+    Description: Graphiant onboarding gateway address & port
+    Type: String
+    Default: onboarding-gateway.graphiant.com:16000
+  SSHPublicKey:
+    Description: Public ssh key for accessing the instance
+    Type: String
+    ConstraintDescription: Must be a ssh public key
+  CustomerVPC:
+    Description: The VPC to deploy the vEdge instance into
+    Type: AWS::EC2::VPC::Id
+  CustomerVPCRouteTable:
+    Description: An existing route table in the VPC to use for internet access
+    Type: String
+  SubnetCloudInit:
+    Description: Subnet within the VPC to use for ssh access
+    Type: AWS::EC2::Subnet::Id
+  SubnetMgmt:
+    Description: Subnet within the VPC to use for mgmt access
+    Type: AWS::EC2::Subnet::Id
+  SubnetWan:
+    Description: Subnet within the VPC to use for WAN access
+    Type: AWS::EC2::Subnet::Id
+  SubnetLan:
+    Description: Subnet within the VPC to use for customer workload access
+    Type: AWS::EC2::Subnet::Id
+
+Resources:
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          InstanceMetadataTags: enabled
+
+  # Network stack - CloudInit
+  SecurityGroupCloutInit:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cloud init interface
+      VpcId: !Ref CustomerVPC
+      SecurityGroupIngress:
+        - IpProtocol: "tcp" # For incoming ssh.
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCidr
+        - IpProtocol: "tcp" # For incoming ssh.
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: !Ref AllowedCidrV6
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 169.254.169.254/32 # imds http endpoint.
+
+  InterfaceCloudInit:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Default VRF
+      GroupSet:
+        - !Ref SecurityGroupCloutInit
+      SubnetId: !Ref SubnetCloudInit
+      Tags:
+        - Key: Name
+          Value: CloudInit
+
+  CloudInitEIP:
+    Type: AWS::EC2::EIP
+
+  AssociateCloudInitEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt CloudInitEIP.AllocationId
+      NetworkInterfaceId: !Ref InterfaceCloudInit
+
+  # Network stack - LocalManagement
+  SecurityGroupLocalManagement:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Management interface
+      VpcId: !Ref CustomerVPC
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedCidr
+        - IpProtocol: "tcp"
+          FromPort: 80
+          ToPort: 80
+          CidrIpv6: !Ref AllowedCidrV6
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedCidr
+        - IpProtocol: "tcp"
+          FromPort: 22
+          ToPort: 22
+          CidrIpv6: !Ref AllowedCidrV6
+
+  InterfaceLocalManagement:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Graphiant mgmt
+      GroupSet:
+        - !Ref SecurityGroupLocalManagement
+      SubnetId: !Ref SubnetMgmt
+      Tags:
+        - Key: Name
+          Value: LocalManagement
+
+  LocalManagementEIP:
+    Type: AWS::EC2::EIP
+
+  AssociateLocalManagementEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt LocalManagementEIP.AllocationId
+      NetworkInterfaceId: !Ref InterfaceLocalManagement
+
+  # Network stack - Wan
+  SecurityGroupWan:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Wan interface
+      VpcId: !Ref CustomerVPC
+      SecurityGroupEgress:
+        - IpProtocol: "udp"
+          FromPort: 53
+          ToPort: 53
+          CidrIp: "0.0.0.0/0"
+          Description: For DNS resolution
+        - IpProtocol: "udp"
+          FromPort: 123
+          ToPort: 123
+          CidrIp: "0.0.0.0/0"
+          Description: For NTP
+        - IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+          Description: For HTTPS between Graphiant network onboarding services
+        - IpProtocol: "udp"
+          FromPort: 500
+          ToPort: 500
+          CidrIp: "0.0.0.0/0"
+          Description: For IKEv2 exchanges for setting up tunnels
+        - IpProtocol: "udp"
+          FromPort: 4500
+          ToPort: 4500
+          CidrIp: "0.0.0.0/0"
+          Description: For IPSec NAT Traversal
+        - IpProtocol: "tcp"
+          FromPort: 16000
+          ToPort: 16000
+          CidrIp: "0.0.0.0/0"
+          Description: For TLS between Graphiant network onboarding services
+        - IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+          CidrIp: "0.0.0.0/0"
+          Description: For debugging connectivity issues
+        - IpProtocol: "udp"
+          FromPort: 53
+          ToPort: 53
+          CidrIpv6: "::/0"
+          Description: For DNS resolution
+        - IpProtocol: "udp"
+          FromPort: 123
+          ToPort: 123
+          CidrIpv6: "::/0"
+          Description: For NTP
+        - IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: "::/0"
+          Description: For HTTPS between Graphiant network onboarding services
+        - IpProtocol: "udp"
+          FromPort: 500
+          ToPort: 500
+          CidrIpv6: "::/0"
+          Description: For IKEv2 exchanges for setting up tunnels
+        - IpProtocol: "udp"
+          FromPort: 4500
+          ToPort: 4500
+          CidrIpv6: "::/0"
+          Description: For IPSec NAT Traversal
+        - IpProtocol: "tcp"
+          FromPort: 16000
+          ToPort: 16000
+          CidrIpv6: "::/0"
+          Description: For TLS between Graphiant network onboarding services
+        - IpProtocol: "icmp"
+          FromPort: -1
+          ToPort: -1
+          CidrIpv6: "::/0"
+          Description: For debugging connectivity issues
+
+  WanEIP:
+    Type: AWS::EC2::EIP
+
+  InterfaceWan:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Graphiant Network
+      GroupSet:
+        - !Ref SecurityGroupWan
+      SubnetId: !Ref SubnetWan
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: WanDefault
+
+  AssociateWanEIP:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt WanEIP.AllocationId
+      NetworkInterfaceId: !Ref InterfaceWan
+
+  # Network stack - Lan
+  SecurityGroupLan:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lan interface
+      VpcId: !Ref CustomerVPC
+
+  InterfaceLan:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      Description: Customer ingress
+      GroupSet:
+        - !Ref SecurityGroupLan
+      SubnetId: !Ref SubnetLan
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: LanDefault
+
+  # Graphiant vEdge instance
+  vEdgeInstance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - AssociateCloudInitEIP
+      - AssociateLocalManagementEIP
+      - AssociateWanEIP
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+      ImageId: !Ref ImageId
+      AvailabilityZone: !Ref AvailabilityZone
+      InstanceType: !Ref InstanceType
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref InterfaceCloudInit
+          DeviceIndex: 0
+        - NetworkInterfaceId: !Ref InterfaceLocalManagement
+          DeviceIndex: 1
+        - NetworkInterfaceId: !Ref InterfaceWan
+          DeviceIndex: 2
+        - NetworkInterfaceId: !Ref InterfaceLan
+          DeviceIndex: 3
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+
+          graphnos:
+            onboarding-gw: ${OnboardingGateway}
+            onboarding-auth-url: ${OnboardingAuthUrl}
+            token: ${Token}
+
+          users:
+            -
+              name: gnos
+              sudo:
+              -
+                "ALL=(ALL) NOPASSWD:ALL"
+              groups: [ sudo ]
+              shell: /bin/bash
+              ssh-authorized-keys:
+              -
+                ${SSHPublicKey}
+
+Outputs:
+  VPCId:
+    Description: VPC ID created by this stack
+    Value: !Ref CustomerVPC
+  RouteTableId:
+    Description: Route table ID created by this stack
+    Value: !Ref CustomerVPCRouteTable
+  SubnetCloudInitId:
+    Description: Subnet ID for cloud-init subnet
+    Value: !Ref SubnetCloudInit
+  SubnetMgmtId:
+    Description: Subnet ID for mgmt subnet
+    Value: !Ref SubnetMgmt
+  SubnetWanId:
+    Description: Subnet ID for WAN subnet
+    Value: !Ref SubnetWan
+  SubnetLanId:
+    Description: Subnet ID for LAN subnet
+    Value: !Ref SubnetLan
+  vEdgeInstanceId:
+    Description: vEdge instance ID created by this stack
+    Value: !Ref vEdgeInstance
