@@ -5,6 +5,19 @@ All notable changes to the Graphiant Playbooks collection will be documented in 
 The format is based on [Ansible Collection Changelog Guidelines](https://docs.ansible.com/ansible/latest/dev_guide/developing_collections.html#changelogs),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Idempotency tracking for all modules - `changed: false` is now correctly reported when no modifications occur
+- Graceful error handling for "object not found" errors in deconfigure operations
+
+### Changed
+- Manager methods now return structured result dictionaries with `changed`, `created`, `skipped`, and `deleted` fields
+- Modules correctly interpret and propagate `changed` status from manager results
+
+### Note
+- PUT/PATCH operations (`configure_interfaces`, `configure_bgp`, etc.) always report `changed: true` as state comparison is not implemented
+
 ## [25.12.1] - 2025-12-18
 
 ### Added

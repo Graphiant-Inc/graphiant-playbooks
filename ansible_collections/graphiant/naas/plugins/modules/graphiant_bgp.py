@@ -204,7 +204,17 @@ def execute_with_logging(module, func, *args, **kwargs):
     success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
 
     try:
-        func(*args, **kwargs)
+        result = func(*args, **kwargs)
+
+        # If the function returns a dict with 'changed' key, use it
+        if isinstance(result, dict) and 'changed' in result:
+            return {
+                'changed': result['changed'],
+                'result_msg': success_msg,
+                'details': result
+            }
+
+        # Fallback for functions that don't return change status
         return {
             'changed': True,
             'result_msg': success_msg

@@ -65,7 +65,7 @@ class DeviceConfigManager(BaseManager):
     the final payload from simplified config data.
     """
 
-    def configure(self, config_yaml_file: str, template_file: str = None) -> None:
+    def configure(self, config_yaml_file: str, template_file: str = None) -> dict:
         """
         Configure devices by pushing configuration payloads.
 
@@ -76,10 +76,17 @@ class DeviceConfigManager(BaseManager):
             config_yaml_file: Path to the YAML configuration file containing device_config
             template_file: Optional path to a user-defined Jinja2 template file
 
+        Returns:
+            dict: Result with 'changed' status and list of configured devices
+            Note: Always returns changed=True when devices are configured since we push
+            via PUT API. True idempotency would require comparing current vs desired state.
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
+        result = {'changed': False, 'configured_devices': [], 'skipped_devices': []}
+
         LOG.info("Configuring devices from %s", config_yaml_file)
         if template_file:
             LOG.info("Using user-defined template: %s", template_file)
@@ -90,15 +97,14 @@ class DeviceConfigManager(BaseManager):
 
             if not device_configs:
                 LOG.warning("No device_config found in configuration file")
-                return
+                return result
 
             # Print current enterprise info
             LOG.info("DeviceConfigManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             # Build the config payload for concurrent execution
             output_config = {}
-            configured_count = 0
-            skipped_count = 0
+            device_names = {}  # Map device_id -> device_name for result tracking
 
             for device_name, config_data in device_configs.items():
                 LOG.info("Processing device: %s", device_name)
@@ -116,7 +122,7 @@ class DeviceConfigManager(BaseManager):
                 payload = self._parse_payload(config_data, device_name)
                 if payload is None:
                     LOG.warning("Skipping device '%s' - no valid payload", device_name)
-                    skipped_count += 1
+                    result['skipped_devices'].append(device_name)
                     continue
 
                 # Build output config for concurrent execution
@@ -124,7 +130,7 @@ class DeviceConfigManager(BaseManager):
                     "device_id": device_id,
                     "payload": payload
                 }
-                configured_count += 1
+                device_names[device_id] = device_name
                 LOG.info(" ✓ Prepared configuration for device: %s (ID: %s)", device_name, device_id)
 
             # Execute concurrent configuration push
@@ -133,9 +139,14 @@ class DeviceConfigManager(BaseManager):
                 self.execute_concurrent_tasks(self.gsdk.show_validated_payload, output_config)
                 LOG.info("Pushing configuration to %d device(s)...", len(output_config))
                 self.execute_concurrent_tasks(self.gsdk.put_device_config_raw, output_config)
-                LOG.info("Successfully configured %d device(s), skipped %d", configured_count, skipped_count)
+                result['changed'] = True
+                result['configured_devices'] = [device_names[did] for did in output_config.keys()]
+                LOG.info("Successfully configured %d device(s), skipped %d",
+                         len(result['configured_devices']), len(result['skipped_devices']))
             else:
                 LOG.warning("No devices to configure")
+
+            return result
 
         except (ConfigurationError, DeviceNotFoundError):
             raise

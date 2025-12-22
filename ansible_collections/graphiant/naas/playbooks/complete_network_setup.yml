@@ -12,9 +12,9 @@
       host: "{{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}"
       username: "{{ graphiant_username | default(lookup('env', 'GRAPHIANT_USERNAME')) }}"
       password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
-      # host: "{{ graphiant_host | default(lookup('ini', 'url file=/absolute/path/test/test.ini section=host')) }}"
-      # username: "{{ graphiant_username | default(lookup('ini', 'username file=/absolute/path/test/test.ini section=credentials')) }}"
-      # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/test/test.ini section=credentials')) }}"
+      # host: "{{ graphiant_host | default(lookup('ini', 'url file=/absolute/path/credentials.ini section=host')) }}"
+      # username: "{{ graphiant_username | default(lookup('ini', 'username file=/absolute/path/credentials.ini section=credentials')) }}"
+      # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/credentials.ini section=credentials')) }}"
 
   tasks:
     - name: Configure global prefix sets
@@ -22,7 +22,14 @@
         <<: *graphiant_client_params
         config_file: "sample_global_prefix_lists.yaml"
         operation: "configure"
+        detailed_logs: true
         state: present
+      register: prefix_sets_result
+      tags: ['global_config', 'prefix_sets']
+
+    - name: Display prefix sets result
+      ansible.builtin.debug:
+        msg: "{{ prefix_sets_result.msg }}"
       tags: ['global_config', 'prefix_sets']
 
     - name: Configure global BGP filters
@@ -30,7 +37,14 @@
         <<: *graphiant_client_params
         config_file: "sample_global_bgp_filters.yaml"
         operation: "configure"
+        detailed_logs: true
         state: present
+      register: bgp_filters_result
+      tags: ['global_config', 'bgp_filters']
+
+    - name: Display BGP filters result
+      ansible.builtin.debug:
+        msg: "{{ bgp_filters_result.msg }}"
       tags: ['global_config', 'bgp_filters']
 
     - name: Configure global SNMP services
@@ -38,7 +52,14 @@
         <<: *graphiant_client_params
         config_file: "sample_global_snmp_services.yaml"
         operation: "configure"
+        detailed_logs: true
         state: present
+      register: snmp_result
+      tags: ['global_config', 'snmp']
+
+    - name: Display SNMP result
+      ansible.builtin.debug:
+        msg: "{{ snmp_result.msg }}"
       tags: ['global_config', 'snmp']
 
     - name: Configure global syslog services
@@ -46,7 +67,14 @@
         <<: *graphiant_client_params
         config_file: "sample_global_syslog_servers.yaml"
         operation: "configure"
+        detailed_logs: true
         state: present
+      register: syslog_result
+      tags: ['global_config', 'syslog']
+
+    - name: Display syslog result
+      ansible.builtin.debug:
+        msg: "{{ syslog_result.msg }}"
       tags: ['global_config', 'syslog']
 
     - name: Configure global IPFIX services
@@ -54,7 +82,14 @@
         <<: *graphiant_client_params
         config_file: "sample_global_ipfix_exporters.yaml"
         operation: "configure"
+        detailed_logs: true
         state: present
+      register: ipfix_result
+      tags: ['global_config', 'ipfix']
+
+    - name: Display IPFIX result
+      ansible.builtin.debug:
+        msg: "{{ ipfix_result.msg }}"
       tags: ['global_config', 'ipfix']
 
     - name: Configure global VPN profiles
@@ -62,30 +97,61 @@
         <<: *graphiant_client_params
         config_file: "sample_global_vpn_profiles.yaml"
         operation: "configure"
+        detailed_logs: true
         state: present
+      register: vpn_result
       tags: ['global_config', 'vpn']
 
-    # - name: Configure interfaces and circuits
-    #   graphiant.naas.graphiant_interfaces:
-    #     <<: *graphiant_client_params
-    #     interface_config_file: "sample_interface_config.yaml"
-    #     circuit_config_file: "sample_circuit_config.yaml"
-    #     operation: "configure_interfaces"
-    #     state: present
-    #   tags: ['interfaces', 'circuits']
+    - name: Display VPN result
+      ansible.builtin.debug:
+        msg: "{{ vpn_result.msg }}"
+      tags: ['global_config', 'vpn']
 
-    # - name: Attach global objects to sites
-    #   graphiant.naas.graphiant_sites:
-    #     <<: *graphiant_client_params
-    #     site_config_file: "sample_site_attachments.yaml"
-    #     operation: "attach"
-    #     state: present
-    #   tags: ['sites', 'attachments']
+    - name: Configure interfaces and circuits
+      graphiant.naas.graphiant_interfaces:
+        <<: *graphiant_client_params
+        interface_config_file: "sample_interface_config.yaml"
+        circuit_config_file: "sample_circuit_config.yaml"
+        operation: "configure_interfaces"
+        detailed_logs: true
+        state: present
+      ignore_errors: true
+      register: interfaces_result
+      tags: ['interfaces', 'circuits']
 
-    # - name: Configure BGP peering
-    #   graphiant.naas.graphiant_bgp:
-    #     <<: *graphiant_client_params
-    #     bgp_config_file: "sample_bgp_peering.yaml"
-    #     operation: "configure"
-    #     state: present
-    #   tags: ['bgp', 'peering']
+    - name: Display interfaces result
+      ansible.builtin.debug:
+        msg: "{{ interfaces_result.msg }}"
+      tags: ['interfaces', 'circuits']
+
+    - name: Attach global objects to sites
+      graphiant.naas.graphiant_sites:
+        <<: *graphiant_client_params
+        site_config_file: "sample_site_attachments.yaml"
+        operation: "attach_objects"
+        detailed_logs: true
+        state: present
+      ignore_errors: true
+      register: attach_result
+      tags: ['sites', 'attachments']
+
+    - name: Display attach result
+      ansible.builtin.debug:
+        msg: "{{ attach_result.msg }}"
+      tags: ['sites', 'attachments']
+
+    - name: Configure BGP peering
+      graphiant.naas.graphiant_bgp:
+        <<: *graphiant_client_params
+        bgp_config_file: "sample_bgp_peering.yaml"
+        operation: "configure"
+        detailed_logs: true
+        state: present
+      ignore_errors: true
+      register: bgp_peering_result
+      tags: ['bgp', 'peering']
+
+    - name: Display BGP peering result
+      ansible.builtin.debug:
+        msg: "{{ bgp_peering_result.msg }}"
+      tags: ['bgp', 'peering']

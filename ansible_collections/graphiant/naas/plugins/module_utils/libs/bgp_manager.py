@@ -20,24 +20,31 @@ class BGPManager(BaseManager):
     for BGP peering relationships.
     """
 
-    def configure(self, config_yaml_file: str) -> None:
+    def configure(self, config_yaml_file: str) -> dict:
         """
         Configure BGP peers for multiple devices concurrently.
 
         Args:
             config_yaml_file: Path to the YAML file containing BGP peering configurations
 
+        Returns:
+            dict: Result with 'changed' status and list of configured devices
+            Note: Always returns changed=True when devices are configured since we push
+            via PUT API. True idempotency would require comparing current vs desired state.
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
+        result = {'changed': False, 'configured_devices': []}
+
         try:
             config_data = self.render_config_file(config_yaml_file)
             final_config_payload = {}
 
             if 'bgp_peering' not in config_data:
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
-                return
+                return result
 
             for device_config in config_data.get('bgp_peering'):
                 for device_name, config in device_config.items():
@@ -66,32 +73,43 @@ class BGPManager(BaseManager):
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
+                result['changed'] = True
+                result['configured_devices'] = list(final_config_payload.keys())
                 LOG.info("Successfully configured BGP peering for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
+
+            return result
 
         except Exception as e:
             LOG.error("Error in BGP configuration: %s", str(e))
             raise ConfigurationError(f"BGP configuration failed: {str(e)}")
 
-    def deconfigure(self, config_yaml_file: str) -> None:
+    def deconfigure(self, config_yaml_file: str) -> dict:
         """
         Deconfigure BGP peers for multiple devices concurrently.
 
         Args:
             config_yaml_file: Path to the YAML file containing BGP peering configurations
 
+        Returns:
+            dict: Result with 'changed' status and list of deconfigured devices
+            Note: Always returns changed=True when devices are deconfigured since we push
+            via PUT API. True idempotency would require comparing current vs desired state.
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
+        result = {'changed': False, 'deconfigured_devices': []}
+
         try:
             config_data = self.render_config_file(config_yaml_file)
             final_config_payload = {}
 
             if 'bgp_peering' not in config_data:
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
-                return
+                return result
 
             for device_config in config_data.get('bgp_peering'):
                 for device_name, config in device_config.items():
@@ -120,9 +138,13 @@ class BGPManager(BaseManager):
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
+                result['changed'] = True
+                result['deconfigured_devices'] = list(final_config_payload.keys())
                 LOG.info("Successfully deconfigured BGP peering for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
+
+            return result
 
         except Exception as e:
             LOG.error("Error in BGP deconfiguration: %s", str(e))

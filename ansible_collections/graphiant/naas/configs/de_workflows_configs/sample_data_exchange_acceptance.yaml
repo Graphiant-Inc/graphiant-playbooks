@@ -40,7 +40,7 @@ data_exchange_acceptances:
         destinationAddress: "0.0.0.0"          # Customer's external IP
         mtu: null                              # Optional MTU setting
         tcpMss: null                           # Optional TCP MSS setting
-        remoteIkePeerIdentity: null            # Optional remote IKE peer identity
+        remoteIkePeerIdentity: "0.0.0.0"       # Optional remote IKE peer identity
         ikeInitiator: false                    # IKE initiation mode (false = responder)
         
         # Tunnel 1 Configuration

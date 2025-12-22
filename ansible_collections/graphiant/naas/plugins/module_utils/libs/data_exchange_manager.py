@@ -31,59 +31,91 @@ class DataExchangeManager(BaseManager):
     Manager for Data Exchange workflows and operations.
     """
 
-    def configure(self, config_yaml_file: str) -> None:
+    def configure(self, config_yaml_file: str) -> dict:
         """
         Configure Data Exchange resources based on the provided YAML file.
         This is the main entry point for Data Exchange configuration.
 
         Args:
             config_yaml_file: Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
         """
+        result = {'changed': False, 'details': {}}
+
         LOG.info("Configuring Data Exchange resources from %s", config_yaml_file)
 
         # Create services first
-        self.create_services(config_yaml_file)
+        services_result = self.create_services(config_yaml_file)
+        if services_result.get('changed'):
+            result['changed'] = True
+        result['details']['services'] = services_result
 
         # Create customers
-        self.create_customers(config_yaml_file)
+        customers_result = self.create_customers(config_yaml_file)
+        if customers_result.get('changed'):
+            result['changed'] = True
+        result['details']['customers'] = customers_result
 
         # Match services to customers
-        self.match_service_to_customers(config_yaml_file)
+        matches_result = self.match_service_to_customers(config_yaml_file)
+        if matches_result.get('changed'):
+            result['changed'] = True
+        result['details']['matches'] = matches_result
 
-        LOG.info("Data Exchange configuration completed successfully")
+        LOG.info("Data Exchange configuration completed (changed: %s)", result['changed'])
+        return result
 
-    def deconfigure(self, config_yaml_file: str) -> None:
+    def deconfigure(self, config_yaml_file: str) -> dict:
         """
         Deconfigure Data Exchange resources based on the provided YAML file.
         This is the main entry point for Data Exchange deconfiguration.
 
         Args:
             config_yaml_file: Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and details of operations performed
         """
+        result = {'changed': False, 'details': {}}
+
         LOG.info("Deconfiguring Data Exchange resources from %s", config_yaml_file)
 
         # Delete customers first (they depend on services)
-        self.delete_customers(config_yaml_file)
+        customers_result = self.delete_customers(config_yaml_file)
+        if customers_result.get('changed'):
+            result['changed'] = True
+        result['details']['customers'] = customers_result
 
         # Delete services
-        self.delete_services(config_yaml_file)
+        services_result = self.delete_services(config_yaml_file)
+        if services_result.get('changed'):
+            result['changed'] = True
+        result['details']['services'] = services_result
 
-        LOG.info("Data Exchange deconfiguration completed successfully")
+        LOG.info("Data Exchange deconfiguration completed (changed: %s)", result['changed'])
+        return result
 
-    def create_services(self, config_yaml_file: str) -> None:
+    def create_services(self, config_yaml_file: str) -> dict:
         """
         Create new Data Exchange services from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and lists of created/skipped items
         """
+        result = {'changed': False, 'created': [], 'skipped': []}
+
         try:
             LOG.info("Creating Data Exchange service from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_services' not in config_data:
                 LOG.info("No data_exchange_services configuration found in YAML file")
-                return
+                return result
 
             services = config_data['data_exchange_services']
             if not isinstance(services, list):
@@ -91,9 +123,6 @@ class DataExchangeManager(BaseManager):
 
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
-
-            created_count = 0
-            skipped_count = 0
 
             for service_config in services:
                 service_name = service_config.get('serviceName')
@@ -106,7 +135,7 @@ class DataExchangeManager(BaseManager):
                 existing_service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if existing_service:
                     LOG.info("Service '%s' already exists (ID: %s), skipping creation", service_name, existing_service.id)
-                    skipped_count += 1
+                    result['skipped'].append(service_name)
                     continue
 
                 if 'policy' in service_config:
@@ -130,9 +159,12 @@ class DataExchangeManager(BaseManager):
                 LOG.info("create_data_exchange_services: Creating service '%s'", service_name)
                 self.gsdk.create_data_exchange_services(service_config)
                 LOG.info("Successfully created service '%s'", service_name)
-                created_count += 1
+                result['created'].append(service_name)
+                result['changed'] = True
 
-            LOG.info("Data Exchange service creation completed: %s created, %s skipped", created_count, skipped_count)
+            LOG.info("Data Exchange service creation completed: %s created, %s skipped (changed: %s)",
+                     len(result['created']), len(result['skipped']), result['changed'])
+            return result
 
         except ConfigurationError:
             raise
@@ -247,20 +279,25 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to retrieve service '%s': %s", service_name, e)
             raise ConfigurationError(f"Failed to retrieve service '{service_name}': {e}")
 
-    def create_customers(self, config_yaml_file: str) -> None:
+    def create_customers(self, config_yaml_file: str) -> dict:
         """
         Create a new Data Exchange customer from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and lists of created/skipped items
         """
+        result = {'changed': False, 'created': [], 'skipped': []}
+
         try:
             LOG.info("Creating Data Exchange customer from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_customers' not in config_data:
                 LOG.info("No data_exchange_customers configuration found in YAML file")
-                return
+                return result
 
             customers = config_data['data_exchange_customers']
             if not isinstance(customers, list):
@@ -268,9 +305,6 @@ class DataExchangeManager(BaseManager):
 
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
-
-            created_count = 0
-            skipped_count = 0
 
             for customer_config in customers:
                 customer_name = customer_config.get('name')
@@ -284,7 +318,7 @@ class DataExchangeManager(BaseManager):
                 if existing_customer:
                     LOG.info("Customer '%s' already exists (ID: %s), skipping creation",
                              customer_name, existing_customer.id)
-                    skipped_count += 1
+                    result['skipped'].append(customer_name)
                     continue
 
                 # Create customer directly
@@ -292,9 +326,12 @@ class DataExchangeManager(BaseManager):
                 LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_name)
                 self.gsdk.create_data_exchange_customers(customer_config)
                 LOG.info("Successfully created customer '%s'", customer_name)
-                created_count += 1
+                result['created'].append(customer_name)
+                result['changed'] = True
 
-            LOG.info("Data Exchange customer creation completed: %s created, %s skipped", created_count, skipped_count)
+            LOG.info("Data Exchange customer creation completed: %s created, %s skipped (changed: %s)",
+                     len(result['created']), len(result['skipped']), result['changed'])
+            return result
 
         except ConfigurationError:
             raise
@@ -364,20 +401,25 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to retrieve customer '%s': %s", customer_name, e)
             raise ConfigurationError(f"Failed to retrieve customer '{customer_name}': {e}")
 
-    def delete_customers(self, config_yaml_file: str) -> None:
+    def delete_customers(self, config_yaml_file: str) -> dict:
         """
         Delete Data Exchange customers from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and lists of deleted/skipped items
         """
+        result = {'changed': False, 'deleted': [], 'skipped': []}
+
         try:
             LOG.info("Deleting Data Exchange customers from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_customers' not in config_data:
                 LOG.info("No data_exchange_customers configuration found in YAML file")
-                return
+                return result
 
             customers = config_data['data_exchange_customers']
             if not isinstance(customers, list):
@@ -385,9 +427,6 @@ class DataExchangeManager(BaseManager):
 
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
-
-            deleted_count = 0
-            skipped_count = 0
 
             for customer_config in customers:
                 customer_name = customer_config.get('name')
@@ -400,16 +439,19 @@ class DataExchangeManager(BaseManager):
                 customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
                 if not customer:
                     LOG.info("Customer '%s' not found, skipping deletion", customer_name)
-                    skipped_count += 1
+                    result['skipped'].append(customer_name)
                     continue
 
                 # Delete customer directly
                 LOG.info("delete_data_exchange_customer: Deleting customer '%s'", customer_name)
                 self.gsdk.delete_data_exchange_customer(customer.id)
                 LOG.info("Successfully deleted customer '%s' (ID: %s)", customer_name, customer.id)
-                deleted_count += 1
+                result['deleted'].append(customer_name)
+                result['changed'] = True
 
-            LOG.info("Data Exchange customer deletion completed: %s deleted, %s skipped", deleted_count, skipped_count)
+            LOG.info("Data Exchange customer deletion completed: %s deleted, %s skipped (changed: %s)",
+                     len(result['deleted']), len(result['skipped']), result['changed'])
+            return result
 
         except ConfigurationError:
             raise
@@ -417,20 +459,25 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to delete Data Exchange customers: %s", e)
             raise ConfigurationError(f"Data Exchange customer deletion failed: {e}")
 
-    def delete_services(self, config_yaml_file: str) -> None:
+    def delete_services(self, config_yaml_file: str) -> dict:
         """
         Delete Data Exchange services from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and lists of deleted/skipped items
         """
+        result = {'changed': False, 'deleted': [], 'skipped': []}
+
         try:
             LOG.info("Deleting Data Exchange services from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
 
             if not config_data or 'data_exchange_services' not in config_data:
                 LOG.info("No data_exchange_services configuration found in YAML file")
-                return
+                return result
 
             services = config_data['data_exchange_services']
             if not isinstance(services, list):
@@ -438,9 +485,6 @@ class DataExchangeManager(BaseManager):
 
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
-
-            deleted_count = 0
-            skipped_count = 0
 
             for service_config in services:
                 service_name = service_config.get('serviceName')
@@ -453,16 +497,19 @@ class DataExchangeManager(BaseManager):
                 service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if not service:
                     LOG.info("Service '%s' not found, skipping deletion", service_name)
-                    skipped_count += 1
+                    result['skipped'].append(service_name)
                     continue
 
                 # Delete service directly
                 LOG.info("delete_data_exchange_service: Deleting service '%s'", service_name)
                 self.gsdk.delete_data_exchange_service(service.id)
                 LOG.info("Successfully deleted service '%s' (ID: %s)", service_name, service.id)
-                deleted_count += 1
+                result['deleted'].append(service_name)
+                result['changed'] = True
 
-            LOG.info("Data Exchange service deletion completed: %s deleted, %s skipped", deleted_count, skipped_count)
+            LOG.info("Data Exchange service deletion completed: %s deleted, %s skipped (changed: %s)",
+                     len(result['deleted']), len(result['skipped']), result['changed'])
+            return result
 
         except ConfigurationError:
             raise
@@ -582,13 +629,18 @@ class DataExchangeManager(BaseManager):
         LOG.info("Updated %s existing entries, added %s new entries. Total entries in matches_file: %s",
                  updated_count, added_count, len(merged_responses))
 
-    def match_service_to_customers(self, config_yaml_file: str) -> None:
+    def match_service_to_customers(self, config_yaml_file: str) -> dict:
         """
         Match Data Exchange services to customers from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+
+        Returns:
+            dict: Result with 'changed' status and lists of matched/skipped items
         """
+        result = {'changed': False, 'matched': [], 'skipped': [], 'failed': []}
+
         try:
             LOG.info("Matching Data Exchange services to customers from %s", config_yaml_file)
             config_data = self.render_config_file(config_yaml_file)
@@ -604,33 +656,31 @@ class DataExchangeManager(BaseManager):
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
-            matched_count = 0
-            skipped_count = 0
-            failed_count = 0
             match_responses = []
 
             for match_config in matches:
                 customer_name = match_config.get('customerName')
                 service_name = match_config.get('serviceName')
+                match_key = f"{service_name}->{customer_name}"
                 LOG.info("--------------------------------")
                 LOG.info("match_service_to_customers: Matching service '%s' to customer '%s'", service_name, customer_name)
                 if not customer_name or not service_name:
                     LOG.error("Configuration error: Each match must have 'customerName' and 'serviceName' fields.")
-                    failed_count += 1
+                    result['failed'].append(match_key)
                     continue
 
                 # Get customer ID
                 customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
                 if not customer:
                     LOG.error("Customer '%s' not found in the enterprise.", customer_name)
-                    failed_count += 1
+                    result['failed'].append(match_key)
                     continue
 
                 # Get service ID
                 service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if not service:
                     LOG.error("Service '%s' not found in the enterprise.", service_name)
-                    failed_count += 1
+                    result['failed'].append(match_key)
                     continue
 
                 # Check if service is already matched to this customer
@@ -646,7 +696,7 @@ class DataExchangeManager(BaseManager):
                                         service_name, customer_name, matched_service.id,
                                         matched_service.matched_customers)
                             already_matched = True
-                            skipped_count += 1
+                            result['skipped'].append(match_key)
                             break
 
                     if already_matched:
@@ -680,12 +730,12 @@ class DataExchangeManager(BaseManager):
                     if "match already exists" in error_msg.lower():
                         LOG.info("Service '%s' is already matched to customer '%s', skipping match as it already exists.",
                                  service_name, customer_name)
-                        skipped_count += 1
+                        result['skipped'].append(match_key)
                         continue
                     else:
                         LOG.error("Failed to match service '%s' to customer '%s': %s",
                                   service_name, customer_name, error_msg)
-                        failed_count += 1
+                        result['failed'].append(match_key)
                         continue
 
                 # Store response data for next workflow
@@ -701,16 +751,19 @@ class DataExchangeManager(BaseManager):
                 match_responses.append(match_response_data)
                 LOG.info("Successfully matched service '%s' to customer '%s' with match_id: %s",
                          service_name, customer_name, response.match_id)
-                matched_count += 1
+                result['matched'].append(match_key)
+                result['changed'] = True
 
             # Save match responses to file for next workflow
             self._save_match_service_to_customer_responses(match_responses, config_yaml_file)
 
-            LOG.info("Data Exchange service matching completed: %s matched, %s skipped, %s failed",
-                     matched_count, skipped_count, failed_count)
-            if failed_count > 0:
-                raise ConfigurationError(f"Data Exchange service to customer matching had {failed_count} failures "
-                                         f"out of {matched_count + skipped_count + failed_count} total")
+            LOG.info("Data Exchange service matching completed: %s matched, %s skipped, %s failed (changed: %s)",
+                     len(result['matched']), len(result['skipped']), len(result['failed']), result['changed'])
+            if len(result['failed']) > 0:
+                total = len(result['matched']) + len(result['skipped']) + len(result['failed'])
+                raise ConfigurationError(f"Data Exchange service to customer matching had {len(result['failed'])} "
+                                         f"failures out of {total} total")
+            return result
         except Exception as e:
             LOG.error("Failed to match Data Exchange services to customers: %s", e)
             raise ConfigurationError(f"Data Exchange service to customer matching failed: {e}")
@@ -757,10 +810,13 @@ class DataExchangeManager(BaseManager):
             # Log summary like other operations
             total_processed = result.get('total_processed', 0)
             total_successful = result.get('total_successful', 0)
+            total_accepted = result.get('total_accepted', 0)
+            total_skipped = result.get('total_skipped', 0)
             total_failed = total_processed - total_successful
 
-            LOG.info("Data Exchange invitation acceptance completed: %s accepted, %s failed",
-                     total_successful, total_failed)
+            LOG.info("Data Exchange invitation acceptance completed: %s accepted, %s skipped, %s failed "
+                     "(changed: %s)",
+                     total_accepted, total_skipped, total_failed, result.get('changed', False))
 
             # Check if there were any failures
             if total_failed > 0:
@@ -915,7 +971,8 @@ class DataExchangeManager(BaseManager):
         try:
             results = []
             total_processed = 0
-            total_successful = 0
+            total_accepted = 0
+            total_skipped = 0
 
             LOG.info("_process_multiple_acceptances: Processing %s invitation acceptances", len(acceptances_config))
 
@@ -988,25 +1045,46 @@ class DataExchangeManager(BaseManager):
                         'result': result,
                         'status': 'success' if not dry_run else 'dry-run'
                     })
-                    total_successful += 1
+                    total_accepted += 1
 
                 except Exception as e:
-                    LOG.error("_process_multiple_acceptances: Failed to process acceptance %s: %s", i + 1, e)
-                    results.append({
-                        'customer_name': acceptance_config.get('customerName'),
-                        'service_name': acceptance_config.get('serviceName'),
-                        'error': str(e),
-                        'status': 'failed'
-                    })
+                    error_str = str(e)
+                    # Check for "consumer already exists" error - treat as idempotent success
+                    if "consumer already exists" in error_str:
+                        LOG.info("_process_multiple_acceptances: Consumer already exists for '%s' and '%s' - "
+                                 "skipping (idempotent)",
+                                 acceptance_config.get('customerName'), acceptance_config.get('serviceName'))
+                        results.append({
+                            'customer_name': acceptance_config.get('customerName'),
+                            'service_name': acceptance_config.get('serviceName'),
+                            'result': {'message': 'Consumer already exists - skipped (idempotent)'},
+                            'status': 'skipped'
+                        })
+                        total_skipped += 1  # Count as skipped for idempotency
+                    else:
+                        LOG.error("_process_multiple_acceptances: Failed to process acceptance %s: %s", i + 1, e)
+                        results.append({
+                            'customer_name': acceptance_config.get('customerName'),
+                            'service_name': acceptance_config.get('serviceName'),
+                            'error': error_str,
+                            'status': 'failed'
+                        })
 
                 total_processed += 1
 
-            LOG.info("_process_multiple_acceptances: Completed %s/%s acceptances successfully",
-                     total_successful, total_processed)
+            total_successful = total_accepted + total_skipped  # Both are considered successful
+            # dry_run never changes anything; otherwise changed only if new acceptances were made
+            changed = False if dry_run else (total_accepted > 0)
+            LOG.info("_process_multiple_acceptances: Completed %s/%s acceptances successfully "
+                     "(%s accepted, %s skipped, changed: %s)",
+                     total_successful, total_processed, total_accepted, total_skipped, changed)
 
             return {
+                'changed': changed,
                 'total_processed': total_processed,
                 'total_successful': total_successful,
+                'total_accepted': total_accepted,
+                'total_skipped': total_skipped,
                 'results': results
             }
 

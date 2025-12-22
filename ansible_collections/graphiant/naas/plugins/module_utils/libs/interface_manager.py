@@ -20,7 +20,7 @@ class InterfaceManager(BaseManager):
     including both regular interfaces and VLAN sub-interfaces.
     """
 
-    def configure(self, interface_config_file: str, circuit_config_file: str = None) -> None:  # pylint: disable=arguments-renamed
+    def configure(self, interface_config_file: str, circuit_config_file: str = None) -> dict:  # pylint: disable=arguments-renamed
         """
         Configure interfaces and circuits for multiple devices concurrently.
         This method combines all interface and circuit configurations in a single API call per device.
@@ -29,10 +29,17 @@ class InterfaceManager(BaseManager):
             interface_config_file: Path to the YAML file containing interface configurations
             circuit_config_file: Optional path to the YAML file containing circuit configurations
 
+        Returns:
+            dict: Result with 'changed' status and list of configured devices
+            Note: Always returns changed=True when devices are configured since we push
+            via PUT API. True idempotency would require comparing current vs desired state.
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
+        result = {'changed': False, 'configured_devices': []}
+
         try:
             # Load interface configurations
             interface_config_data = self.render_config_file(interface_config_file)
@@ -45,7 +52,7 @@ class InterfaceManager(BaseManager):
 
             if 'interfaces' not in interface_config_data:
                 LOG.warning("No interfaces configuration found in %s", interface_config_file)
-                return
+                return result
 
             # Collect all device configurations first
             device_configs = {}
@@ -164,16 +171,20 @@ class InterfaceManager(BaseManager):
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
+                result['changed'] = True
+                result['configured_devices'] = list(output_config.keys())
                 LOG.info("Successfully configured interfaces and circuits for %s devices", len(output_config))
             else:
                 LOG.warning("No valid device configurations found")
+
+            return result
 
         except Exception as e:
             LOG.error("Error in interface and circuit configuration: %s", str(e))
             raise ConfigurationError(f"Interface and circuit configuration failed: {str(e)}")
 
     def deconfigure(self, interface_config_file: str, circuit_config_file: str = None,  # pylint: disable=arguments-renamed
-                    circuits_only: bool = False) -> None:
+                    circuits_only: bool = False) -> dict:
         """
         Deconfigure interfaces and circuits for multiple devices concurrently.
         This method combines all interface and circuit deconfigurations in a single API call per device.
@@ -184,10 +195,17 @@ class InterfaceManager(BaseManager):
             circuit_config_file: Optional path to the YAML file containing circuit configurations
             circuits_only: If True, only deconfigure circuits, skip interface deconfiguration
 
+        Returns:
+            dict: Result with 'changed' status and list of deconfigured devices
+            Note: Always returns changed=True when devices are deconfigured since we push
+            via PUT API. True idempotency would require comparing current vs desired state.
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
+        result = {'changed': False, 'deconfigured_devices': []}
+
         try:
             # Load interface configurations
             interface_config_data = self.render_config_file(interface_config_file)
@@ -201,7 +219,7 @@ class InterfaceManager(BaseManager):
 
             if 'interfaces' not in interface_config_data:
                 LOG.warning("No interfaces configuration found in %s", interface_config_file)
-                return
+                return result
 
             # Collect all device configurations first
             device_configs = {}
@@ -334,6 +352,8 @@ class InterfaceManager(BaseManager):
 
             if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
+                result['changed'] = True
+                result['deconfigured_devices'] = list(output_config.keys())
                 if circuits_only:
                     LOG.info("Successfully deconfigured circuits for %s devices (circuits-only mode)", len(output_config))
                 else:
@@ -344,6 +364,8 @@ class InterfaceManager(BaseManager):
                 else:
                     LOG.warning("No valid device configurations found")
 
+            return result
+
         except Exception as e:
             LOG.error("Error in interface and circuit deconfiguration: %s", str(e))
             LOG.error("Exception type: %s", type(e).__name__)
@@ -351,7 +373,7 @@ class InterfaceManager(BaseManager):
             LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Interface and circuit deconfiguration failed: {str(e)}")
 
-    def configure_interfaces(self, interface_config_file: str, circuit_config_file: str = None) -> None:
+    def configure_interfaces(self, interface_config_file: str, circuit_config_file: str = None) -> dict:
         """
         Configure all interfaces and circuits for multiple devices concurrently.
         This method calls the configure method to handle all configurations in a single API call per device.
@@ -360,14 +382,17 @@ class InterfaceManager(BaseManager):
             interface_config_file: Path to the YAML file containing interface configurations
             circuit_config_file: Optional path to the YAML file containing circuit configurations
 
+        Returns:
+            dict: Result with 'changed' status and list of configured devices
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        self.configure(interface_config_file, circuit_config_file)
+        return self.configure(interface_config_file, circuit_config_file)
 
     def deconfigure_interfaces(self, interface_config_file: str, circuit_config_file: str = None,
-                               circuits_only: bool = False) -> None:
+                               circuits_only: bool = False) -> dict:
         """
         Deconfigure all interfaces and circuits for multiple devices concurrently.
         This method calls the deconfigure method to handle all deconfigurations in a single API call per device.
@@ -378,11 +403,14 @@ class InterfaceManager(BaseManager):
             circuit_config_file: Optional path to the YAML file containing circuit configurations
             circuits_only: If True, only deconfigure circuits, skip interface deconfiguration
 
+        Returns:
+            dict: Result with 'changed' status and list of deconfigured devices
+
         Raises:
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        self.deconfigure(interface_config_file, circuit_config_file, circuits_only)
+        return self.deconfigure(interface_config_file, circuit_config_file, circuits_only)
 
     def configure_circuits(self, circuit_config_file: str, interface_config_file: str) -> None:
         """
