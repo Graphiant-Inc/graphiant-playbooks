@@ -50,6 +50,15 @@ interfaces:
           mtu: 1450
           v4_tcp_mss: 1392
           v6_tcp_mss: 1220
+        - vlan: 30
+          lan: lan-8-test
+          ipv4: 10.2.88.3/24
+          ipv6: 2001:10:2:88::3/64
+          description: Segment-8 interface
+          alias: Gig8.30
+          mtu: 1450
+          v4_tcp_mss: 1392
+          v6_tcp_mss: 1220
 
   - edge-3-sdktest:  
     # WAN Sub-Interface with DHCP IPv4/IPv6 assignment
