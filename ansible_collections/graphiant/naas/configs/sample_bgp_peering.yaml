@@ -6,31 +6,42 @@ bgp_peering:
         - demo_bgp_outbound_filter
       segments:
         - lan_segment: lan-7-test
-          local_ipv4_address: 10.1.7.1
-          local_interface: GigabitEthernet7/0/0.18
           neighbors:
             - remote_ipv4_address: 10.1.7.11
               peer_as: 60011
+              local_interface: GigabitEthernet7/0/0.18
               ipv4_inbound_filter: demo_bgp_inbound_filter
               ipv4_outbound_filter: demo_bgp_outbound_filter
+              hold_timer: 180
+              keepalive_timer: 60
+              ebgp_multi_hop: 1
+              as_override: false
+              remote_private_as: false
+              allow_as_in: 1
+              # send_community: true
+              # bfd: true
+              # md5_password: "mustchangeme"
+
   - edge-2-sdktest:
       route_policies:
         - demo_bgp_inbound_filter
         - demo_bgp_outbound_filter
       segments:
         - lan_segment: lan-7-test
-          local_ipv4_address: 10.2.7.2
-          local_interface: GigabitEthernet8/0/0.28
           neighbors:
             - remote_ipv4_address: 10.2.7.12
               peer_as: 60021
               ipv4_inbound_filter: demo_bgp_inbound_filter
               ipv4_outbound_filter: demo_bgp_outbound_filter
         - lan_segment: lan-8-test
-          local_ipv4_address: 10.2.8.2
-          local_interface: GigabitEthernet8/0/0.29
           neighbors:
             - remote_ipv4_address: 10.2.8.12
               peer_as: 60023
+              local_interface: GigabitEthernet8/0/0.29
+              ipv4_inbound_filter: demo_bgp_inbound_filter
+              ipv4_outbound_filter: demo_bgp_outbound_filter
+            - remote_ipv4_address: 10.2.88.13
+              peer_as: 60024
+              local_interface: GigabitEthernet8/0/0.30
               ipv4_inbound_filter: demo_bgp_inbound_filter
               ipv4_outbound_filter: demo_bgp_outbound_filter

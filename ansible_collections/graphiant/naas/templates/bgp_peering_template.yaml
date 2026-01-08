@@ -22,7 +22,11 @@
                                 "neighbor": {
                                     "peerAsn": {{ neighbor.peer_as }},
                                     "localInterface": {
-                                        "interface": "{{ entry.local_interface }}"
+                                        {% if neighbor.local_interface %}
+                                            "interface": "{{ neighbor.local_interface }}"
+                                        {% else %}
+                                            "interface": null
+                                        {% endif %}
                                     },
                                     "remoteAddress": "{{ neighbor.remote_ipv4_address }}",
                                     "enabled": true,
@@ -94,7 +98,11 @@
                                     "asOverride": {{ neighbor.as_override | default('false') }},
                                     "removePrivateAs": {{ neighbor.remote_private_as | default('false') }},
                                     "allowAsIn": {
-                                        "count": null
+                                        {% if neighbor.allow_as_in %}
+                                            "count": {{ neighbor.allow_as_in }}
+                                        {% else %}
+                                            "count": null
+                                        {% endif %}
                                     }
                                 }
                             {% else %}
