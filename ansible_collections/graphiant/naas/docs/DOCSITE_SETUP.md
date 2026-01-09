@@ -74,7 +74,7 @@ This creates:
 
 ```bash
 cd docs
-pip install -r requirements.txt
+pip install -r requirements-ee.txt
 ```
 
 #### Step 3: Build the Docusite

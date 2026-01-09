@@ -1,0 +1,65 @@
+---
+# Configuration for antsibull-changelog
+# See https://docs.ansible.com/projects/antsibull-changelog/changelog-configuration/
+
+# Path to the collection root (relative to this config file)
+path: "."
+
+# Title for the changelog
+title: "Ansible Collection Changelog"
+
+# Whether to keep fragments after release
+keep_fragments: false
+
+# Output formats (yaml for changelog.yaml, rst for CHANGELOG.rst)
+output_formats:
+  - yaml
+  - rst
+
+# Paths for generated files
+changelog_filename_template: "CHANGELOG.rst"
+changelog_filename: "CHANGELOG.rst"
+preview_filename_template: "CHANGELOG.rst.new"
+preview_filename: "CHANGELOG.rst.new"
+
+# Collection metadata
+collection_name: "graphiant.naas"
+is_other_project: false
+
+# Release tag format
+release_tag_re: "^v(\\d+\\.\\d+\\.\\d+)$"
+release_tag_format: "v{version}"
+
+# Fragment categories (standard Ansible categories)
+fragment_categories:
+  - breaking_changes
+  - major_changes
+  - removed_features
+  - deprecated_features
+  - security_fixes
+  - bugfixes
+  - removed_modules
+  - new_modules
+  - new_plugins
+  - removed_plugins
+  - new_inventory
+  - removed_inventory
+  - new_plugin_options
+  - removed_plugin_options
+  - new_lookup
+  - removed_lookup
+  - new_filter
+  - removed_filter
+  - new_test
+  - removed_test
+  - new_strategy
+  - removed_strategy
+  - new_callback
+  - removed_callback
+  - new_cldr_data
+  - removed_cldr_data
+  - minor_changes
+  - trivial
+
+# Use semantic versioning
+use_semantic_versioning: true

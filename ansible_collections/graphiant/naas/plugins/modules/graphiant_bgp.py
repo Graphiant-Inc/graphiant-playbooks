@@ -63,9 +63,9 @@ options:
   operation:
     description:
       - "The specific BGP operation to perform."
-      - "C(configure): Configure BGP peering neighbors and attach global BGP routing policies."
-      - "C(deconfigure): Deconfigure BGP peering neighbors. Policies are automatically detached."
-      - "C(detach_policies): Detach global BGP routing policies from BGP peers without removing the peers."
+      - "V(configure): Configure BGP peering neighbors and attach global BGP routing policies."
+      - "V(deconfigure): Deconfigure BGP peering neighbors. Policies are automatically detached."
+      - "V(detach_policies): Detach global BGP routing policies from BGP peers without removing the peers."
     type: str
     choices:
       - configure
@@ -74,8 +74,8 @@ options:
   state:
     description:
       - "The desired state of the BGP peering."
-      - "C(present): Maps to C(configure) when operation not specified."
-      - "C(absent): Maps to C(deconfigure) when operation not specified."
+      - "V(present): Maps to V(configure) when O(operation) not specified."
+      - "V(absent): Maps to V(deconfigure) when O(operation) not specified."
     type: str
     choices: [ present, absent ]
     default: present
@@ -83,12 +83,17 @@ options:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
       - When enabled, provides comprehensive logs of all BGP operations.
-      - Logs are captured and included in the result_msg for display using debug module.
+      - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
 
+attributes:
+  check_mode:
+    description: Supports check mode.
+    support: full
+
 requirements:
-  - python >= 3.10
+  - python >= 3.7
   - graphiant-sdk >= 25.12.1
 
 seealso:
@@ -150,14 +155,14 @@ EXAMPLES = r'''
 RETURN = r'''
 msg:
   description:
-    - Result message from the operation, including detailed logs when C(detailed_logs) is enabled.
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
   type: str
   returned: always
   sample: "Successfully configured BGP peering and attached policies"
 changed:
   description:
     - Whether the operation made changes to the system.
-    - C(true) for all configure/deconfigure/detach operations.
+    - V(true) for all configure/deconfigure/detach operations.
   type: bool
   returned: always
   sample: true

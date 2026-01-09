@@ -1,9 +1,9 @@
 # Graphiant Playbooks
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![Ansible](https://img.shields.io/badge/ansible--core-2.17+-green.svg)](https://docs.ansible.com/)
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-red.svg)](https://developer.hashicorp.com/terraform/install)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.graphiant.com/docs/graphiant-sdk-python)
 
 Automated network infrastructure management for [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com) offerings.
@@ -21,7 +21,7 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v25.12.2) | [📖 Documentation](ansible_collections/graphiant/naas/README.md) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v25.12.3) | [📖 Documentation](ansible_collections/graphiant/naas/README.md) |
 | **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](terraform/README.md) |
 | **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](.github/workflows/README.md) |
 | **Docker Support** | Containerized execution environment | [📖 Documentation](Docker.md) |
@@ -30,7 +30,7 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.7+ (compatible with ansible-core 2.17, 2.18, and 2.19)
 - Ansible Core 2.17+
 - Terraform v1.14+
 
@@ -42,11 +42,11 @@ git clone https://github.com/Graphiant-Inc/graphiant-playbooks.git
 cd graphiant-playbooks
 
 # Create virtual environment
-python3.10 -m venv venv
+python3.7 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install -r ansible_collections/graphiant/naas/requirements.txt
+pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
 
 # Install collection from source
 ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
@@ -139,7 +139,7 @@ terraform apply -var-file="../../configs/gateway_services/gcp_config.tfvars"
 
 ```
 graphiant-playbooks/
-├── ansible_collections/graphiant/naas/                # Ansible collection (v25.12.2)
+├── ansible_collections/graphiant/naas/                # Ansible collection (v25.12.3)
 │   ├── plugins/modules/                              # Ansible modules (6 modules)
 │   ├── plugins/module_utils/                         # Python library code
 │   ├── playbooks/                                    # Example playbooks
@@ -155,7 +155,6 @@ graphiant-playbooks/
 ├── scripts/                                          # Utility scripts
 │   ├── build_collection.py                          # Collection build script
 │   ├── bump_version.py                              # Version bumping script
-│   ├── generate_requirements.py                     # Requirements generator
 │   ├── validate_collection.py                       # Collection validation script
 │   └── build_docsite.sh                             # Documentation build script
 ├── .github/workflows/                                # GitHub Actions workflows
@@ -184,7 +183,7 @@ See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community guidelines.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 or later (GPLv3+) - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 

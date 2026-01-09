@@ -69,24 +69,24 @@ options:
   operation:
     description:
       - "The specific global configuration operation to perform."
-      - "C(configure): Configure all global objects (automatically detects all types in the file)."
-      - "C(deconfigure): Deconfigure all global objects (automatically detects all types in the file)."
-      - "C(configure_prefix_sets): Configure global prefix sets only."
-      - "C(deconfigure_prefix_sets): Deconfigure global prefix sets only."
-      - "C(configure_bgp_filters): Configure global BGP filters (routing policies) only."
-      - "C(deconfigure_bgp_filters): Deconfigure global BGP filters only."
-      - "C(configure_snmp_services): Configure global SNMP services only."
-      - "C(deconfigure_snmp_services): Deconfigure global SNMP services only."
-      - "C(configure_syslog_services): Configure global syslog services only."
-      - "C(deconfigure_syslog_services): Deconfigure global syslog services only."
-      - "C(configure_ipfix_services): Configure global IPFIX services only."
-      - "C(deconfigure_ipfix_services): Deconfigure global IPFIX services only."
-      - "C(configure_vpn_profiles): Configure global VPN profiles only."
-      - "C(deconfigure_vpn_profiles): Deconfigure global VPN profiles only."
-      - "C(configure_lan_segments): Configure global LAN segments only."
-      - "C(deconfigure_lan_segments): Deconfigure global LAN segments only."
-      - "C(configure_site_lists): Configure global site lists only."
-      - "C(deconfigure_site_lists): Deconfigure global site lists only."
+      - "V(configure): Configure all global objects (automatically detects all types in the file)."
+      - "V(deconfigure): Deconfigure all global objects (automatically detects all types in the file)."
+      - "V(configure_prefix_sets): Configure global prefix sets only."
+      - "V(deconfigure_prefix_sets): Deconfigure global prefix sets only."
+      - "V(configure_bgp_filters): Configure global BGP filters (routing policies) only."
+      - "V(deconfigure_bgp_filters): Deconfigure global BGP filters only."
+      - "V(configure_snmp_services): Configure global SNMP services only."
+      - "V(deconfigure_snmp_services): Deconfigure global SNMP services only."
+      - "V(configure_syslog_services): Configure global syslog services only."
+      - "V(deconfigure_syslog_services): Deconfigure global syslog services only."
+      - "V(configure_ipfix_services): Configure global IPFIX services only."
+      - "V(deconfigure_ipfix_services): Deconfigure global IPFIX services only."
+      - "V(configure_vpn_profiles): Configure global VPN profiles only."
+      - "V(deconfigure_vpn_profiles): Deconfigure global VPN profiles only."
+      - "V(configure_lan_segments): Configure global LAN segments only."
+      - "V(deconfigure_lan_segments): Deconfigure global LAN segments only."
+      - "V(configure_site_lists): Configure global site lists only."
+      - "V(deconfigure_site_lists): Deconfigure global site lists only."
     type: str
     choices:
       - configure
@@ -110,8 +110,8 @@ options:
   state:
     description:
       - "The desired state of the global configuration objects."
-      - "C(present): Maps to C(configure) when operation not specified."
-      - "C(absent): Maps to C(deconfigure) when operation not specified."
+      - "V(present): Maps to V(configure) when O(operation) not specified."
+      - "V(absent): Maps to V(deconfigure) when O(operation) not specified."
     type: str
     choices: [ present, absent ]
     default: present
@@ -119,12 +119,17 @@ options:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
       - When enabled, provides comprehensive logs of all global configuration operations.
-      - Logs are captured and included in the result_msg for display using debug module.
+      - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
 
+attributes:
+  check_mode:
+    description: Supports check mode.
+    support: full
+
 requirements:
-  - python >= 3.10
+  - python >= 3.7
   - graphiant-sdk >= 25.12.1
 
 seealso:
@@ -215,14 +220,14 @@ EXAMPLES = r'''
 RETURN = r'''
 msg:
   description:
-    - Result message from the operation, including detailed logs when C(detailed_logs) is enabled.
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
   type: str
   returned: always
   sample: "Successfully configured all global objects"
 changed:
   description:
     - Whether the operation made changes to the system.
-    - C(true) for all configure/deconfigure operations.
+    - V(true) for all configure/deconfigure operations.
   type: bool
   returned: always
   sample: true

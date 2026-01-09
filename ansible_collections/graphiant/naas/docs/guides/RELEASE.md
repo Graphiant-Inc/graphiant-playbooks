@@ -23,7 +23,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 The current collection version is defined in `_version.py`:
 ```python
-__version__ = "25.12.2"
+__version__ = "25.12.3"
 ```
 
 ## Release Process
@@ -54,7 +54,7 @@ Ensure PyYAML is installed for the bump script:
 
 ```bash
 cd ansible_collections/graphiant/naas
-pip install -r requirements.txt
+pip install -r requirements-ee.txt
 ```
 
 ### Step 2: Update Version
@@ -92,7 +92,7 @@ python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
 
 **Option B: Update manually**
 1. Edit `_version.py` to update `DEPENDENCIES` dictionary
-2. Edit `requirements.txt` to match the versions in `_version.py`
+2. Edit `requirements-ee.txt` to match the versions in `_version.py`
 
 ### Step 4: Review Changes
 
@@ -256,7 +256,7 @@ Before releasing, ensure:
 
 Dependencies are managed in two places:
 1. `_version.py` - Source of truth for all versions
-2. `requirements.txt` - Used by pip for installation
+2. `requirements-ee.txt` - Used by pip for installation
 
 When updating dependencies:
 
@@ -268,14 +268,14 @@ DEPENDENCIES = {
 }
 ```
 
-2. Update `requirements.txt` to match:
+2. Update `requirements-ee.txt` to match:
 ```
 graphiant-sdk==25.12.0
 ```
 
 3. Test with the new dependency versions:
 ```bash
-pip install -r requirements.txt --upgrade
+pip install -r requirements-ee.txt --upgrade
 ansible-test sanity --python 3.12
 ```
 
@@ -341,5 +341,5 @@ ansible-galaxy collection publish build/graphiant-naas-*.tar.gz --api-key=$TOKEN
 - `bump_version.py` - Version bumping script
 - `galaxy.yml` - Collection metadata
 - `CHANGELOG.md` - Release notes
-- `requirements.txt` - Python dependencies
+- `requirements-ee.txt` - Python dependencies
 - `build_collection.py` - Collection build script

@@ -14,9 +14,9 @@ Thank you for your interest in contributing!
    ```
 3. **Set up development environment:**
    ```bash
-   python3.10 -m venv venv
+   python3.7 -m venv venv
    source venv/bin/activate
-   pip install -r ansible_collections/graphiant/naas/requirements.txt
+   pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
    ```
 
 ## Development Workflow
@@ -101,7 +101,7 @@ The collection uses command-line exclusions and proper directory structure:
 
 1. **Yamllint exclusions** - Jinja2 template directories are excluded using `--exclude templates/ --exclude configs/de_workflows_configs/`, as these contain Jinja2 templates with syntax that yamllint cannot parse.
 
-2. **Utility scripts** - Utility scripts (build_collection.py, bump_version.py, generate_requirements.py, validate_collection.py, build_docsite.sh) are located in the `scripts/` directory at the repository root, outside the collection directory. This means they are not checked by `ansible-test sanity`, so the shebang test runs normally on collection files.
+2. **Utility scripts** - Utility scripts (build_collection.py, bump_version.py, validate_collection.py, build_docsite.sh) are located in the `scripts/` directory at the repository root, outside the collection directory. This means they are not checked by `ansible-test sanity`, so the shebang test runs normally on collection files.
 
 This approach is cleaner and more maintainable than maintaining version-specific ignore files or configuration files.
 
@@ -170,7 +170,7 @@ if __name__ == '__main__':
 All version information is centralized in `_version.py`. This ensures consistency across:
 - Collection version (`galaxy.yml`)
 - Module `version_added` fields
-- Dependency versions (`requirements.txt`)
+- Dependency versions (`requirements-ee.txt`)
 - Changelog entries
 
 ### For Maintainers: Updating Versions

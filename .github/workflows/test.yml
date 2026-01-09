@@ -48,7 +48,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-ee.txt
 
       - name: Install collection
         run: |
@@ -77,6 +77,12 @@ jobs:
             echo "   - GRAPHIANT_PASSWORD"
           fi
 
+      - name: Install validation tools (optional)
+        run: |
+          # Install optional tools for full validation
+          # These are also checked separately in lint.yml workflow
+          pip install ansible-lint>=24.0.0 "antsibull-docs>=2.0.0,<3.0.0" || echo "⚠️  Failed to install optional validation tools (non-fatal)"
+
       - name: Validate collection
         run: |
           python ${{ github.workspace }}/scripts/validate_collection.py --full
@@ -104,7 +110,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-ee.txt
 
       - name: Install collection
         run: |

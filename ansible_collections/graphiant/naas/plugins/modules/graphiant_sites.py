@@ -67,12 +67,12 @@ options:
   operation:
     description:
       - "The specific site operation to perform."
-      - "C(configure): Create sites and attach global objects in one operation."
-      - "C(deconfigure): Detach global objects and delete sites in one operation."
-      - "C(configure_sites): Create sites only (without attaching objects)."
-      - "C(deconfigure_sites): Delete sites only (without detaching objects)."
-      - "C(attach_objects): Attach global objects to existing sites."
-      - "C(detach_objects): Detach global objects from sites (without deleting sites)."
+      - "V(configure): Create sites and attach global objects in one operation."
+      - "V(deconfigure): Detach global objects and delete sites in one operation."
+      - "V(configure_sites): Create sites only (without attaching objects)."
+      - "V(deconfigure_sites): Delete sites only (without detaching objects)."
+      - "V(attach_objects): Attach global objects to existing sites."
+      - "V(detach_objects): Detach global objects from sites (without deleting sites)."
     type: str
     choices:
       - configure
@@ -84,8 +84,8 @@ options:
   state:
     description:
       - "The desired state of the sites."
-      - "C(present): Maps to C(configure) when operation not specified."
-      - "C(absent): Maps to C(deconfigure) when operation not specified."
+      - "V(present): Maps to V(configure) when O(operation) not specified."
+      - "V(absent): Maps to V(deconfigure) when O(operation) not specified."
     type: str
     choices: [ present, absent ]
     default: present
@@ -93,12 +93,17 @@ options:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
       - When enabled, provides comprehensive logs of all site operations.
-      - Logs are captured and included in the result_msg for display using debug module.
+      - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
 
+attributes:
+  check_mode:
+    description: Supports check mode.
+    support: full
+
 requirements:
-  - python >= 3.10
+  - python >= 3.7
   - graphiant-sdk >= 25.12.1
 
 seealso:
@@ -178,14 +183,14 @@ EXAMPLES = r'''
 RETURN = r'''
 msg:
   description:
-    - Result message from the operation, including detailed logs when C(detailed_logs) is enabled.
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
   type: str
   returned: always
   sample: "Successfully configured (created sites and attached objects)"
 changed:
   description:
     - Whether the operation made changes to the system.
-    - C(true) for all configure/deconfigure/attach/detach operations.
+    - V(true) for all configure/deconfigure/attach/detach operations.
   type: bool
   returned: always
   sample: true

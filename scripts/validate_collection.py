@@ -38,12 +38,14 @@ def check_structure(base_path):
         'galaxy.yml',           # Required: Collection metadata
         'README.md',            # Required: Documentation
         'LICENSE',              # Required: License file
-        'meta/runtime.yml',     # Required: Runtime requirements (ansible-core 2.10+)
+        'meta/runtime.yml',     # Required: Runtime metadata (minimal, supports ansible-core >= 2.17.0)
+        'meta/execution-environment.yml',  # Required: Execution Environment configuration
     ]
 
     # Recommended files
     recommended_files = [
-        'CHANGELOG.md',         # Recommended: Version history
+        'changelogs/changelog.yaml',  # Recommended: Changelog in YAML format (for antsibull-changelog)
+        'requirements-ee.txt',         # Recommended: Runtime dependencies for Execution Environments
     ]
 
     # Graphiant collection specific files
@@ -53,12 +55,13 @@ def check_structure(base_path):
         'plugins/modules/graphiant_global_config.py',
         'plugins/modules/graphiant_sites.py',
         'plugins/modules/graphiant_data_exchange.py',
+        'plugins/modules/graphiant_data_exchange_info.py',  # Info module for query operations
         'plugins/module_utils/graphiant_utils.py',
         'plugins/module_utils/logging_decorator.py',
         'plugins/module_utils/libs/__init__.py',  # Required for Python package
     ]
 
-    required_files = galaxy_required_files + recommended_files + collection_files
+    required_files = galaxy_required_files + collection_files
 
     # Galaxy standard directories
     galaxy_dirs = [
@@ -76,11 +79,13 @@ def check_structure(base_path):
         'templates',
         'tests',
         'docs',  # Documentation (optional but recommended)
+        'changelogs',  # Changelog directory (for changelog.yaml)
     ]
 
     required_dirs = galaxy_dirs + collection_dirs
 
     errors = []
+    warnings = []
 
     # Check directories
     for dir_path in required_dirs:
@@ -91,7 +96,7 @@ def check_structure(base_path):
             print(f"  ❌ {dir_path}/ (missing)")
             errors.append(f"Missing directory: {dir_path}")
 
-    # Check files
+    # Check required files
     for file_path in required_files:
         full_path = os.path.join(base_path, file_path)
         if os.path.exists(full_path) and os.path.isfile(full_path):
@@ -99,6 +104,15 @@ def check_structure(base_path):
         else:
             print(f"  ❌ {file_path} (missing)")
             errors.append(f"Missing file: {file_path}")
+
+    # Check recommended files (warnings, not errors)
+    for file_path in recommended_files:
+        full_path = os.path.join(base_path, file_path)
+        if os.path.exists(full_path) and os.path.isfile(full_path):
+            print(f"  ✅ {file_path}")
+        else:
+            print(f"  ⚠️  {file_path} (recommended but missing)")
+            warnings.append(f"Missing recommended file: {file_path}")
 
     # Check embedded libraries
     libs_dir = os.path.join(base_path, 'plugins/module_utils/libs')
@@ -110,6 +124,18 @@ def check_structure(base_path):
         for lib in key_libs:
             if not os.path.exists(os.path.join(libs_dir, lib)):
                 errors.append(f"Missing key library: libs/{lib}")
+
+    # Check for legacy CHANGELOG.md (warn if found, recommend migration to YAML format)
+    changelog_md = os.path.join(base_path, 'CHANGELOG.md')
+    changelog_yaml = os.path.join(base_path, 'changelogs', 'changelog.yaml')
+    if os.path.exists(changelog_md) and not os.path.exists(changelog_yaml):
+        print(f"  ⚠️  CHANGELOG.md found (consider migrating to changelogs/changelog.yaml)")
+        warnings.append("Legacy CHANGELOG.md found - consider migrating to changelogs/changelog.yaml")
+
+    # Print warnings if any
+    if warnings:
+        for warning in warnings:
+            print(f"   ⚠️  {warning}")
 
     return len(errors) == 0, errors
 
@@ -143,6 +169,13 @@ def check_galaxy_yml_fields(collection_path):
         if field not in galaxy_data or not galaxy_data[field]:
             warnings.append(f"Missing recommended field: {field}")
 
+    # Check version format (should be semantic versioning)
+    if 'version' in galaxy_data:
+        version = galaxy_data['version']
+        # Basic semantic version check (MAJOR.MINOR.PATCH)
+        if not isinstance(version, str) or version.count('.') != 2:
+            warnings.append(f"Version '{version}' may not follow semantic versioning (MAJOR.MINOR.PATCH)")
+
     # Print results
     if errors:
         for error in errors:
@@ -153,6 +186,26 @@ def check_galaxy_yml_fields(collection_path):
 
     if not errors and not warnings:
         print("  ✅ galaxy.yml has all required and recommended fields")
+
+    # Check execution-environment.yml
+    ee_file = os.path.join(collection_path, 'meta', 'execution-environment.yml')
+    if os.path.exists(ee_file):
+        try:
+            with open(ee_file, 'r') as f:
+                ee_data = yaml.safe_load(f)
+            if isinstance(ee_data, dict) and 'requirements_file' in ee_data:
+                req_file = ee_data.get('requirements_file')
+                req_path = os.path.join(collection_path, req_file)
+                if os.path.exists(req_path):
+                    print(f"  ✅ meta/execution-environment.yml references {req_file}")
+                else:
+                    warnings.append(f"execution-environment.yml references {req_file} which doesn't exist")
+            else:
+                warnings.append("execution-environment.yml missing 'requirements_file' field")
+        except Exception as e:
+            warnings.append(f"Failed to parse execution-environment.yml: {e}")
+    else:
+        warnings.append("meta/execution-environment.yml not found (recommended for Execution Environments)")
 
     return len(errors) == 0, errors
 
@@ -227,8 +280,9 @@ def run_ansible_lint(collection_path):
                     print(f"     {line}")
             return False
     except FileNotFoundError:
-        print("  ⚠️  ansible-lint not found")
+        print("  ⚠️  ansible-lint not found (optional check - skipped)")
         print("     Install with: pip install ansible-lint")
+        print("     Note: This is an optional check and does not cause validation to fail")
         return True
 
 
@@ -274,9 +328,10 @@ def run_docs_lint(collection_path):
             # Don't fail on docs issues, just warn
             return True
     except FileNotFoundError:
-        print("  ⚠️  antsibull-docs not found")
+        print("  ⚠️  antsibull-docs not found (optional check - skipped)")
         print("     Install with: pip install antsibull-docs")
         print("     Then run: antsibull-docs lint-collection-docs --plugin-docs .")
+        print("     Note: This is an optional check and does not cause validation to fail")
         return True
 
 
@@ -311,6 +366,10 @@ def print_summary(results, collection_path, script_dir=None):
     print()
     print("4. Verify installation:")
     print("   ansible-galaxy collection list | grep graphiant")
+    print()
+    print("5. Run ansible-test sanity (from collection root):")
+    print(f"   cd {collection_path}")
+    print("   ansible-test sanity --color --python 3.12")
 
     return 0 if all_passed else 1
 
