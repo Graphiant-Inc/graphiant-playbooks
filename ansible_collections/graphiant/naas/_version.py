@@ -39,7 +39,7 @@ COLLECTION_DEPENDENCIES = {
 }
 
 # Python version requirement
-# Compatible with ansible-core 2.17, 2.18, and 2.19 (all support Python 3.7+)
+# Compatible with ansible-core 2.17, 2.18, 2.19, and 2.20 (all support Python 3.7+)
 REQUIRES_PYTHON = ">=3.7"
 
 # Module version_added (should match collection version, but use major.minor format)

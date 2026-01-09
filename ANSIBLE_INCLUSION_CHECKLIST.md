@@ -107,7 +107,7 @@
 - **Requirement:** Must support all Python versions supported by ansible-core 2.17+
 - **Verification:**
   - Python requirement: `>= 3.7` (documented in `_version.py`, `README.md`, and all modules)
-  - ansible-core 2.17, 2.18, and 2.19 support Python 3.7+
+  - ansible-core 2.17, 2.18, 2.19, and 2.20 support Python 3.7+
   - All modules specify `python >= 3.7` in `requirements:` section
   - Location: `meta/runtime.yml` line 2, `README.md` line 24
 
@@ -213,8 +213,8 @@
 - **Requirement:** Must pass `ansible-test sanity` with no errors from forbidden list
 - **Verification:**
   - Sanity tests run in CI: `.github/workflows/lint.yml` (lint stage)
-  - Both platforms test against multiple ansible-core versions (2.17, 2.18, 2.19) using matrix/parallel strategies
-  - Installation method: Installed from PyPI using compatible version specifiers (`ansible-core~=2.17`, `ansible-core~=2.18`, `ansible-core~=2.19`)
+  - Both platforms test against multiple ansible-core versions (2.17, 2.18, 2.19, 2.20) using matrix/parallel strategies
+  - Installation method: Installed from PyPI using compatible version specifiers (`ansible-core~=2.17`, `ansible-core~=2.18`, `ansible-core~=2.19`, `ansible-core~=2.20`)
   - Current status: All critical tests passing
     - ✅ Import test - PASSING
     - ✅ No-assert test - PASSING
@@ -247,11 +247,12 @@
       - `ansible_core: 2.17` ✅
       - `ansible_core: 2.18` ✅
       - `ansible_core: 2.19` ✅
+      - `ansible_core: 2.20` ✅
     - Tests run for each version:
       - Python unit tests ✅
       - Collection validation ✅
     - E2E integration test runs as separate job (not in matrix) - conditional on GRAPHIANT credentials ✅
-  - Installation method: Installed from PyPI using compatible version specifiers (`ansible-core~=2.17`, `ansible-core~=2.18`, `ansible-core~=2.19`)
+  - Installation method: Installed from PyPI using compatible version specifiers (`ansible-core~=2.17`, `ansible-core~=2.18`, `ansible-core~=2.19`, `ansible-core~=2.20`)
 
 ### 4.4 CI Tests on Pull Requests
 - [x] **Status:** ✅ **PASSING**
@@ -277,7 +278,7 @@
 - **Verification:**
   - Sanity tests are part of `lint.yml` workflow (lint stage)
   - Workflow runs on push to `main` and `develop` branches
-  - **GitHub Actions:** `.github/workflows/lint.yml` (ansible-test-sanity job with matrix strategy testing against 2.17, 2.18, 2.19)
+  - **GitHub Actions:** `.github/workflows/lint.yml` (ansible-test-sanity job with matrix strategy testing against 2.17, 2.18, 2.19, 2.20)
   - Tests run against multiple ansible-core versions on release commits ✅
 
 ### 4.7 CI/CD Pipeline Structure
@@ -290,8 +291,8 @@
     - antsibull-docs (Documentation linting) ✅
     - ansible-test sanity (runs against multiple ansible-core versions, excludes Jinja2 templates via `--exclude`) ✅
   - **Test/Run Stage/Workflow:** Focuses on testing and validation
-    - Python unit tests (runs against multiple ansible-core versions: 2.17, 2.18, 2.19) ✅
-    - Full collection validation (uses `scripts/validate_collection.py --full`, includes structure validation, ansible-lint, and docs-lint; runs against multiple ansible-core versions: 2.17, 2.18, 2.19) ✅
+    - Python unit tests (runs against multiple ansible-core versions: 2.17, 2.18, 2.19, 2.20) ✅
+    - Full collection validation (uses `scripts/validate_collection.py --full`, includes structure validation, ansible-lint, and docs-lint; runs against multiple ansible-core versions: 2.17, 2.18, 2.19, 2.20) ✅
     - E2E integration test (hello_test.yml) - separate job, conditionally runs when GRAPHIANT credentials are configured (skips gracefully if not configured) ✅
   - **Stage Ordering:** In PR pipelines, workflows run in order: `lint` → `test` → `build` → `release` ✅
   - **GitHub Actions:** `.github/workflows/test.yml` and `.github/workflows/lint.yml`
@@ -343,14 +344,14 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
   - `ansible-lint` - Ansible playbook best practices
   - `docs-lint` - Documentation linting (antsibull-docs)
   - `collection-structure` - Collection structure validation
-  - `ansible-test-sanity` - Ansible test sanity (tests against ansible-core 2.17, 2.18, 2.19)
+  - `ansible-test-sanity` - Ansible test sanity (tests against ansible-core 2.17, 2.18, 2.19, 2.20)
     - Uses `--exclude templates/ --exclude configs/de_workflows_configs/` to exclude Jinja2 templates from yamllint checks
 - **Triggers:** Pull requests, pushes to main/develop branches
 
 #### `test.yml` - Testing Workflow
 - **Purpose:** Comprehensive testing and validation
 - **Jobs:**
-  - `test` - Matrix job testing against ansible-core 2.17, 2.18, 2.19:
+  - `test` - Matrix job testing against ansible-core 2.17, 2.18, 2.19, 2.20:
     - Python unit tests
     - Full collection validation (uses `scripts/validate_collection.py --full`, includes structure validation, ansible-lint, and docs-lint)
   - `e2e-integration-test` - Separate job (not in matrix):
@@ -388,9 +389,9 @@ All critical action items have been completed:
 
 - [x] ✅ Code of Conduct - `CODE_OF_CONDUCT.md` exists
 - [x] ✅ version_added - All modules use `"25.12.0"` (major.minor format)
-- [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19
+- [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19, 2.20
 - [x] ✅ Scheduled CI runs - Nightly runs at 2 AM UTC
-- [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, and 2.19)
+- [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
 - [x] ✅ License headers - All modules have GPLv3 headers
 - [x] ✅ Sanity tests - All critical tests passing
 - [x] ✅ Documentation - All modules have complete DOCUMENTATION, EXAMPLES, RETURN sections

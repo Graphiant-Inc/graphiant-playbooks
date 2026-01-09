@@ -19,7 +19,7 @@ releases:
         - "Consolidated dependency management - removed C(requirements-dev.txt) and C(generate_requirements.py), now using C(requirements-ee.txt) for all environments"
         - "Updated license from MIT to GPLv3+ for consistency across all files"
         - "Converted C(CHANGELOG.md) to C(changelogs/changelog.yaml) format for automated changelog generation"
-        - "Updated CI/CD workflows to test against ansible-core 2.17, 2.18, and 2.19 with scheduled runs"
+        - "Updated CI/CD workflows to test against ansible-core 2.17, 2.18, 2.19, and 2.20 with scheduled runs"
       bugfixes:
         - "Fixed module documentation to include C(check_mode) support information in C(attributes) field"
         - "Fixed all module examples to use FQCNs for builtin modules"
@@ -30,7 +30,7 @@ releases:
         - "Removed C(scripts/generate_requirements.py) - requirements are now manually maintained"
       notes:
         - "Query operations for Data Exchange should now use C(graphiant.naas.graphiant_data_exchange_info) module"
-        - "Collection now supports Python 3.7+ (compatible with ansible-core 2.17, 2.18, and 2.19)"
+        - "Collection now supports Python 3.7+ (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)"
         - "All CI/CD workflows use C(requirements-ee.txt) for consistency"
         - "Execution Environments should use C(meta/execution-environment.yml) which points to C(requirements-ee.txt)"
   "25.12.2":
@@ -95,7 +95,7 @@ releases:
     changes:
       added:
         - "GitHub Actions workflows for linting, testing, building, and releasing"
-        - "Multi-version testing support (ansible-core 2.17, 2.18, 2.19)"
+        - "Multi-version testing support (ansible-core 2.17, 2.18, 2.19, 2.20)"
         - "E2E integration test workflow with conditional execution"
         - "`ANSIBLE_INCLUSION_CHECKLIST.md` - Comprehensive checklist for Ansible collection inclusion (repository root)"
         - "`CODE_OF_CONDUCT.md` - Code of conduct for contributors (repository root)"

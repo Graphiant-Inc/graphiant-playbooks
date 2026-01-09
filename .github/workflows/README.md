@@ -9,11 +9,11 @@ Detailed linting workflow that runs multiple linting checks in parallel:
 - Jinja2 template linting (djlint)
 - Ansible lint
 - Documentation lint (antsibull-docs)
-- ansible-test sanity (tests against ansible-core 2.17, 2.18, 2.19)
+- ansible-test sanity (tests against ansible-core 2.17, 2.18, 2.19, 2.20)
 
 ### `test.yml` - Testing
 Runs all tests for the collection:
-- **`test` job** - Matrix job testing against ansible-core 2.17, 2.18, 2.19:
+- **`test` job** - Matrix job testing against ansible-core 2.17, 2.18, 2.19, 2.20:
   - Python unit tests
   - Full collection validation
 - **`e2e-integration-test` job** - Separate job (not in matrix):
@@ -92,7 +92,7 @@ ansible-lint --config-file .ansible-lint playbooks/
 ansible-test sanity --color --python 3.12 --exclude templates/ --exclude configs/de_workflows_configs/
 
 # Testing (install ansible-core first)
-pip install ansible-core~=2.17  # or 2.18, 2.19
+pip install ansible-core~=2.17  # or 2.18, 2.19, 2.20
 ansible-galaxy collection install . --force
 export PYTHONPATH=$(pwd)/plugins/module_utils
 python tests/test.py

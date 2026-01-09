@@ -89,11 +89,11 @@ Dependencies are managed in `_version.py` and synced to `requirements-ee.txt`:
 - ansible-core: >=2.17.0
 
 **Development Tools:**
-- flake8: 7.3.0
-- pylint: 3.3.7
-- ansible-lint: >=24.0.0
-- pre-commit: 4.2.0
-- antsibull-docs: >=2.0.0,<3.0.0
+- flake8
+- pylint
+- ansible-lint
+- pre-commit
+- antsibull-docs
 
 ### Updating Dependencies
 
@@ -108,10 +108,10 @@ python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
 
 ### Dependency Version Pinning Strategy
 
-- **Core dependencies** (PyYAML, Jinja2, etc.): Pin to specific versions for stability
-- **Graphiant SDK**: Pin to specific versions, update when new features are needed
-- **Development tools** (linting, docs): Use `>=` for flexibility
-- **Ansible**: Use `>=` to support multiple Ansible versions
+- **Core dependencies** (PyYAML, Jinja2, etc.): No version pins (flexible for Execution Environments)
+- **Graphiant SDK**: No version pins (flexible for Execution Environments)
+- **Development tools** (linting, docs): No version pins (use latest compatible versions)
+- **Ansible**: Use `>=` to support multiple Ansible versions (tested against 2.17, 2.18, 2.19, 2.20)
 
 ## Key Files
 

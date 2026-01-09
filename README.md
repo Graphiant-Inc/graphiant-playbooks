@@ -30,7 +30,7 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 ### Prerequisites
 
-- Python 3.7+ (compatible with ansible-core 2.17, 2.18, and 2.19)
+- Python 3.7+ (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
 - Ansible Core 2.17+
 - Terraform v1.14+
 
