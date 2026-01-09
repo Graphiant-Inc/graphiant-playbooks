@@ -1,6 +1,5 @@
 ---
 # Collection runtime metadata
 # See https://docs.ansible.com/ansible-core/devel/dev_guide/developing_collections_structure.html#meta-runtime-yml
-# This file is intentionally minimal - collection supports ansible-core >= 2.17.0
-# (version requirement is documented in README.md and module requirements sections)
-{}
+# Galaxy requires 'requires_ansible' field for collection import/publishing
+requires_ansible: '>=2.17.0'

@@ -30,7 +30,7 @@ This collection requires **ansible-core >= 2.17.0**.
 
 ## Python Requirements
 
-- Python >= 3.7 (compatible with ansible-core 2.17, 2.18, and 2.19)
+- Python >= 3.7 (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
 - Graphiant SDK >= 25.12.1
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](docs/guides/VERSION_MANAGEMENT.md) for details.

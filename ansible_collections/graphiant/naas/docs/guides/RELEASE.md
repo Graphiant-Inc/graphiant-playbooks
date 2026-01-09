@@ -268,9 +268,9 @@ DEPENDENCIES = {
 }
 ```
 
-2. Update `requirements-ee.txt` to match:
+2. Update `requirements-ee.txt` to match (no version pins):
 ```
-graphiant-sdk==25.12.0
+graphiant-sdk
 ```
 
 3. Test with the new dependency versions:
@@ -281,10 +281,10 @@ ansible-test sanity --python 3.12
 
 ### Dependency Version Pinning Strategy
 
-- **Core dependencies** (PyYAML, Jinja2, etc.): Pin to specific versions for stability
-- **Graphiant SDK**: Pin to specific versions, update when new features are needed
-- **Development tools** (linting, docs): Use `>=` for flexibility
-- **Ansible**: Use `>=` to support multiple Ansible versions
+- **Core dependencies** (PyYAML, Jinja2, etc.): No version pins (flexible for Execution Environments)
+- **Graphiant SDK**: No version pins (flexible for Execution Environments)
+- **Development tools** (linting, docs): No version pins (use latest compatible versions)
+- **Ansible**: Use `>=` to support multiple Ansible versions (tested against 2.17, 2.18, 2.19, 2.20)
 
 ## Troubleshooting
 
