@@ -29,8 +29,8 @@ python scripts/bump_version.py 25.12.0  # Set specific version
 
 ### Sync Requirements
 ```bash
-# Generate requirements.txt from _version.py
-python scripts/generate_requirements.py
+# Note: requirements-ee.txt is manually maintained (no version pins)
+# It contains only runtime dependencies for Execution Environments
 ```
 
 ## Versioning Strategy
@@ -74,7 +74,7 @@ See [RELEASE.md](RELEASE.md) for complete release process documentation.
 
 ### Current Dependencies
 
-Dependencies are managed in `_version.py` and synced to `requirements.txt`:
+Dependencies are managed in `_version.py` and synced to `requirements-ee.txt`:
 
 **Core Python Packages:**
 - PyYAML: 6.0.1
@@ -104,7 +104,7 @@ python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
 
 **Option 2: Manual update**
 1. Edit `_version.py` to update `DEPENDENCIES` dictionary
-2. Run `python scripts/generate_requirements.py` to sync `requirements.txt`
+2. Note: `requirements-ee.txt` is manually maintained and doesn't use version pins (for Execution Environment compatibility)
 
 ### Dependency Version Pinning Strategy
 
@@ -119,10 +119,9 @@ python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
 |------|---------|----------|
 | `_version.py` | **Source of truth** - All version definitions | Collection root |
 | `bump_version.py` | Automated version bumping script | `scripts/` (repo root) |
-| `generate_requirements.py` | Generate `requirements.txt` from `_version.py` | `scripts/` (repo root) |
+| `requirements-ee.txt` | Runtime dependencies for Execution Environments (manually maintained, no version pins) | Collection root |
 | `galaxy.yml` | Collection metadata (auto-updated) | Collection root |
 | `CHANGELOG.md` | Version history (auto-updated) | Collection root |
-| `requirements.txt` | Python dependencies (auto-generated) | Collection root |
 
 ## Version File Structure
 
@@ -131,7 +130,6 @@ python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
 - `MODULE_VERSION_ADDED` - Version for module `version_added` (major.minor.0 format)
 - `DEPENDENCIES` - Python package versions
 - `COLLECTION_DEPENDENCIES` - Ansible collection dependencies
-- `REQUIRES_ANSIBLE` - Minimum Ansible version
 - `REQUIRES_PYTHON` - Minimum Python version
 
 ## Quick Reference
@@ -155,8 +153,8 @@ python scripts/bump_version.py 25.12.0
 # Update dependency during bump
 python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
 
-# Sync requirements.txt
-python scripts/generate_requirements.py
+# Sync requirements-ee.txt
+# Note: requirements-ee.txt is manually maintained (no version pins)
 
 # Build collection (auto-syncs requirements)
 python scripts/build_collection.py

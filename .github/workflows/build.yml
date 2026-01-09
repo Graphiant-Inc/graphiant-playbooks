@@ -12,6 +12,9 @@ on:
     paths:
       - 'ansible_collections/graphiant/naas/**'
       - '.github/workflows/build.yml'
+  schedule:
+    # Run weekly on Monday at 3 AM UTC
+    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 jobs:
@@ -38,7 +41,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-ee.txt
 
       - name: Create build directory
         run: |

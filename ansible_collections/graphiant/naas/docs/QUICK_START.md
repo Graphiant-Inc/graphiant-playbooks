@@ -32,7 +32,7 @@ antsibull-docs sphinx-init --use-current --dest-dir docs --squash-hierarchy grap
 
 # 5. Install dependencies
 cd docs
-pip install -r requirements.txt
+pip install -r requirements-ee.txt
 
 # 6. Build the docsite
 ./build.sh

@@ -66,7 +66,7 @@ options:
   circuit_config_file:
     description:
       - Path to the circuit configuration YAML file.
-      - Required for WAN and circuit operations (C(configure_wan_circuits_interfaces), C(deconfigure_wan_circuits_interfaces), C(configure_circuits), C(deconfigure_circuits)).  # noqa: E501
+      - Required for WAN and circuit operations (V(configure_wan_circuits_interfaces), V(deconfigure_wan_circuits_interfaces), V(configure_circuits), V(deconfigure_circuits)).  # noqa: E501
       - Optional for LAN-only operations.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - Configuration files support Jinja2 templating syntax for dynamic generation.
@@ -74,7 +74,16 @@ options:
     type: str
     required: false
   operation:
-    description: "The specific interface operation to perform. C(configure_interfaces): Configure all interfaces (LAN and WAN) in one operation. C(deconfigure_interfaces): Deconfigure all interfaces. Resets parent interface to default LAN and deletes subinterfaces. C(configure_lan_interfaces): Configure LAN interfaces (subinterfaces) only. C(deconfigure_lan_interfaces): Deconfigure LAN interfaces (subinterfaces) only. C(configure_wan_circuits_interfaces): Configure WAN circuits and interfaces together. C(deconfigure_wan_circuits_interfaces): Deconfigure WAN circuits and interfaces together. C(configure_circuits): Configure circuits only. Can be called separately after interface is configured. C(deconfigure_circuits): Deconfigure circuits only. Removes static routes if any."
+    description:
+      - "The specific interface operation to perform."
+      - "V(configure_interfaces): Configure all interfaces (LAN and WAN) in one operation."
+      - "V(deconfigure_interfaces): Deconfigure all interfaces. Resets parent interface to default LAN and deletes subinterfaces."
+      - "V(configure_lan_interfaces): Configure LAN interfaces (subinterfaces) only."
+      - "V(deconfigure_lan_interfaces): Deconfigure LAN interfaces (subinterfaces) only."
+      - "V(configure_wan_circuits_interfaces): Configure WAN circuits and interfaces together."
+      - "V(deconfigure_wan_circuits_interfaces): Deconfigure WAN circuits and interfaces together."
+      - "V(configure_circuits): Configure circuits only. Can be called separately after interface is configured."
+      - "V(deconfigure_circuits): Deconfigure circuits only. Removes static routes if any."
     type: str
     choices:
       - configure_interfaces
@@ -86,27 +95,35 @@ options:
       - configure_circuits
       - deconfigure_circuits
   state:
-    description: "The desired state of the interfaces. C(present): Maps to C(configure_interfaces) when operation not specified. C(absent): Maps to C(deconfigure_interfaces) when operation not specified."
+    description:
+      - "The desired state of the interfaces."
+      - "V(present): Maps to V(configure_interfaces) when O(operation) not specified."
+      - "V(absent): Maps to V(deconfigure_interfaces) when O(operation) not specified."
     type: str
     choices: [ present, absent ]
     default: present
   circuits_only:
     description:
-      - If C(true), only circuits are affected in deconfigure operations.
-      - Used with C(deconfigure_interfaces) and C(deconfigure_wan_circuits_interfaces) operations.
-      - When C(true), static routes are removed but interfaces remain configured.
+      - If V(true), only circuits are affected in deconfigure operations.
+      - Used with V(deconfigure_interfaces) and V(deconfigure_wan_circuits_interfaces) operations.
+      - When V(true), static routes are removed but interfaces remain configured.
     type: bool
     default: false
   detailed_logs:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
       - When enabled, provides comprehensive logs of all interface operations.
-      - Logs are captured and included in the result_msg for display using debug module.
+      - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
 
+attributes:
+  check_mode:
+    description: Supports check mode.
+    support: full
+
 requirements:
-  - python >= 3.10
+  - python >= 3.7
   - graphiant-sdk >= 25.12.1
 
 seealso:
@@ -203,14 +220,14 @@ EXAMPLES = r'''
 RETURN = r'''
 msg:
   description:
-    - Result message from the operation, including detailed logs when C(detailed_logs) is enabled.
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
   type: str
   returned: always
   sample: "Successfully configured all interfaces"
 changed:
   description:
     - Whether the operation made changes to the system.
-    - C(true) for all configure/deconfigure operations.
+    - V(true) for all configure/deconfigure operations.
   type: bool
   returned: always
   sample: true

@@ -102,7 +102,7 @@ def validate_host(host):
 
 **Keep Dependencies Updated:**
 
-- ✅ Regularly update `requirements.txt` dependencies
+- ✅ Regularly update `requirements-ee.txt` dependencies
 - ✅ Review and update Ansible collection dependencies in `galaxy.yml`
 - ✅ Monitor for security advisories in dependencies
 - ✅ Use dependency pinning for reproducible builds
@@ -110,7 +110,7 @@ def validate_host(host):
 **Check for Vulnerabilities:**
 ```bash
 # Check Python dependencies
-pip-audit -r requirements.txt
+pip-audit -r requirements-ee.txt
 
 # Check Ansible collection dependencies
 ansible-galaxy collection verify graphiant.naas

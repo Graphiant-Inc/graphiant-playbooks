@@ -6,7 +6,7 @@ WORKDIR /app
 COPY ansible_collections /app/ansible_collections
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r /app/ansible_collections/graphiant/naas/requirements.txt
+RUN pip install --no-cache-dir -r /app/ansible_collections/graphiant/naas/requirements-ee.txt
 
 # Install the Ansible collection
 RUN ansible-galaxy collection install /app/ansible_collections/graphiant/naas/ --force

@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         working-directory: ansible_collections/graphiant/naas
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements-ee.txt
 
       - name: Create build directory
         run: |

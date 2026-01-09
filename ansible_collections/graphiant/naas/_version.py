@@ -6,7 +6,7 @@ All version references throughout the repository should use values from this fil
 """
 
 # Collection version (semantic versioning: MAJOR.MINOR.PATCH)
-__version__ = "25.12.2"
+__version__ = "25.12.3"
 COLLECTION_VERSION = __version__
 
 # Dependency versions
@@ -38,11 +38,9 @@ COLLECTION_DEPENDENCIES = {
     "ansible.posix": ">=1.5.0",
 }
 
-# Ansible version requirement (for meta/runtime.yml)
-REQUIRES_ANSIBLE = ">=2.17"
-
 # Python version requirement
-REQUIRES_PYTHON = ">=3.10"
+# Compatible with ansible-core 2.17, 2.18, and 2.19 (all support Python 3.7+)
+REQUIRES_PYTHON = ">=3.7"
 
 # Module version_added (should match collection version, but use major.minor format)
 # Ansible requires version_added to be major.minor, not patch level

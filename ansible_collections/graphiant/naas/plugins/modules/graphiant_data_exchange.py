@@ -11,7 +11,7 @@ This module provides Data Exchange management capabilities including:
 - Data Exchange services creation and deletion
 - Data Exchange customers creation and deletion
 - Service-to-customer matching operations
-- Summary and query operations for services and customers
+- Service invitation acceptance
 """
 
 DOCUMENTATION = r'''
@@ -35,66 +35,88 @@ notes:
   - "The module automatically resolves names to IDs for sites, LAN segments, services, customers, and regions."
   - "All operations are idempotent and safe to run multiple times without creating duplicates."
   - "For accept_invitation operation, minimum 2 gateways per region are required for redundancy."
-  - "Check mode (C(--check)) is not supported for this module. Data Exchange operations involve complex multi-step workflows with state changes that cannot be safely simulated. The C(accept_invitation) operation provides a C(dry_run) parameter for validation without API calls."
+  - "Check mode (C(--check)) is not supported for this module."
+  - "Data Exchange operations involve complex multi-step workflows with state changes that cannot be safely simulated."
+  - "The V(accept_invitation) operation provides a O(dry_run) parameter for validation without API calls."
 options:
   operation:
-    description: "The specific Data Exchange operation to perform. C(create_services): Create Data Exchange services from YAML configuration (Workflow 1). Configuration file must contain C(data_exchange_services) list with service definitions. Services define peering services with LAN segments, sites, and service prefixes. C(delete_services): Delete Data Exchange services from YAML configuration. Services must be deleted after customers that depend on them. C(get_services_summary): Get summary of all Data Exchange services with tabulated output. Returns service details including IDs, names, status, role, and matched customers count. C(create_customers): Create Data Exchange customers from YAML configuration (Workflow 2). Configuration file must contain C(data_exchange_customers) list with customer definitions. Customers can be non-Graphiant peers that can be invited to connect to services. C(delete_customers): Delete Data Exchange customers from YAML configuration. Customers must be deleted before services they depend on. C(get_customers_summary): Get summary of all Data Exchange customers with tabulated output. Returns customer details including IDs, names, type, status, and matched services count. C(match_service_to_customers): Match services to customers from YAML configuration (Workflow 3). Configuration file must contain C(data_exchange_matches) list with match definitions. Automatically saves match responses to JSON file for use in Workflow 4. Updates existing match entries or appends new ones based on customer_name and service_name. C(accept_invitation): Accept Data Exchange service invitation (Workflow 4). Configuration file must contain C(data_exchange_acceptances) list with acceptance details. Requires matches_file from Workflow 3 for match ID lookup. Supports dry-run mode for validation without API calls. Configures full IPSec gateway deployment with dual tunnels, static routing, and VPN profiles. C(get_service_health): Get service health monitoring information for all matched customers. Returns tabulated health status including overall health, producer prefix health, and customer prefix health. Supports both consumer and provider views."
+    description:
+      - "The specific Data Exchange operation to perform."
+      - "V(create_services): Create Data Exchange services from YAML configuration (Workflow 1)."
+      - "Configuration file must contain I(data_exchange_services) list with service definitions."
+      - "Services define peering services with LAN segments, sites, and service prefixes."
+      - "V(delete_services): Delete Data Exchange services from YAML configuration. Services must be deleted after customers that depend on them."
+      - "V(create_customers): Create Data Exchange customers from YAML configuration (Workflow 2)."
+      - "Configuration file must contain I(data_exchange_customers) list with customer definitions."
+      - "Customers can be non-Graphiant peers that can be invited to connect to services."
+      - "V(delete_customers): Delete Data Exchange customers from YAML configuration. Customers must be deleted before services they depend on."
+      - "V(match_service_to_customers): Match services to customers from YAML configuration (Workflow 3)."
+      - "Configuration file must contain I(data_exchange_matches) list with match definitions."
+      - "Automatically saves match responses to JSON file for use in Workflow 4."
+      - "Updates existing match entries or appends new ones based on customer_name and service_name."
+      - "V(accept_invitation): Accept Data Exchange service invitation (Workflow 4)."
+      - "Configuration file must contain I(data_exchange_acceptances) list with acceptance details."
+      - "Requires O(matches_file) from Workflow 3 for match ID lookup."
+      - "Supports dry-run mode for validation without API calls."
+      - "Configures full IPSec gateway deployment with dual tunnels, static routing, and VPN profiles."
+      - "For query operations (get_services_summary, get_customers_summary, get_service_health),"
+      - "use M(graphiant.naas.graphiant_data_exchange_info) module instead."
     type: str
     choices:
       - create_services
       - delete_services
-      - get_services_summary
       - create_customers
       - delete_customers
-      - get_customers_summary
       - match_service_to_customers
       - accept_invitation
-      - get_service_health
     required: true
   state:
-    description: "The desired state of the Data Exchange resources. C(present): Maps to C(create_services) when operation not specified. C(absent): Maps to C(delete_services) when operation not specified. C(query): Maps to C(get_services_summary) when operation not specified."
+    description:
+      - "The desired state of the Data Exchange resources."
+      - "V(present): Maps to V(create_services) when O(operation) not specified."
+      - "V(absent): Maps to V(delete_services) when O(operation) not specified."
     type: str
     choices:
       - present
       - absent
-      - query
     default: present
   config_file:
     description:
       - Path to the YAML configuration file for the operation.
-      - Required for C(create_services), C(delete_services), C(create_customers), C(delete_customers), C(match_service_to_customers), and C(accept_invitation) operations.  # noqa: E501
+      - Required for V(create_services), V(delete_services), V(create_customers), V(delete_customers),
+        V(match_service_to_customers), and V(accept_invitation) operations.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - Configuration files support Jinja2 templating syntax for dynamic generation.
-      - For C(create_services), file must contain C(data_exchange_services) list.
-      - For C(create_customers) or C(delete_customers), file must contain C(data_exchange_customers) list.
-      - For C(match_service_to_customers), file must contain C(data_exchange_matches) list.
-      - For C(accept_invitation), file must contain C(data_exchange_acceptances) list.
-      - Match responses are saved to C(output/) directory near the configuration file.
+      - For V(create_services), file must contain I(data_exchange_services) list.
+      - For V(create_customers) or V(delete_customers), file must contain I(data_exchange_customers) list.
+      - For V(match_service_to_customers), file must contain I(data_exchange_matches) list.
+      - For V(accept_invitation), file must contain I(data_exchange_acceptances) list.
+      - Match responses are saved to I(output/) directory near the configuration file.
     type: str
   matches_file:
     description:
       - Path to the matches responses JSON file for match ID lookup.
-      - Optional for C(accept_invitation) operation.
-      - If not provided, default C(de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json).
+      - Optional for V(accept_invitation) operation.
+      - If not provided, default I(de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json).
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
-      - This file is automatically generated by C(match_service_to_customers) operation (Workflow 3).
-      - File contains match details including C(customer_id), C(service_id), C(match_id), and C(status).
-      - Required for C(accept_invitation) to look up match IDs for customer-service combinations.
+      - This file is automatically generated by V(match_service_to_customers) operation (Workflow 3).
+      - File contains match details including I(customer_id), I(service_id), I(match_id), and I(status).
+      - Required for V(accept_invitation) to look up match IDs for customer-service combinations.
     type: str
   dry_run:
     description:
-      - Enable dry-run mode for C(accept_invitation) operation.
+      - Enable dry-run mode for V(accept_invitation) operation.
       - When enabled, validates configuration without making actual API calls.
       - Performs all name-to-ID resolution and configuration validation.
       - Useful for testing and validation before actual execution.
-      - Only applicable to C(accept_invitation) operation.
+      - Only applicable to V(accept_invitation) operation.
     type: bool
     default: false
   detailed_logs:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
       - When enabled, provides comprehensive logs of all Data Exchange operations.
-      - Logs are captured and included in the C(msg) return value for display using debug module.
+      - Logs are captured and included in the RV(msg) return value for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
   host:
@@ -114,23 +136,16 @@ options:
       - Graphiant portal password for authentication.
     type: str
     required: true
-  service_name:
-    description:
-      - Service name for health monitoring operations.
-      - Required for C(get_service_health) operation.
-      - Must be an existing Data Exchange service name.
-    type: str
-  is_provider:
-    description:
-      - Whether to get provider view for service health monitoring.
-      - When C(false), returns health from consumer/customer perspective.
-      - When C(true), returns health from service provider perspective.
-      - Only applicable to C(get_service_health) operation.
-    type: bool
-    default: false
+
+attributes:
+  check_mode:
+    description: >
+      Check mode is not supported for this module. Data Exchange operations involve complex
+      multi-step workflows with state changes that cannot be safely simulated.
+    support: none
 
 requirements:
-  - python >= 3.10
+  - python >= 3.7
   - graphiant-sdk >= 25.12.1
   - tabulate
 
@@ -141,6 +156,8 @@ seealso:
     description: Configure global objects (LAN segments, VPN profiles) required for Data Exchange
   - module: graphiant.naas.graphiant_sites
     description: Configure sites required for Data Exchange services
+  - module: graphiant.naas.graphiant_data_exchange_info
+    description: Query Data Exchange services, customers, and service health information
 
 author:
   - Graphiant Team (@graphiant)
@@ -159,7 +176,7 @@ EXAMPLES = r'''
   register: create_services_result
 
 - name: Display services creation result
-  debug:
+  ansible.builtin.debug:
     msg: "{{ create_services_result.msg }}"
 
 - name: Workflow 1 - Create services with Jinja2 template (scale testing)
@@ -182,7 +199,7 @@ EXAMPLES = r'''
   register: create_customers_result
 
 - name: Display customers creation result
-  debug:
+  ansible.builtin.debug:
     msg: "{{ create_customers_result.msg }}"
 
 - name: Workflow 2 - Create customers with Jinja2 template (scale testing)
@@ -205,7 +222,7 @@ EXAMPLES = r'''
   register: match_result
 
 - name: Display match result
-  debug:
+  ansible.builtin.debug:
     msg: "{{ match_result.msg }}"
 
 - name: Workflow 4 - Accept Data Exchange service invitation (Dry Run)
@@ -221,7 +238,7 @@ EXAMPLES = r'''
   register: accept_result_dry_run
 
 - name: Display dry run result
-  debug:
+  ansible.builtin.debug:
     msg: "{{ accept_result_dry_run.msg }}"
 
 - name: Workflow 4 - Accept Data Exchange service invitation
@@ -237,7 +254,7 @@ EXAMPLES = r'''
   register: accept_result
 
 - name: Display acceptance result
-  debug:
+  ansible.builtin.debug:
     msg: "{{ accept_result.msg }}"
 
 - name: Delete Data Exchange customers (must be deleted before services)
@@ -256,59 +273,6 @@ EXAMPLES = r'''
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
 
-- name: Get Data Exchange services summary
-  graphiant.naas.graphiant_data_exchange:
-    operation: get_services_summary
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-  register: services_summary
-
-- name: Display services summary
-  debug:
-    msg: "{{ services_summary.msg }}"
-
-- name: Get Data Exchange customers summary
-  graphiant.naas.graphiant_data_exchange:
-    operation: get_customers_summary
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-  register: customers_summary
-
-- name: Display customers summary
-  debug:
-    msg: "{{ customers_summary.msg }}"
-
-- name: Get service health (consumer view)
-  graphiant.naas.graphiant_data_exchange:
-    operation: get_service_health
-    service_name: "de-service-1"
-    is_provider: false
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-    detailed_logs: true
-  register: service_health
-
-- name: Display service health
-  debug:
-    msg: "{{ service_health.msg }}"
-
-- name: Get service health (provider view)
-  graphiant.naas.graphiant_data_exchange:
-    operation: get_service_health
-    service_name: "de-service-1"
-    is_provider: true
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-    detailed_logs: true
-  register: service_health_provider
-
-- name: Display service health (provider view)
-  debug:
-    msg: "{{ service_health_provider.msg }}"
 
 - name: Complete Data Exchange workflow (all four workflows)
   block:
@@ -355,7 +319,7 @@ EXAMPLES = r'''
       register: accept_result
 
     - name: Display workflow results
-      debug:
+      ansible.builtin.debug:
         msg: "{{ item.msg }}"
       loop:
         - "{{ create_services_result }}"
@@ -367,7 +331,7 @@ EXAMPLES = r'''
 RETURN = r'''
 msg:
   description:
-    - Result message from the operation, including detailed logs when C(detailed_logs) is enabled.
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
     - For summary operations, includes tabulated output for easy reading.
     - For health operations, includes tabulated health status for all matched customers.
   type: str
@@ -403,16 +367,16 @@ result_data:
 changed:
   description:
     - Whether the operation made changes to the system.
-    - C(true) for create, delete, match, and accept operations.
-    - C(false) for query operations (get_services_summary, get_customers_summary, get_service_health).
+    - V(true) for create, delete, match, and accept operations.
+    - V(false) for operations that don't make changes (e.g., dry-run mode).
   type: bool
   returned: always
   sample: true
 operation:
   description:
     - The operation that was performed.
-    - One of create_services, delete_services, get_services_summary, create_customers, delete_customers,
-      get_customers_summary, match_service_to_customers, accept_invitation, or get_service_health.
+    - One of create_services, delete_services, create_customers, delete_customers,
+      match_service_to_customers, or accept_invitation.
   type: str
   returned: always
   sample: "create_services"
@@ -486,26 +450,21 @@ def main():
             choices=[
                 'create_services',
                 'delete_services',
-                'get_services_summary',
                 'create_customers',
                 'delete_customers',
-                'get_customers_summary',
                 'match_service_to_customers',
-                'accept_invitation',
-                'get_service_health'
+                'accept_invitation'
             ]
         ),
         state=dict(
             type='str',
-            choices=['present', 'absent', 'query'],
+            choices=['present', 'absent'],
             default='present'
         ),
         config_file=dict(type='str', required=False),
         matches_file=dict(type='str', required=False),
         detailed_logs=dict(type='bool', default=False),
-        dry_run=dict(type='bool', default=False),
-        service_name=dict(type='str', required=False),
-        is_provider=dict(type='bool', default=False)
+        dry_run=dict(type='bool', default=False)
     )
 
     # Create module instance
@@ -534,9 +493,6 @@ def main():
         elif state == 'absent':
             # Default to delete_services for absent state
             operation = 'delete_services'
-        elif state == 'query':
-            # Default to get_services_summary for query state
-            operation = 'get_services_summary'
 
     # Validate required parameters
     if operation in ['create_services', 'delete_services', 'create_customers', 'delete_customers',
@@ -570,12 +526,6 @@ def main():
             changed = result['changed']
             result_msg = result['result_msg']
 
-        elif operation == 'get_services_summary':
-            result = execute_with_logging(module, graphiant_config.data_exchange.get_services_summary,
-                                          success_msg="Successfully retrieved Data Exchange services summary")
-            result_msg = result['result_msg']
-            result_data = result.get('result_data', {})
-
         elif operation == 'create_customers':
             result = execute_with_logging(module, graphiant_config.data_exchange.create_customers,
                                           config_file,
@@ -589,12 +539,6 @@ def main():
                                           success_msg=f"Successfully deleted Data Exchange customers {config_file}")
             changed = result['changed']
             result_msg = result['result_msg']
-
-        elif operation == 'get_customers_summary':
-            result = execute_with_logging(module, graphiant_config.data_exchange.get_customers_summary,
-                                          success_msg="Successfully retrieved Data Exchange customers summary")
-            result_msg = result['result_msg']
-            result_data = result.get('result_data', {})
 
         elif operation == 'match_service_to_customers':
             result = execute_with_logging(module, graphiant_config.data_exchange.match_service_to_customers,
@@ -623,25 +567,12 @@ def main():
             changed = result['changed']
             result_msg = result['result_msg']
 
-        elif operation == 'get_service_health':
-            service_name = params.get('service_name')
-            is_provider = params.get('is_provider', False)
-
-            if not service_name:
-                module.fail_json(msg="get_service_health operation requires service_name parameter")
-
-            result = execute_with_logging(
-                module, graphiant_config.data_exchange.get_service_health, service_name, is_provider,
-                success_msg=f"Successfully retrieved service health for service {service_name}")
-            result_msg = result['result_msg']
-            result_data = result.get('result_data', {})
-
         else:
             module.fail_json(
                 msg=f"Unsupported operation: {operation}. "
-                    f"Supported operations are: create_services, delete_services, get_services_summary, "
-                    f"create_customers, delete_customers, get_customers_summary, match_service_to_customers, "
-                    f"accept_invitation, get_service_health"
+                    f"Supported operations are: create_services, delete_services, create_customers, "
+                    f"delete_customers, match_service_to_customers, accept_invitation. "
+                    f"For query operations, use graphiant.naas.graphiant_data_exchange_info module."
             )
 
         # Return success

@@ -1,7 +1,7 @@
 # Graphiant NaaS Ansible Collection
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/)
 [![Ansible](https://img.shields.io/badge/ansible--core-2.17+-green.svg)](https://docs.ansible.com/)
 
 The Ansible Graphiant NaaS collection includes modules for automating the management of Graphiant NaaS (Network as a Service) infrastructure.
@@ -30,7 +30,7 @@ This collection requires **ansible-core >= 2.17.0**.
 
 ## Python Requirements
 
-- Python >= 3.10
+- Python >= 3.7 (compatible with ansible-core 2.17, 2.18, and 2.19)
 - Graphiant SDK >= 25.12.1
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](docs/guides/VERSION_MANAGEMENT.md) for details.
@@ -57,11 +57,11 @@ git clone https://github.com/Graphiant-Inc/graphiant-playbooks.git
 cd graphiant-playbooks
 
 # Create virtual environment or activate an existing virtual environment
-python3.10 -m venv venv
+python3.7 -m venv venv
 source venv/bin/activate
 
 # Install collection dependencies
-pip install -r ansible_collections/graphiant/naas/requirements.txt
+pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
 
 # Install collection from source
 ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
@@ -71,7 +71,7 @@ ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
 
 ```bash
 # Install collection dependencies in a virtual environment
-pip install -r ansible_collections/graphiant/naas/requirements.txt
+pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
 
 # Install collection from Ansible Galaxy
 ansible-galaxy collection install graphiant.naas
@@ -422,12 +422,12 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 25.12.2
+python scripts/bump_version.py 25.12.3
 ```
 
 After bumping version, remember to:
 1. Update CHANGELOG.md with actual changes
-2. Run `python scripts/generate_requirements.py` to sync requirements.txt
+2. Install dependencies: `pip install -r requirements-ee.txt`
 3. Review and commit changes
 
 ## Support
@@ -438,4 +438,4 @@ After bumping version, remember to:
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+GNU General Public License v3.0 or later (GPLv3+) - see [LICENSE](LICENSE) for details.

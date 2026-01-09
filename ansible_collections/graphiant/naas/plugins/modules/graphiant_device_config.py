@@ -66,7 +66,7 @@ options:
       - Required for all operations.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - Configuration files support Jinja2 templating syntax for dynamic generation.
-      - "File must contain C(device_config) list with entries in the format:"
+      - "File must contain I(device_config) list with entries in the format:"
       - "  device_config:"
       - "    - device-name:"
       - "        payload: |"
@@ -77,7 +77,7 @@ options:
     description:
       - Optional path to a user-defined Jinja2 template file.
       - When provided, the template is rendered with config file data as context.
-      - The rendered template should produce the final C(device_config) structure.
+      - The rendered template should produce the final I(device_config) structure.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - "Use this to create reusable templates for common configuration patterns."
     type: str
@@ -85,8 +85,8 @@ options:
   operation:
     description:
       - The specific device configuration operation to perform.
-      - "C(configure): Push device configuration to devices (PUT /v1/devices/{device_id}/config)."
-      - "C(show_validated_payload): Dry-run mode that shows the validated payload after SDK model processing."
+      - "V(configure): Push device configuration to devices (PUT /v1/devices/{device_id}/config)."
+      - "V(show_validated_payload): Dry-run mode that shows the validated payload after SDK model processing."
       - "Validates configuration syntax, resolves device names, and displays what would be pushed to the API."
       - "Unrecognized fields are excluded by SDK models. No changes are made to devices."
     type: str
@@ -97,8 +97,8 @@ options:
   state:
     description:
       - The desired state of the device configuration.
-      - "C(present): Maps to C(configure) operation when operation not specified."
-      - "C(absent) state is not supported as device configuration is a PUT operation."
+      - "V(present): Maps to V(configure) operation when O(operation) not specified."
+      - "V(absent) state is not supported as device configuration is a PUT operation."
     type: str
     choices: [ present ]
     default: present
@@ -106,12 +106,17 @@ options:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
       - When enabled, provides comprehensive logs of all device configuration operations.
-      - Logs are captured and included in the result_msg for display using debug module.
+      - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
 
+attributes:
+  check_mode:
+    description: Supports check mode.
+    support: full
+
 requirements:
-  - python >= 3.12
+  - python >= 3.7
   - graphiant-sdk >= 25.12.1
 
 seealso:
@@ -141,7 +146,7 @@ EXAMPLES = r'''
   register: config_result
 
 - name: Display configuration result
-  debug:
+  ansible.builtin.debug:
     msg: "{{ config_result.msg }}"
 
 - name: Show validated payload (dry-run) before pushing
@@ -155,7 +160,7 @@ EXAMPLES = r'''
   register: preview_result
 
 - name: Display validated payload
-  debug:
+  ansible.builtin.debug:
     msg: "{{ preview_result.msg }}"
 
 - name: Push configuration using user-defined template
@@ -217,22 +222,22 @@ EXAMPLES = r'''
 RETURN = r'''
 msg:
   description:
-    - Result message from the operation, including detailed logs when C(detailed_logs) is enabled.
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
   type: str
   returned: always
   sample: "Successfully configured 3 device(s)"
 changed:
   description:
     - Whether the operation made changes to the system.
-    - C(true) for configure operations.
-    - C(false) for show_validated_payload operations.
+    - V(true) for configure operations.
+    - V(false) for show_validated_payload operations.
   type: bool
   returned: always
   sample: true
 operation:
   description:
     - The operation that was performed.
-    - Either C(configure) or C(show_validated_payload).
+    - Either V(configure) or V(show_validated_payload).
   type: str
   returned: always
   sample: "configure"

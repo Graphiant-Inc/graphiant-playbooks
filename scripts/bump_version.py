@@ -31,7 +31,7 @@ try:
     import yaml
 except ImportError:
     print("Error: PyYAML is required. Install it with: pip install PyYAML")
-    print("Or install all dependencies: pip install -r requirements.txt")
+    print("Or install all dependencies: pip install -r requirements-ee.txt")
     sys.exit(1)
 
 
@@ -200,27 +200,11 @@ def update_module_version_added(new_version: str) -> None:
 
 
 def update_requirements_txt(dependency_updates: Optional[dict] = None) -> None:
-    """Update requirements.txt with new dependency versions"""
-    if not dependency_updates:
-        return
-
-    req_file = COLLECTION_ROOT / "requirements.txt"
-    with open(req_file, 'r') as f:
-        content = f.read()
-
-    for dep_name, dep_version in dependency_updates.items():
-        # Handle both == and >= patterns
-        pattern = rf'{re.escape(dep_name)}==[^\s\n]+'
-        replacement = f'{dep_name}=={dep_version}'
-        content = re.sub(pattern, replacement, content)
-
-        pattern = rf'{re.escape(dep_name)}>=[^\s\n]+'
-        replacement = f'{dep_name}>={dep_version}'
-        content = re.sub(pattern, replacement, content)
-
-    with open(req_file, 'w') as f:
-        f.write(content)
-    print("✅ Updated requirements.txt with dependency updates")
+    """Update requirements-ee.txt with new dependency versions (if needed)"""
+    # Note: requirements-ee.txt doesn't have version pins, so this function
+    # is kept for API compatibility but doesn't modify the file
+    if dependency_updates:
+        print("ℹ️  Note: requirements-ee.txt doesn't use version pins, skipping update")
 
 
 def update_version_file_dependencies(dependency_updates: Optional[dict] = None) -> None:
