@@ -227,8 +227,13 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 | `03_dataex_match_services_to_customers.yml` | Match services to customers |
 | `04_dataex_delete_customers.yml` | Delete customers |
 | `05_dataex_delete_services.yml` | Delete services |
-| `06_dataex_accept_invitation_dry_run.yml` | Test invitation acceptance |
+| `06_dataex_accept_invitation_dry_run.yml` | Test invitation acceptance (dry-run) |
 | `07_dataex_accept_invitation.yml` | Accept service invitations |
+| `08_dataex_query_service_health.yml` | Query service health monitoring |
+
+**Modules used:**
+- `graphiant_data_exchange` - Manage services, customers, matches, and invitations
+- `graphiant_data_exchange_info` - Query services summary, customers summary, and service health
 
 See [Examples Guide](docs/guides/EXAMPLES.md) for detailed usage examples.
 
@@ -242,6 +247,7 @@ ansible-doc graphiant.naas.graphiant_bgp
 ansible-doc graphiant.naas.graphiant_global_config
 ansible-doc graphiant.naas.graphiant_sites
 ansible-doc graphiant.naas.graphiant_data_exchange
+ansible-doc graphiant.naas.graphiant_data_exchange_info
 ansible-doc graphiant.naas.graphiant_device_config
 ```
 

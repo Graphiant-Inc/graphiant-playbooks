@@ -1,6 +1,7 @@
 ---
 # Data Exchange Accept Invitation Playbook (Workflow 4)
-# This playbook demonstrates how to accept Data Exchange service invitations
+# This playbook demonstrates how to use the graphiant_data_exchange and
+# graphiant_data_exchange_info modules to accept Data Exchange service invitations
 # for non-Graphiant customers with gateway deployment and VPN configuration
 
 - name: Data Exchange Accept Invitation (Workflow 4)
@@ -23,21 +24,23 @@
   tasks:
 
     - name: Get Data Exchange services summary
-      graphiant.naas.graphiant_data_exchange:
+      graphiant.naas.graphiant_data_exchange_info:
         <<: *graphiant_client_params
-        operation: get_services_summary
+        query: services_summary
         detailed_logs: true
       register: services_summary
 
     - name: Display services summary
       ansible.builtin.debug:
-        msg: "{{ services_summary.result_msg }}"
+        msg: "{{ services_summary.msg }}"
 
     - name: Accept Data Exchange service invitation (Dry Run)
       graphiant.naas.graphiant_data_exchange:
         <<: *graphiant_client_params
         operation: accept_invitation
         config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
+        # matches_file is optional - if provided, uses service_id to lookup match_id via API if missing
+        # If not provided, attempts API lookup (works if service is visible to consumer tenant)
         matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
         # Scale testing
         # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale.yaml"

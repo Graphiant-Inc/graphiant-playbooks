@@ -1,7 +1,7 @@
 ---
 # Data Exchange Management Playbook
-# This playbook demonstrates how to use the graphiant_data_exchange module
-# for managing Data Exchange services, customers, and matches.
+# This playbook demonstrates how to use the graphiant_data_exchange and
+# graphiant_data_exchange_info modules for managing Data Exchange services.
 
 - name: Data Exchange Management
   hosts: localhost
@@ -22,15 +22,15 @@
 
   tasks:
     - name: Get Data Exchange services summary
-      graphiant.naas.graphiant_data_exchange:
+      graphiant.naas.graphiant_data_exchange_info:
         <<: *graphiant_client_params
-        operation: get_services_summary
+        query: services_summary
         detailed_logs: true
       register: services_summary
 
     - name: Display services summary
       ansible.builtin.debug:
-        msg: "{{ services_summary.result_msg }}"
+        msg: "{{ services_summary.msg }}"
 
     - name: Delete Data Exchange services
       graphiant.naas.graphiant_data_exchange:
@@ -47,12 +47,12 @@
         msg: "{{ delete_services_result.result_msg }}"
 
     - name: Get updated services summary
-      graphiant.naas.graphiant_data_exchange:
+      graphiant.naas.graphiant_data_exchange_info:
         <<: *graphiant_client_params
-        operation: get_services_summary
+        query: services_summary
         detailed_logs: true
       register: updated_services_summary
 
     - name: Display updated services count
       ansible.builtin.debug:
-        msg: "{{ updated_services_summary.result_msg }}"
+        msg: "{{ updated_services_summary.msg }}"
