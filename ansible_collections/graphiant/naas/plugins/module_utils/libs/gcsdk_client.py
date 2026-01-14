@@ -1233,6 +1233,45 @@ class GraphiantPortalClient():
             LOG.error("get_matched_services_for_customer: Unexpected error: %s", e)
             return None
 
+    def get_matching_customers_for_service(self, service_id: int):
+        """
+        Get list of customers matched to a specific service (producer view).
+        This API returns match_id for each customer-service match.
+
+        Args:
+            service_id (int): ID of the service
+
+        Returns:
+            list: List of matched customers with match_id, or None if failed
+        """
+        try:
+            LOG.info("get_matching_customers_for_service: Retrieving matching customers for service ID: %s", service_id)
+            response = self.api.v1_extranets_b2b_peering_producer_id_matching_customers_summary_get(
+                authorization=self.bearer_token,
+                id=service_id
+            )
+
+            if response and hasattr(response, 'info') and response.info is not None:
+                LOG.info("get_matching_customers_for_service: Found %s matching customers for service %s",
+                         len(response.info), service_id)
+                return response.info
+            else:
+                LOG.info("get_matching_customers_for_service: No matching customers found for service %s", service_id)
+                return []
+
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/producer/{service_id}/matching-customers-summary"
+            self._log_api_error(
+                method_name="get_matching_customers_for_service",
+                api_url=api_url,
+                query_params={"id": service_id},
+                exception=e
+            )
+            return None
+        except Exception as e:
+            LOG.error("get_matching_customers_for_service: Unexpected error: %s", e)
+            return None
+
     def delete_data_exchange_customer(self, customer_id: int):
         """
         Delete a Data Exchange customer.

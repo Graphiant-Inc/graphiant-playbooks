@@ -697,6 +697,26 @@ class DataExchangeManager(BaseManager):
                                         matched_service.matched_customers)
                             already_matched = True
                             result['skipped'].append(match_key)
+
+                            # Fetch match_id from API and save to matches_file for existing matches
+                            # This allows recovery if matches_file is lost
+                            matching_customers = self.gsdk.get_matching_customers_for_service(matched_service.id)
+                            if matching_customers:
+                                for match_info in matching_customers:
+                                    if match_info.customer_name == customer_name and match_info.match_id:
+                                        LOG.info("Retrieved match_id %s for existing match: "
+                                                 "service '%s' to customer '%s'",
+                                                 match_info.match_id, service_name, customer_name)
+                                        match_responses.append({
+                                            "customer_name": customer_name,
+                                            "service_name": service_name,
+                                            "customer_id": customer.id,
+                                            "service_id": matched_service.id,
+                                            "match_id": match_info.match_id,
+                                            "timestamp": None,
+                                            "status": "matched"
+                                        })
+                                        break
                             break
 
                     if already_matched:
@@ -1283,72 +1303,141 @@ class DataExchangeManager(BaseManager):
     def _get_match_id_from_customer_service(self, customer_name, service_name, matches_file=None):
         """
         Get match ID and service ID from customer name and service name.
-        Reads from the matches responses JSON file.
+        Reads from matches_file (mandatory). If match_id is missing but service_id exists,
+        uses API to lookup match_id.
 
         Args:
             customer_name (str): Customer name
             service_name (str): Service name
-            matches_file (str, optional): Path to matches responses JSON file
+            matches_file (str): Path to matches responses JSON file (mandatory)
 
         Returns:
             dict: Dictionary containing match_id and service_id, or None if not found
         """
-        try:
-            import json
-            import os
+        import json
+        import os
 
-            # Use provided matches file or default
-            if not matches_file:
-                # Use the same path resolution logic as render_config_file
-                # Use config_path for relative path resolution
-                matches_file = os.path.join(
-                    self.config_utils.config_path,
-                    "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
-                )
+        # Step 1: If matches_file is not provided, try to find service_id via API
+        if not matches_file:
+            LOG.info("_get_match_id_from_customer_service: No matches_file provided, "
+                     "trying to find service via API for customer '%s' and service '%s'",
+                     customer_name, service_name)
+            # Try to get service by name - may exist if other invitations were already accepted
+            service = self.gsdk.get_data_exchange_service_by_name(service_name)
+            if service:
+                LOG.info("_get_match_id_from_customer_service: Found service '%s' with ID %s via API",
+                         service_name, service.id)
+                return self._lookup_match_id_from_api(customer_name, service_name, service.id)
             else:
-                # Apply the same path resolution logic as render_config_file for provided path
-                if os.path.isabs(matches_file):
-                    # Absolute path - use as is
-                    pass
-                else:
-                    # Relative path - resolve using config_path (same as render_config_file)
-                    # Security: Normalize path to prevent path traversal attacks
-                    matches_file = os.path.normpath(os.path.join(self.config_utils.config_path, matches_file))
-                    # Security: Validate that resolved path is within config_path to prevent path traversal
-                    config_path_real = os.path.realpath(self.config_utils.config_path)
-                    matches_file_real = os.path.realpath(matches_file)
-                    if not matches_file_real.startswith(config_path_real):
-                        raise ConfigurationError(
-                            "Security: Path traversal detected. Matches file path resolves outside config directory."
-                        )
+                LOG.error("_get_match_id_from_customer_service: Service '%s' not found via API and "
+                          "no matches_file provided", service_name)
+                return None
 
-            if os.path.exists(matches_file):
-                LOG.info("_get_match_id_from_customer_service: Reading matches from %s", matches_file)
-                with open(matches_file, 'r') as f:
-                    matches_data = json.load(f)
+        # Step 2: Read from matches_file
+        try:
+            # Apply path resolution logic for provided path
+            if os.path.isabs(matches_file):
+                # Absolute path - use as is
+                resolved_matches_file = matches_file
+            else:
+                # Relative path - resolve using config_path (same as render_config_file)
+                # Security: Normalize path to prevent path traversal attacks
+                resolved_matches_file = os.path.normpath(os.path.join(self.config_utils.config_path, matches_file))
+                # Security: Validate that resolved path is within config_path to prevent path traversal
+                config_path_real = os.path.realpath(self.config_utils.config_path)
+                matches_file_real = os.path.realpath(resolved_matches_file)
+                if not matches_file_real.startswith(config_path_real):
+                    raise ConfigurationError(
+                        "Security: Path traversal detected. Matches file path resolves outside config directory."
+                    )
 
-                # Find matching customer and service
-                for match in matches_data:
-                    if (match.get('customer_name') == customer_name and
-                            match.get('service_name') == service_name):
-                        match_id = match.get('match_id')
-                        service_id = match.get('service_id')
-                        LOG.info("_get_match_id_from_customer_service: Found match_id %s and service_id %s for customer '%s' and service '%s'",
+            if not os.path.exists(resolved_matches_file):
+                LOG.error("_get_match_id_from_customer_service: Matches file not found at %s", resolved_matches_file)
+                return None
+
+            LOG.info("_get_match_id_from_customer_service: Reading matches from %s", resolved_matches_file)
+            with open(resolved_matches_file, 'r') as f:
+                matches_data = json.load(f)
+
+            # Find matching customer and service
+            for match in matches_data:
+                if (match.get('customer_name') == customer_name and
+                        match.get('service_name') == service_name):
+                    match_id = match.get('match_id')
+                    service_id = match.get('service_id')
+
+                    # If both match_id and service_id exist, return them
+                    if match_id and service_id:
+                        LOG.info("_get_match_id_from_customer_service: Found match_id %s and service_id %s "
+                                 "for customer '%s' and service '%s' from matches_file",
                                  match_id, service_id, customer_name, service_name)
                         return {
                             'match_id': match_id,
                             'service_id': service_id
                         }
 
-                LOG.warning("_get_match_id_from_customer_service: No match found for customer '%s' and service '%s'",
-                            customer_name, service_name)
-                return None
+                    # If only service_id exists (no match_id), use API to get match_id
+                    if service_id and not match_id:
+                        LOG.info("_get_match_id_from_customer_service: Found service_id %s but no match_id "
+                                 "for customer '%s' and service '%s', looking up match_id via API...",
+                                 service_id, customer_name, service_name)
+                        return self._lookup_match_id_from_api(customer_name, service_name, service_id)
+
+                    LOG.warning("_get_match_id_from_customer_service: Entry found but missing service_id "
+                                "for customer '%s' and service '%s'", customer_name, service_name)
+                    return None
+
+            # No match found in matches_file, try API as fallback
+            LOG.info("_get_match_id_from_customer_service: No match found in matches_file for "
+                     "customer '%s' and service '%s', trying API lookup...", customer_name, service_name)
+            service = self.gsdk.get_data_exchange_service_by_name(service_name)
+            if service:
+                LOG.info("_get_match_id_from_customer_service: Found service '%s' with ID %s via API",
+                         service_name, service.id)
+                return self._lookup_match_id_from_api(customer_name, service_name, service.id)
             else:
-                LOG.error("_get_match_id_from_customer_service: Matches file not found at %s", matches_file)
+                LOG.warning("_get_match_id_from_customer_service: Service '%s' not found via API", service_name)
                 return None
 
         except Exception as e:
             LOG.error("_get_match_id_from_customer_service: Error reading matches file: %s", e)
+            return None
+
+    def _lookup_match_id_from_api(self, customer_name, service_name, service_id):
+        """
+        Lookup match_id from API using service_id.
+
+        Args:
+            customer_name (str): Customer name
+            service_name (str): Service name
+            service_id (int): Service ID
+
+        Returns:
+            dict: Dictionary containing match_id and service_id, or None if not found
+        """
+        try:
+            LOG.info("_lookup_match_id_from_api: Looking up match_id via API for "
+                     "customer '%s', service '%s', service_id %s", customer_name, service_name, service_id)
+
+            # Get matching customers for this service (includes match_id)
+            matching_customers = self.gsdk.get_matching_customers_for_service(service_id)
+            if matching_customers:
+                for match_info in matching_customers:
+                    if match_info.customer_name == customer_name and match_info.match_id:
+                        LOG.info("_lookup_match_id_from_api: Found match_id %s for customer '%s' "
+                                 "and service '%s' via API",
+                                 match_info.match_id, customer_name, service_name)
+                        return {
+                            'match_id': match_info.match_id,
+                            'service_id': service_id
+                        }
+
+            LOG.warning("_lookup_match_id_from_api: No match found via API for "
+                        "customer '%s' and service '%s'", customer_name, service_name)
+            return None
+
+        except Exception as e:
+            LOG.error("_lookup_match_id_from_api: Error during API lookup: %s", e)
             return None
 
     def get_service_health(self, service_name, is_provider=False):

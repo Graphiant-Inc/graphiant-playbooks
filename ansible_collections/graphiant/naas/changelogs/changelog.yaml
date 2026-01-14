@@ -5,6 +5,21 @@
 
 ancestor: null
 releases:
+  "25.12.4":
+    release_date: "TBD"
+    changes:
+      added:
+        - "New API C(get_matching_customers_for_service) for retrieving match_id from service_id"
+        - "New playbook C(08_dataex_query_service_health.yml) for service health monitoring"
+      changed:
+        - "Updated Data Exchange playbooks to use C(graphiant_data_exchange_info) for query operations"
+        - "Enhanced C(matches_file) behavior - match_id lookup via API when only service_id is provided"
+        - "Self-healing matches_file recovery - re-running match workflow recovers match_ids for existing matches"
+      bugfixes:
+        - "Fixed playbooks using incorrect module for query operations (now uses C(graphiant_data_exchange_info))"
+      notes:
+        - "Consumer tenant can now lookup match_id via API using service_id from matches_file"
+        - "matches_file is now optional for accept_invitation if service is visible to consumer tenant"
   "25.12.3":
     release_date: "2025-01-23"
     changes:

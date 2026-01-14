@@ -1,7 +1,7 @@
 ---
 # Data Exchange Management Playbook
-# This playbook demonstrates how to use the graphiant_data_exchange module
-# for managing Data Exchange customers.
+# This playbook demonstrates how to use the graphiant_data_exchange and
+# graphiant_data_exchange_info modules for managing Data Exchange customers.
 
 - name: Data Exchange Management
   hosts: localhost
@@ -22,15 +22,15 @@
 
   tasks:
     - name: Get Data Exchange customers summary
-      graphiant.naas.graphiant_data_exchange:
+      graphiant.naas.graphiant_data_exchange_info:
         <<: *graphiant_client_params
-        operation: get_customers_summary
+        query: customers_summary
         detailed_logs: true
       register: customers_summary
 
     - name: Display customers summary
       ansible.builtin.debug:
-        msg: "{{ customers_summary.result_msg }}"
+        msg: "{{ customers_summary.msg }}"
 
     - name: Create Data Exchange customers
       graphiant.naas.graphiant_data_exchange:
@@ -47,12 +47,12 @@
         msg: "{{ create_customers_result.result_msg }}"
 
     - name: Get updated customers summary
-      graphiant.naas.graphiant_data_exchange:
+      graphiant.naas.graphiant_data_exchange_info:
         <<: *graphiant_client_params
-        operation: get_customers_summary
+        query: customers_summary
         detailed_logs: true
       register: updated_customers_summary
 
     - name: Display updated customers count
       ansible.builtin.debug:
-        msg: "{{ updated_customers_summary.result_msg }}"
+        msg: "{{ updated_customers_summary.msg }}"
