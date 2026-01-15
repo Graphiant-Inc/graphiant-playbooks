@@ -155,8 +155,8 @@ class ConfigUtils(PortalUtils):
         Raises:
             ConfigurationError: If required parameters are missing.
         """
-        self._validate_required_params(kwargs, ['interface_name'])
-        LOG.info("VRRP on interfaces: %s %s", action.upper(), kwargs.get('interface_name'))
+        self._validate_required_params(kwargs, ['interfaceName'])
+        LOG.info("VRRP on interfaces: %s %s", action.upper(), kwargs.get('interfaceName'))
 
         try:
             result = self.template.render_vrrp_interfaces(action=action, **kwargs)
@@ -165,9 +165,9 @@ class ConfigUtils(PortalUtils):
                     config_payload["interfaces"] = {}
                 config_payload["interfaces"].update(result["interfaces"])
             else:
-                LOG.warning("No interfaces found in VRRP template result for %s", kwargs.get('interface_name'))
+                LOG.warning("No interfaces found in VRRP template result for %s", kwargs.get('interfaceName'))
         except Exception as e:
-            LOG.error("Failed to process VRRP on interfaces %s: %s", kwargs.get('interface_name'), str(e))
+            LOG.error("Failed to process VRRP on interfaces %s: %s", kwargs.get('interfaceName'), str(e))
             raise ConfigurationError(f"VRRP on interfaces processing failed: {str(e)}")
 
     def device_circuit(self, config_payload, action="add", **kwargs):

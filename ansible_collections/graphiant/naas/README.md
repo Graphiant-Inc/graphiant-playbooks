@@ -10,6 +10,7 @@ The Ansible Graphiant NaaS collection includes modules for automating the manage
 
 This collection provides Ansible modules to automate:
 - Interface and circuit configuration
+- VRRP (Virtual Router Redundancy Protocol) configuration
 - BGP peering management
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
 - Site management and object attachments
@@ -42,6 +43,7 @@ This collection requires **ansible-core >= 2.17.0**.
 | Name | Description |
 |------|-------------|
 | `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) |
+| `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
 | `graphiant_bgp` | Manage BGP peering and routing policies |
 | `graphiant_global_config` | Manage global configuration objects |
 | `graphiant_sites` | Manage sites and site attachments |
@@ -179,6 +181,13 @@ antsibull-docs lint-collection-docs ansible_collections/graphiant/naas/
         interface_config_file: "interface_config.yaml"
         operation: "configure_lan_interfaces"
 
+    - name: Configure VRRP on interfaces
+      graphiant.naas.graphiant_vrrp:
+        <<: *graphiant_client_params
+        vrrp_config_file: "vrrp_config.yaml"
+        operation: "configure"
+        state: present
+
     - name: Configure BGP peering
       graphiant.naas.graphiant_bgp:
         <<: *graphiant_client_params
@@ -207,6 +216,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `hello_test.yml` | E2E integration test playbook (used in CI/CD) |
 | `complete_network_setup.yml` | Full network configuration workflow |
 | `interface_management.yml` | Interface and circuit operations |
+| `vrrp_interface_management.yml` | VRRP configuration on interfaces and subinterfaces |
 | `circuit_management.yml` | Circuit-specific operations |
 | `lan_segments_management.yml` | LAN segment configuration |
 | `site_management.yml` | Site creation and management |
@@ -243,6 +253,7 @@ View module documentation with `ansible-doc`:
 
 ```bash
 ansible-doc graphiant.naas.graphiant_interfaces
+ansible-doc graphiant.naas.graphiant_vrrp
 ansible-doc graphiant.naas.graphiant_bgp
 ansible-doc graphiant.naas.graphiant_global_config
 ansible-doc graphiant.naas.graphiant_sites
@@ -374,6 +385,7 @@ python -m unittest tests.test
 Configuration files use YAML format with optional Jinja2 templating. Sample files are in the `configs/` directory:
 
 - `sample_interface_config.yaml` - Interface configurations
+- `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
 - `sample_bgp_peering.yaml` - BGP peering configurations
 - `sample_global_*.yaml` - Global configuration objects
 - `sample_device_config_payload.yaml` - Raw device configuration payloads (Edge/Gateway Device types)

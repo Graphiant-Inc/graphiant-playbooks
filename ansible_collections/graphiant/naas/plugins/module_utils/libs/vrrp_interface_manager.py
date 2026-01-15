@@ -90,8 +90,8 @@ class VRRPInterfaceManager(BaseManager):
                     referenced_interfaces = set()
                     for vrrp_config in configs.get("interfaces", []):
                         # Check main interface for interface reference
-                        if vrrp_config.get('interface_name'):
-                            referenced_interfaces.add(vrrp_config['interface_name'])
+                        if vrrp_config.get('interfaceName'):
+                            referenced_interfaces.add(vrrp_config['interfaceName'])
                         # Check subinterfaces for interface references
                         if vrrp_config.get('vlan'):
                             referenced_interfaces.add(vrrp_config['vlan'])
@@ -104,16 +104,16 @@ class VRRPInterfaceManager(BaseManager):
                     for config in configs.get("interfaces", []):
                         # Check if this interface has any VRRP configuration
                         if config.get('vrrp_ipv4') or config.get('vrrp_ipv6'):
-                            LOG.info(" ✓ Found VRRP configuration for interface: %s", config.get('interface_name'))
+                            LOG.info(" ✓ Found VRRP configuration for interface: %s", config.get('interfaceName'))
                             self.config_utils.vrrp_interfaces(
                                 output_config[device_id]["edge"],
                                 action="add",
                                 **config
                             )
                             vrrp_configured += 1
-                            LOG.info(" ✓ To configure VRRP for interface: %s", config.get('interface_name'))
+                            LOG.info(" ✓ To configure VRRP for interface: %s", config.get('interfaceName'))
                         else:
-                            LOG.info(" ✗ Skipping interface '%s' - no VRRP configuration", config.get('interface_name'))
+                            LOG.info(" ✗ Skipping interface '%s' - no VRRP configuration", config.get('interfaceName'))
 
                     LOG.info("Device %s summary: %s VRRP interfaces to be configured", device_name, vrrp_configured)
                     LOG.info("Final config for %s: %s", device_name, output_config[device_id]['edge'])
@@ -188,14 +188,14 @@ class VRRPInterfaceManager(BaseManager):
                     # Process VRRP removal for this device
                     vrrp_deconfigured = 0
                     for config in configs.get("interfaces", []):
-                        LOG.info(" ✓ Removing VRRP configuration for interface: %s", config.get('interface_name'))
+                        LOG.info(" ✓ Removing VRRP configuration for interface: %s", config.get('interfaceName'))
                         self.config_utils.vrrp_interfaces(
                             output_config[device_id]["edge"],
                             action="delete",
                             **config
                         )
                         vrrp_deconfigured += 1
-                        LOG.info(" ✓ To deconfigure VRRP for interface: %s", config.get('interface_name'))
+                        LOG.info(" ✓ To deconfigure VRRP for interface: %s", config.get('interfaceName'))
 
                     LOG.info("Device %s summary: %s VRRP interfaces to be deconfigured", device_name, vrrp_deconfigured)
 
