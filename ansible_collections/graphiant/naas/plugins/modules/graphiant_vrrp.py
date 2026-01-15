@@ -21,7 +21,7 @@ description:
   - Supports VRRP configuration and deconfiguration on both main interfaces and subinterfaces (VLANs).
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "25.12.4"
+version_added: "25.13.0"
 notes:
   - "VRRP Operations:"
   - "  - Configure: Configure VRRP groups on interfaces and subinterfaces."
