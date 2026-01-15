@@ -1,0 +1,165 @@
+# yamllint disable-file
+{
+    "interfaces": {
+        "{{ interface_name }}": {
+            "interface": {
+                {% if vlan is defined %}
+                "subinterfaces": {
+                    "{{ vlan }}": {
+                        "interface": {
+                            "vlan": {{ vlan }}
+                            {% if action == "delete" %}
+                            {% if vrrp_ipv4 is defined %}
+                            ,"ipv4": {
+                                "vrrp": {
+                                    "group": {
+                                        "enabled": false,
+                                        "virtualRouterId": {{ vrrp_ipv4.virtual_router_id }}
+                                    }
+                                }
+                            }
+                            {% endif %}
+                            {% if vrrp_ipv6 is defined %}
+                            ,"ipv6": {
+                                "vrrp": {
+                                    "group": {
+                                        "enabled": false,
+                                        "virtualRouterId": {{ vrrp_ipv6.virtual_router_id }}
+                                    }
+                                }
+                            }
+                            {% endif %}
+                            {% else %}
+                            {% if vrrp_ipv4 is defined %}
+                            ,"ipv4": {
+                                "vrrp": {
+                                    "group": {
+                                        "enabled": {{ vrrp_ipv4.enabled | default(true) }},
+                                        "allowInterOperability": {{ vrrp_ipv4.allowInterOperability | default(false) | lower }},
+                                        "virtualRouterId": {{ vrrp_ipv4.virtual_router_id }}, 
+                                        "description": "{{ vrrp_ipv4.description | default(interface_name ~ ' VRRP group ' ~ vrrp_ipv4.virtual_router_id) }}",
+                                        "priority": {{ vrrp_ipv4.priority | default(100) }},
+                                        "virtualIp": "{{ vrrp_ipv4.virtual_ip }}",
+                                        "preempt": {{ vrrp_ipv4.preempt | default(false) | lower }}
+                                        {% if vrrp_ipv4.tracked_interfaces is defined %}
+                                        ,"trackedInterfaces": [
+                                            {% for tracked in vrrp_ipv4.tracked_interfaces %}
+                                            {
+                                                "interface": "{{ tracked.interface }}",
+                                                "priorityDecrement": {{ tracked.priority_decrement | default(10) }}
+                                            }{% if not loop.last %},{% endif %}
+                                            {% endfor %}
+                                        ]
+                                        {% endif %}
+                                    }
+                                }
+                            }
+                            {% endif %}
+                            {% if vrrp_ipv6 is defined %}
+                            ,"ipv6": {
+                                "vrrp": {
+                                    "group": {
+                                        "enabled": {{ vrrp_ipv6.enabled | default(true) }},
+                                        "allowInterOperability": {{ vrrp_ipv6.allowInterOperability | default(false) | lower }},
+                                        "virtualRouterId": {{ vrrp_ipv6.virtual_router_id }},
+                                        "description": "{{ vrrp_ipv6.description | default(interface_name ~ ' VRRP group ' ~ vrrp_ipv6.virtual_router_id) }}",
+                                        "priority": {{ vrrp_ipv6.priority | default(100) }},
+                                        "virtualIp": "{{ vrrp_ipv6.virtual_ip }}",
+                                        "preempt": {{ vrrp_ipv6.preempt | default(false) | lower }}
+                                        {% if vrrp_ipv6.tracked_interfaces is defined %}
+                                        ,"trackedInterfaces": [
+                                            {% for tracked in vrrp_ipv6.tracked_interfaces %}
+                                            {
+                                                "interface": "{{ tracked.interface }}",
+                                                "priorityDecrement": {{ tracked.priority_decrement | default(10) }}
+                                            }{% if not loop.last %},{% endif %}
+                                            {% endfor %}
+                                        ]
+                                        {% endif %}
+                                    }
+                                }
+                            }
+                            {% endif %}
+                            {% endif %}
+                        }
+                    }
+                }
+                {% else %}
+                {% if action == "delete" %}
+                {% if vrrp_ipv4 is defined %}
+                "ipv4": {
+                    "vrrp": {
+                        "group": {
+                            "enabled": false,
+                            "virtualRouterId": {{ vrrp_ipv4.virtual_router_id }}
+                        }
+                    }
+                }
+                {% endif %}
+                {% if vrrp_ipv6 is defined %}
+                {% if vrrp_ipv4 is defined %},{% endif %}"ipv6": {
+                    "vrrp": {
+                        "group": {
+                            "enabled": false,
+                            "virtualRouterId": {{ vrrp_ipv6.virtual_router_id }}
+                        }
+                    }
+                }
+                {% endif %}
+                {% else %}
+                {% if vrrp_ipv4 is defined %}
+                "ipv4": {
+                    "vrrp": {
+                        "group": {
+                            "enabled": {{ vrrp_ipv4.enabled | default(true) }},
+                            "allowInterOperability": {{ vrrp_ipv4.allowInterOperability | default(false) | lower }},
+                            "virtualRouterId": {{ vrrp_ipv4.virtual_router_id }},
+                            "description": "{{ vrrp_ipv4.description | default(interface_name ~ ' VRRP group ' ~ vrrp_ipv4.virtual_router_id) }}",
+                            "priority": {{ vrrp_ipv4.priority | default(100) }},
+                            "virtualIp": "{{ vrrp_ipv4.virtual_ip }}",
+                            "preempt": {{ vrrp_ipv4.preempt | default(false) | lower }}
+                            {% if vrrp_ipv4.tracked_interfaces is defined %}
+                            ,"trackedInterfaces": [
+                                {% for tracked in vrrp_ipv4.tracked_interfaces %}
+                                {
+                                    "interface": "{{ tracked.interface }}",
+                                    "priorityDecrement": {{ tracked.priority_decrement | default(10) }}
+                                }{% if not loop.last %},{% endif %}
+                                {% endfor %}
+                            ]
+                            {% endif %}
+                        }
+                    }
+                }
+                {% endif %}
+                {% if vrrp_ipv6 is defined %}
+                {% if vrrp_ipv4 is defined %},{% endif %}"ipv6": {
+                    "vrrp": {
+                        "group": {
+                            "enabled": {{ vrrp_ipv6.enabled | default(true) }},
+                            "allowInterOperability": {{ vrrp_ipv6.allowInterOperability | default(false) | lower }},
+                            "virtualRouterId": {{ vrrp_ipv6.virtual_router_id }},
+                            "description": "{{ vrrp_ipv6.description | default(interface_name ~ ' VRRP group ' ~ vrrp_ipv6.virtual_router_id) }}",
+                            "priority": {{ vrrp_ipv6.priority | default(100) }},
+                            "virtualIp": "{{ vrrp_ipv6.virtual_ip }}",
+                            "preempt": {{ vrrp_ipv6.preempt | default(false) | lower }}
+                            {% if vrrp_ipv6.tracked_interfaces is defined %}
+                            ,"trackedInterfaces": [
+                                {% for tracked in vrrp_ipv6.tracked_interfaces %}
+                                {
+                                    "interface": "{{ tracked.interface }}",
+                                    "priorityDecrement": {{ tracked.priority_decrement | default(10) }}
+                                }{% if not loop.last %},{% endif %}
+                                {% endfor %}
+                            ]
+                            {% endif %}
+                        }
+                    }
+                }
+                {% endif %}
+                {% endif %}
+                {% endif %}
+            }
+        }
+    }
+}

@@ -11,6 +11,7 @@ from .global_config_manager import GlobalConfigManager
 from .site_manager import SiteManager
 from .data_exchange_manager import DataExchangeManager
 from .device_config_manager import DeviceConfigManager
+from .vrrp_interface_manager import VRRPInterfaceManager
 from .logger import setup_logger
 from .exceptions import GraphiantPlaybookError
 
@@ -60,6 +61,7 @@ class GraphiantConfig:
             self.sites = SiteManager(self.config_utils)
             self.data_exchange = DataExchangeManager(self.config_utils)
             self.device_config = DeviceConfigManager(self.config_utils)
+            self.vrrp_interfaces = VRRPInterfaceManager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -81,5 +83,6 @@ class GraphiantConfig:
             'sites': hasattr(self, 'sites') and self.sites is not None,
             'data_exchange': hasattr(self, 'data_exchange') and self.data_exchange is not None,
             'device_config': hasattr(self, 'device_config') and self.device_config is not None,
+            'vrrp_interfaces': hasattr(self, 'vrrp_interfaces') and self.vrrp_interfaces is not None,
             'config_utils': hasattr(self, 'config_utils') and self.config_utils is not None
         }
