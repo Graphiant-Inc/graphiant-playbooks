@@ -125,7 +125,7 @@ class VRRPInterfaceManager(BaseManager):
                     LOG.error("Error configuring device %s: %s", device_name, str(e))
                     raise ConfigurationError(f"Configuration failed for {device_name}: {str(e)}")
 
-            if output_config:   
+            if output_config:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
                 result['changed'] = True
                 result['configured_devices'] = list(output_config.keys())
