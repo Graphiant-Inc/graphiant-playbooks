@@ -244,6 +244,22 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
 
+    def test_configure_vrrp_interfaces(self):
+        """
+        Configure VRRP (Virtual Router Redundancy Protocol) on interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
+
+    def test_deconfigure_vrrp_interfaces(self):
+        """
+        Deconfigure VRRP (Virtual Router Redundancy Protocol) from interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
+
     def test_configure_global_config_prefix_lists(self):
         """
         Configure Global Config Prefix Lists.
@@ -551,6 +567,9 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_wan_circuits_interfaces'))
     # To configure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
+    # VRRP Interface Configuration Management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_vrrp_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vrrp_interfaces'))
     # To deconfigure all interfaces (reset parent interface to default lan and delete subinterfaces)
     # suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
 
