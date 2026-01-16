@@ -143,6 +143,33 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process device interface %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Device interface processing failed: {str(e)}")
 
+    def vrrp_interfaces(self, config_payload, action="add", **kwargs):
+        """
+        Update the device interfaces section with VRRP configuration.
+
+        Args:
+            config_payload (dict): Dictionary to be updated with VRRP data.
+            action (str, optional): Action to perform, either "add" or "delete".
+            **kwargs: Additional parameters passed to the template renderer.
+
+        Raises:
+            ConfigurationError: If required parameters are missing.
+        """
+        self._validate_required_params(kwargs, ['interfaceName'])
+        LOG.info("VRRP on interfaces: %s %s", action.upper(), kwargs.get('interfaceName'))
+
+        try:
+            result = self.template.render_vrrp_interfaces(action=action, **kwargs)
+            if "interfaces" in result:
+                if "interfaces" not in config_payload:
+                    config_payload["interfaces"] = {}
+                config_payload["interfaces"].update(result["interfaces"])
+            else:
+                LOG.warning("No interfaces found in VRRP template result for %s", kwargs.get('interfaceName'))
+        except Exception as e:
+            LOG.error("Failed to process VRRP on interfaces %s: %s", kwargs.get('interfaceName'), str(e))
+            raise ConfigurationError(f"VRRP on interfaces processing failed: {str(e)}")
+
     def device_circuit(self, config_payload, action="add", **kwargs):
         """
         Update the device circuits section of the configuration payload.

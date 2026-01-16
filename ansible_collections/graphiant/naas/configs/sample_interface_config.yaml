@@ -8,6 +8,11 @@ interfaces:
       mtu: 1500
     # LAN Sub-Interface (VLAN) with Static IP assignment
     - name: GigabitEthernet7/0/0
+      ipv4: 10.1.1.1/24
+      ipv6: 2001:10:1:1::1/64
+      lan: lan-1-test
+      description: Segment-1 interface
+      mtu: 1500
       sub_interfaces:
         - vlan: 18
           lan: lan-7-test
@@ -84,3 +89,10 @@ interfaces:
       mtu: 1500
       v4_tcp_mss: 1392
       v6_tcp_mss: 1220
+      sub_interfaces:
+        - vlan: 28
+          lan: lan-7-test
+          ipv4: 10.2.7.3/24
+          ipv6: 2001:10:2:7::3/64
+          description: Segment-7 interface
+          alias: Gig8.28
