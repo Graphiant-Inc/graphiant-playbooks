@@ -44,6 +44,10 @@
                                     "bfd": {
                                         "bfd": {
                                             "enabled": {{ neighbor.bfd | default('false') }}
+                                            {% if neighbor.bfd %}
+                                            ,"minimumInterval": {{ neighbor.minimumInterval | default(1000) }},
+                                            "localMultiplier": {{ neighbor.localMultiplier | default(3) }}
+                                            {% endif %}
                                         }
                                     },
                                     "md5Password": {
