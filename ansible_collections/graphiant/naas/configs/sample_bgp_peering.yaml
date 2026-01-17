@@ -21,8 +21,8 @@ bgp_peering:
               # send_community: true
               # md5_password: "mustchangeme"
               bfd: true
-              minimumInterval: 1200 # in milliseconds, Range: 250-30000 (default: 1000)
-              localMultiplier: 4 # Range: 1-255 (default: 3)
+              minimum_interval: 1200 # in milliseconds, Range: 250-30000 (default: 1000)
+              local_multiplier: 4 # Range: 1-255 (default: 3)
 
   - edge-2-sdktest:
       route_policies:

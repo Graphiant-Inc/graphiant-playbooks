@@ -20,14 +20,14 @@
                         "{{ neighbor.remote_ipv4_address }}": {
                             {% if action != "delete" %}
                                 "neighbor": {
+                                    {% if neighbor.peer_as %}
                                     "peerAsn": {{ neighbor.peer_as }},
+                                    {% endif %}
+                                    {% if neighbor.local_interface %}
                                     "localInterface": {
-                                        {% if neighbor.local_interface %}
-                                            "interface": "{{ neighbor.local_interface }}"
-                                        {% else %}
-                                            "interface": null
-                                        {% endif %}
+                                        "interface": "{{ neighbor.local_interface }}"
                                     },
+                                    {% endif %}
                                     "remoteAddress": "{{ neighbor.remote_ipv4_address }}",
                                     "enabled": true,
                                     "state": "UnknownBGPNeighborState",
@@ -43,10 +43,12 @@
                                     "maxPrefixValue": {},
                                     "bfd": {
                                         "bfd": {
-                                            "enabled": {{ neighbor.bfd | default('false') }}
-                                            {% if neighbor.bfd %}
-                                            ,"minimumInterval": {{ neighbor.minimumInterval | default(1000) }},
-                                            "localMultiplier": {{ neighbor.localMultiplier | default(3) }}
+                                            "enabled": {{ neighbor.bfd | default('false') }}{% if neighbor.minimum_interval or neighbor.local_multiplier %},{% endif %}
+                                            {% if neighbor.minimum_interval %}
+                                            "minimumInterval": {{ neighbor.minimum_interval }}{% if neighbor.local_multiplier %},{% endif %}
+                                            {% endif %}
+                                            {% if neighbor.local_multiplier %}
+                                            "localMultiplier": {{ neighbor.local_multiplier }}
                                             {% endif %}
                                         }
                                     },
