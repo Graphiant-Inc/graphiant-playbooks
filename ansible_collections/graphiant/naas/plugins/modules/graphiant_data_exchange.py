@@ -20,7 +20,7 @@ module: graphiant_data_exchange
 short_description: Manage Graphiant Data Exchange services, customers, matches, and invitations
 description:
   - This module provides comprehensive Data Exchange management capabilities for Graphiant's B2B peering platform.
-  - Enables creating, deleting, and querying Data Exchange services and customers.
+  - Enables creating and deleting Data Exchange services and customers.
   - Provides service-to-customer matching operations with automatic match response file management.
   - Supports invitation acceptance with gateway service deployment and VPN configuration.
 version_added: "25.12.0"
@@ -378,8 +378,8 @@ changed:
 operation:
   description:
     - The operation that was performed.
-    - One of create_services, delete_services, create_customers, delete_customers,
-      match_service_to_customers, or accept_invitation.
+    - One of V(create_services), V(delete_services), V(create_customers), V(delete_customers),
+      V(match_service_to_customers), or V(accept_invitation).
   type: str
   returned: always
   sample: "create_services"

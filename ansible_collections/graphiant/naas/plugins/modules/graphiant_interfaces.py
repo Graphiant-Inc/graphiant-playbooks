@@ -119,8 +119,14 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode.
-    support: full
+    description: Supports check mode with partial support.
+    support: partial
+    details: >
+      The module cannot accurately determine whether changes would actually be made without
+      querying the current state via API calls. In check mode, the module assumes that changes
+      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure)).
+      This means that check mode may report changes even when the configuration is already
+      applied. The module does not perform state comparison in check mode due to API limitations.
 
 requirements:
   - python >= 3.7
@@ -234,9 +240,9 @@ changed:
 operation:
   description:
     - The operation that was performed.
-    - One of configure_interfaces, deconfigure_interfaces, configure_lan_interfaces, deconfigure_lan_interfaces,
-      configure_wan_circuits_interfaces, deconfigure_wan_circuits_interfaces, configure_circuits,
-      or deconfigure_circuits.
+    - One of V(configure_interfaces), V(deconfigure_interfaces), V(configure_lan_interfaces), V(deconfigure_lan_interfaces),
+      V(configure_wan_circuits_interfaces), V(deconfigure_wan_circuits_interfaces), V(configure_circuits),
+      or V(deconfigure_circuits).
   type: str
   returned: always
   sample: "configure_interfaces"
@@ -399,13 +405,19 @@ def main():
 
     # Handle check mode
     if module.check_mode:
-        module.exit_json(
+        # All interface operations make changes
+        # Note: Check mode assumes changes would be made as we cannot determine
+        # current state without making API calls. In practice, these operations
+        # typically result in changes unless the configuration is already applied.
+        result_dict = dict(
             changed=True,
-            msg=f"Check mode: Would execute {operation}",
+            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
             operation=operation,
-            interface_config_file=interface_config_file,
-            circuit_config_file=circuit_config_file
+            interface_config_file=interface_config_file
         )
+        if circuit_config_file:
+            result_dict['circuit_config_file'] = circuit_config_file
+        module.exit_json(**result_dict)
 
     try:
         # Get Graphiant connection

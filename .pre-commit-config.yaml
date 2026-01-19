@@ -11,3 +11,12 @@ repos:
       - id: pylint
         args: ["--errors-only"]
         language: system # So that local venv is used containing dependencies
+  - repo: local
+    hooks:
+      - id: check-inclusion-checklist
+        name: Check Ansible Inclusion Checklist Compliance
+        entry: python scripts/check_inclusion_checklist.py --strict
+        language: system
+        pass_filenames: false
+        always_run: true
+        files: ^ansible_collections/graphiant/naas/plugins/modules/.*\.py$

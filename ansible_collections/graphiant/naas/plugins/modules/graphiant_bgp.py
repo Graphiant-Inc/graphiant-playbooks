@@ -32,7 +32,7 @@ notes:
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves device names, site names, and policy names to IDs."
   - "All operations are idempotent and safe to run multiple times."
-  - "Global BGP filters must be created using C(graphiant_global_config) module before attaching to BGP peers."
+  - "Global BGP filters must be created using M(graphiant.naas.graphiant_global_config) module before attaching to BGP peers."
 options:
   host:
     description:
@@ -89,8 +89,15 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode.
-    support: full
+    description: Supports check mode with partial support.
+    support: partial
+    details: >
+      The module cannot accurately determine whether changes would actually be made without
+      querying the current state via API calls. In check mode, the module assumes that changes
+      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure),
+      V(detach_policies)). This means that check mode may report changes even when the
+      configuration is already applied. The module does not perform state comparison in check
+      mode due to API limitations.
 
 requirements:
   - python >= 3.7
@@ -169,7 +176,7 @@ changed:
 operation:
   description:
     - The operation that was performed.
-    - One of configure, deconfigure, or detach_policies.
+    - One of V(configure), V(deconfigure), or V(detach_policies).
   type: str
   returned: always
   sample: "configure"
@@ -293,9 +300,13 @@ def main():
 
     # Handle check mode
     if module.check_mode:
+        # All BGP operations (configure, deconfigure, detach_policies) make changes
+        # Note: Check mode assumes changes would be made as we cannot determine
+        # current state without making API calls. In practice, these operations
+        # typically result in changes unless the configuration is already applied.
         module.exit_json(
             changed=True,
-            msg=f"Check mode: Would execute {operation}",
+            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
             operation=operation,
             bgp_config_file=bgp_config_file
         )
