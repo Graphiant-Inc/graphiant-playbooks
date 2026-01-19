@@ -112,8 +112,16 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode.
-    support: full
+    description: Supports check mode with partial support.
+    support: partial
+    details: >
+      For V(show_validated_payload) operation, check mode returns V(changed=False) as this is
+      a read-only validation operation that makes no changes to the system. For V(configure)
+      operation, check mode returns V(changed=True) as the module cannot accurately determine
+      whether changes would actually be made without querying the current state via API calls.
+      The module does not perform state comparison in check mode for V(configure) operations
+      due to API limitations. This means that check mode may report changes even when the
+      configuration is already applied.
 
 requirements:
   - python >= 3.7
@@ -357,13 +365,25 @@ def main():
 
     # Handle check mode
     if module.check_mode:
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation}",
+        # show_validated_payload is a read-only validation operation that makes no changes
+        if operation == 'show_validated_payload':
+            changed = False
+            msg = f"Check mode: Would validate payload from {config_file} (no changes made)"
+        else:
+            # configure operation would make changes
+            changed = True
+            msg = f"Check mode: Would execute {operation}"
+
+        result_dict = dict(
+            changed=changed,
+            msg=msg,
             operation=operation,
-            config_file=config_file,
-            template_file=template_file
+            config_file=config_file
         )
+        if template_file:
+            result_dict['template_file'] = template_file
+
+        module.exit_json(**result_dict)
 
     try:
         # Get Graphiant connection

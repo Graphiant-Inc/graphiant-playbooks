@@ -26,7 +26,22 @@ Thank you for your interest in contributing!
    git checkout -b feature/your-feature-name
    ```
 
-2. **Validate collection structure:**
+2. **Check Ansible Inclusion Checklist compliance:**
+   ```bash
+   # From repository root
+   python scripts/check_inclusion_checklist.py
+   
+   # Or with strict mode (exits with error on failures)
+   python scripts/check_inclusion_checklist.py --strict
+   ```
+   > **Important:** Before committing or raising a PR, ensure your changes comply with the requirements in `ANSIBLE_INCLUSION_CHECKLIST.md`. The checklist covers:
+   > - FQCN usage (including `ansible.builtin.*` for builtin modules)
+   > - Module references in DOCUMENTATION sections using `M()` with FQCN
+   > - Semantic markup (V() for values, O() for options, etc.)
+   > - Check mode support information
+   > - And many other Ansible Galaxy inclusion requirements
+
+3. **Validate collection structure:**
    ```bash
    # From repository root
    python scripts/validate_collection.py
@@ -35,12 +50,12 @@ Thank you for your interest in contributing!
    python ../../scripts/validate_collection.py
    ```
 
-3. **Build and install collection:**
+4. **Build and install collection:**
    ```bash
    ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
    ```
 
-4. **Run linting (before commit):**
+5. **Run linting (before commit):**
    ```bash
    # Python linting with flake8 (local development only, not in CI)
    flake8 ansible_collections/graphiant/naas/plugins/module_utils/libs
@@ -71,12 +86,32 @@ Thank you for your interest in contributing!
    ansible-playbook ~/.ansible/collections/ansible_collections/graphiant/naas/playbooks/hello_test.yml
    ```
 
-6. **Commit with clear messages:**
+6. **Run pre-commit hooks (if installed):**
+   ```bash
+   # Install pre-commit hooks (one-time setup)
+   pre-commit install
+   
+   # Run hooks manually
+   pre-commit run --all-files
+   ```
+   > **Note:** Pre-commit hooks include the Ansible Inclusion Checklist check, which validates FQCN usage and semantic markup compliance.
+
+7. **Commit with clear messages:**
    ```bash
    git commit -m "Add: description of changes"
    ```
+   > **Important:** Before committing, ensure:
+   > - ✅ Ansible Inclusion Checklist compliance: `python scripts/check_inclusion_checklist.py --strict`
+   > - ✅ Collection structure validation: `python scripts/validate_collection.py`
+   > - ✅ All tests pass locally
 
-7. **Push and create a pull request**
+8. **Push and create a pull request**
+   
+   > **Before raising a PR, verify:**
+   > - ✅ All checks in `ANSIBLE_INCLUSION_CHECKLIST.md` are reviewed
+   > - ✅ CI/CD workflows will pass (lint, test, build)
+   > - ✅ Documentation is updated if needed
+   > - ✅ Changelog is updated for user-facing changes
 
 ## Linting Tools
 

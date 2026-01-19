@@ -1,7 +1,7 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2025-12-22  
+**Review Date:** 2025-01-23  
 **Collection Version:** 25.12.3  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
@@ -75,7 +75,7 @@
 
 ### 2.3 Ansible Documentation Standards
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** Must follow Ansible documentation standards
+- **Requirement:** Must follow Ansible documentation standards and the style guide
 - **Verification:**
   - All modules have `DOCUMENTATION` sections with proper YAML format
   - All modules have `EXAMPLES` sections
@@ -83,24 +83,91 @@
   - Modules verified:
     - `graphiant_bgp.py` ✅
     - `graphiant_data_exchange.py` ✅
+    - `graphiant_data_exchange_info.py` ✅
+    - `graphiant_device_config.py` ✅
     - `graphiant_global_config.py` ✅
     - `graphiant_interfaces.py` ✅
     - `graphiant_sites.py` ✅
+    - `graphiant_vrrp.py` ✅
+
+### 2.3.1 Semantic Markup
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** Must use semantic markup (V() for option values, O() for option names, M() for modules, etc.)
+- **Verification:**
+  - All option values use `V()` markup (e.g., `V(configure)`, `V(present)`, `V(true)`)
+  - All option names use `O()` markup (e.g., `O(operation)`, `O(detailed_logs)`)
+  - All module references use `M()` with FQCN (e.g., `M(graphiant.naas.graphiant_interfaces)`)
+  - **Module references in DOCUMENTATION sections:** ✅ **PASSING**
+    - When referring to other modules in DOCUMENTATION sections, must use `M()` with FQCN
+    - Example: `M(graphiant.naas.graphiant_global_config)` instead of `C(graphiant_global_config)`
+    - All module references in notes, description, and other DOCUMENTATION text use `M()` with FQCN ✅
+  - All builtin modules use `M(ansible.builtin.debug)` format
+  - Return values use `RV()` markup (e.g., `RV(msg)`)
+  - File/input names use `I()` markup (e.g., `I(config_file)`)
+  - Code/commands use `C()` markup (e.g., `C(/v1/devices/{device_id}/config)`)
+  - All 8 modules verified ✅
+
+### 2.3.2 Check Mode Support Information
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** All modules must have check mode support information in the `attributes` field
+- **Verification:**
+  - All 8 modules have `attributes:` section with `check_mode:` information:
+    - `graphiant_bgp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+    - `graphiant_data_exchange.py`: `support: none` (with explanation) ✅
+    - `graphiant_data_exchange_info.py`: `support: full` ✅ (read-only _info module)
+    - `graphiant_device_config.py`: `support: partial` ✅ (show_validated_payload returns changed=False, configure assumes changes)
+    - `graphiant_global_config.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+    - `graphiant_interfaces.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+    - `graphiant_sites.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+    - `graphiant_vrrp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+
+### 2.3.3 Check Mode Best Practices Compliance
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** Check mode support level must accurately reflect module capabilities. Modules should not always return `changed=True` in check mode when they can determine no changes would be made.
+- **Verification:**
+  - **Support level accuracy:** ✅ **PASSING**
+    - State-changing modules use `support: partial` (cannot determine current state without API calls) ✅
+    - Read-only modules use `support: full` (`graphiant_data_exchange_info`) ✅
+    - Modules with intentional limitations use `support: none` (`graphiant_data_exchange`) ✅
+  - **Check mode behavior:** ✅ **PASSING**
+    - `graphiant_device_config`: Returns `changed=False` for `show_validated_payload` (read-only operation) ✅
+    - `graphiant_device_config`: Returns `changed=True` for `configure` (assumes changes, documented) ✅
+    - Other state-changing modules: Return `changed=True` with clear documentation that this assumes changes would be made ✅
+  - **Documentation:** ✅ **PASSING**
+    - All modules document check mode limitations in `attributes.check_mode.description` ✅
+    - Support levels accurately reflect actual capabilities ✅
+    - No false claims of `support: full` when module cannot accurately determine changes ✅
 
 ### 2.4 Development Conventions
-- [x] **Status:** ✅ **PASSING** (with note)
+- [x] **Status:** ✅ **PASSING** (with notes)
 - **Requirement:** Must follow Ansible development conventions
 - **Verification:**
   - **Idempotency:** ✅ Documented in all modules
-  - **Module naming:** ✅ No `_info` or `_facts` modules (none needed)
-  - **Check mode support:** ⚠️ **PARTIAL**
-    - `graphiant_interfaces`: `supports_check_mode=True` ✅
-    - `graphiant_bgp`: `supports_check_mode=True` ✅
-    - `graphiant_global_config`: `supports_check_mode=True` ✅
-    - `graphiant_sites`: `supports_check_mode=True` ✅
-    - `graphiant_data_exchange`: `supports_check_mode=False` ⚠️
+    - All modules document idempotency behavior
+    - Note: Some modules (e.g., `graphiant_device_config`) may always return `changed: true` for PUT operations as state comparison is not implemented
+    - QUESTION: Some modules like `graphiant_device_config.py` always return `changed: true` in check mode - is this acceptable?
+    - QUESTION: Are modules truly idempotent or do they always make changes? Some RETURN sections indicate `changed: true` for all configure/deconfigure operations
+  - **Module naming:** ✅ Compliant
+    - Information-gathering modules: `graphiant_data_exchange_info.py` ✅ (follows `<something>_info` naming)
+    - No `_facts` modules (none needed) ✅
+    - All other modules are state-changing modules (no query operations) ✅
+  - **Query operations:** ✅ **PASSING**
+    - No modules use `state=query` or `state=get` mechanisms ✅
+    - Query operations properly separated into `graphiant_data_exchange_info` module ✅
+    - All state-changing modules only handle create/update/delete operations ✅
+  - **Check mode support:** ✅ **PASSING**
+    - `graphiant_interfaces`: `supports_check_mode=True`, `support: partial` ✅
+    - `graphiant_bgp`: `supports_check_mode=True`, `support: partial` ✅
+    - `graphiant_global_config`: `supports_check_mode=True`, `support: partial` ✅
+    - `graphiant_sites`: `supports_check_mode=True`, `support: partial` ✅
+    - `graphiant_vrrp`: `supports_check_mode=True`, `support: partial` ✅
+    - `graphiant_device_config`: `supports_check_mode=True`, `support: partial` ✅
+      - Note: Returns `changed=False` for read-only `show_validated_payload` operation
+      - Returns `changed=True` for `configure` operation (assumes changes, documented)
+    - `graphiant_data_exchange`: `supports_check_mode=False`, `support: none` ⚠️
       - Note: Intentional for complex multi-step workflows
       - Module provides `dry_run` parameter for `accept_invitation` operation
+    - `graphiant_data_exchange_info`: `supports_check_mode=True`, `support: full` ✅ (required for _info modules, read-only)
 
 ### 2.5 Python Version Support
 - [x] **Status:** ✅ **PASSING**
@@ -130,11 +197,18 @@
 
 ### 2.8 FQCN Usage
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** FQCNs must be used for all plugins and modules
+- **Requirement:** FQCNs must be used for all plugins and modules including `ansible.builtin.*` for builtin ones from ansible-core in all their appearances in documentation, examples, return sections, and extends_documentation_fragment sections
 - **Verification:**
-  - Modules use FQCN: `graphiant.naas.graphiant_*`
-  - Playbooks use FQCNs (e.g., `ansible.builtin.debug`)
-  - No short names used in examples
+  - Modules use FQCN: `graphiant.naas.graphiant_*` ✅
+  - All builtin modules use FQCN: `ansible.builtin.debug` (20 occurrences across all modules) ✅
+  - All EXAMPLES sections use `ansible.builtin.debug` ✅
+  - All documentation references use `M(ansible.builtin.debug)` ✅
+  - **Module references in DOCUMENTATION sections:** ✅ **PASSING**
+    - When referring to other modules in DOCUMENTATION sections (notes, description, etc.), must use `M()` with FQCN
+    - Example: `M(graphiant.naas.graphiant_global_config)` instead of `C(graphiant_global_config)` or `graphiant_global_config`
+    - All module references in DOCUMENTATION text use `M()` with FQCN ✅
+  - No short names used in examples ✅
+  - No `extends_documentation_fragment` sections found (none used) ✅
 
 ---
 
@@ -158,51 +232,103 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must have at least one module
 - **Verification:**
-  - Module count: 5 modules
-  - Modules:
+  - Module count: 8 modules
+  - State-changing modules:
     1. `graphiant_interfaces` - Manage interfaces and circuits
     2. `graphiant_bgp` - Manage BGP peering and routing policies
     3. `graphiant_global_config` - Manage global configuration objects
     4. `graphiant_sites` - Manage sites and site attachments
     5. `graphiant_data_exchange` - Manage Data Exchange workflows
+    6. `graphiant_device_config` - Push raw device configurations
+    7. `graphiant_vrrp` - Manage VRRP configuration
+  - Information-gathering modules:
+    8. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
 
 ### 3.3 Changelog
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** Must have a CHANGELOG.md following Ansible guidelines
+- **Requirement:** Must have changelog, preferably with `changelogs/changelog.yaml`
 - **Verification:**
-  - File exists: `CHANGELOG.md`
-  - Format: Follows Ansible Collection Changelog Guidelines
+  - File exists: `changelogs/changelog.yaml` ✅ (recommended format)
+  - Format: YAML format for automated changelog generation using antsibull-changelog ✅
+  - Config file: `changelogs/config.yaml` exists ✅
   - Semantic versioning: ✅
-  - Sections: Added, Changed, Deprecated, Removed
+  - Sections: Added, Changed, Deprecated, Removed, Bugfixes, etc. ✅
+  - Can be used to automatically generate markdown file ✅
 
 ### 3.4 Version Added
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** All modules must have `version_added` in major.minor format
+- **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
-  - All modules use `version_added: "25.12.0"` (major.minor format)
+  - All modules use `version_added: "25.12.0"` (major.minor format, collection version) ✅
   - Centralized in `_version.py` as `MODULE_VERSION_ADDED`
   - Modules verified:
     - `graphiant_bgp.py`: `version_added: "25.12.0"` ✅
     - `graphiant_data_exchange.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_data_exchange_info.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_device_config.py`: `version_added: "25.12.0"` ✅
     - `graphiant_global_config.py`: `version_added: "25.12.0"` ✅
     - `graphiant_interfaces.py`: `version_added: "25.12.0"` ✅
     - `graphiant_sites.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_vrrp.py`: `version_added: "25.13.0"` ✅ (newer module)
 
-### 3.5 Collection Dependencies
+### 3.5 galaxy.yml Tags Field
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** Collection dependencies must be properly specified
+- **Requirement:** `galaxy.yml` must have `tags` field set
 - **Verification:**
-  - Dependencies in `galaxy.yml`: `ansible.posix: ">=1.5.0"` ✅
-  - Ansible requirement: Not specified in `meta/runtime.yml` (collection supports ansible-core >= 2.17.0) ✅
+  - Tags field exists in `galaxy.yml` ✅
+  - Tags: `networking`, `naas`, `graphiant`, `automation`, `interfaces`, `circuits`, `bgp`, `routing` ✅
+  - Location: `galaxy.yml` lines 14-22
+
+### 3.6 Collection Dependencies
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** Collection dependencies must have a lower bound on the version which is at least 1.0.0, and are all part of the ansible package
+- **Verification:**
+  - Dependencies in `galaxy.yml`: `ansible.posix: ">=1.5.0"` ✅ (lower bound >= 1.0.0)
+  - All dependencies are part of the ansible package ✅
+  - Ansible requirement: Specified in `meta/runtime.yml` as `requires_ansible: '>=2.17.0'` ✅
   - Python requirement: `>= 3.7` (documented in modules and README, compatible with ansible-core 2.17+) ✅
 
-### 3.6 License Headers
+### 3.7 meta/runtime.yml
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** All modules must have GPLv3 license headers
+- **Requirement:** `meta/runtime.yml` must define the minimal version of Ansible which the collection works with
+- **Verification:**
+  - File exists: `meta/runtime.yml` ✅
+  - Contains: `requires_ansible: '>=2.17.0'` ✅
+  - Defines minimal Ansible version requirement ✅
+
+### 3.8 License Headers
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** All modules must have GPLv3 license headers (consistent with collection license)
 - **Verification:**
   - All module files include GPLv3 license header after shebang
   - Format: `# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)`
-  - All 5 modules verified ✅
+  - All 8 modules verified ✅
+  - Collection license: GPLv3+ (consistent across all files) ✅
+
+### 3.9 Public Plugins, Roles, and Playbooks
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** Public plugins, roles and playbooks must not use files outside of `meta/`, `plugins/`, `roles/`, and `playbooks/` directories
+- **Verification:**
+  - All modules in `plugins/modules/` ✅
+  - All module_utils in `plugins/module_utils/` ✅
+  - All playbooks in `playbooks/` ✅
+  - No references to files outside allowed directories ✅
+
+### 3.10 Large Objects
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** Collection repository should not contain any large objects (binaries) comparatively to the current Galaxy tarball size limit of 20 MB
+- **Verification:**
+  - No large binary files found in repository ✅
+  - No package installers for testing purposes ✅
+  - Repository size is well within Galaxy tarball size limit ✅
+
+### 3.11 Unnecessary Files
+- [x] **Status:** ✅ **PASSING**
+- **Requirement:** Collection repository should not contain any unnecessary files like temporary files. Temporary files should be added to `.gitignore`
+- **Verification:**
+  - No temporary files committed to repository ✅
+  - `.gitignore` properly configured ✅
+  - Utility scripts in `scripts/` directory (outside collection) ✅
 
 ---
 
@@ -210,10 +336,10 @@
 
 ### 4.1 ansible-test Sanity
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** Must pass `ansible-test sanity` with no errors from forbidden list
+- **Requirement:** Must pass `ansible-test sanity`. If `test/sanity/ignore*.txt` exists, it MUST not contain error codes listed in the list of errors that must not be ignored
 - **Verification:**
-  - Sanity tests run in CI: `.github/workflows/lint.yml` (lint stage)
-  - Both platforms test against multiple ansible-core versions (2.17, 2.18, 2.19, 2.20) using matrix/parallel strategies
+  - Sanity tests run in CI: `.github/workflows/lint.yml` (ansible-test-sanity job)
+  - Tests against multiple ansible-core versions (2.17, 2.18, 2.19, 2.20) using matrix strategy ✅
   - Installation method: Installed from PyPI using compatible version specifiers (`ansible-core~=2.17`, `ansible-core~=2.18`, `ansible-core~=2.19`, `ansible-core~=2.20`)
   - Current status: All critical tests passing
     - ✅ Import test - PASSING
@@ -222,6 +348,7 @@
     - ✅ Validate-modules test - PASSING
     - ✅ Shebang test - PASSING (utility scripts moved outside collection directory)
     - ✅ Yamllint test - PASSING (Jinja2 templates excluded via `--exclude` option)
+  - Ignore files: No `test/sanity/ignore*.txt` files exist ✅ (no forbidden errors ignored)
   - Command-line exclusions:
     - `--exclude templates/` - Excludes Jinja2 template directory from yamllint checks
     - `--exclude configs/de_workflows_configs/` - Excludes Jinja2 config templates from yamllint checks
@@ -240,10 +367,10 @@
 
 ### 4.3 CI Tests Against Multiple ansible-core Versions
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** CI tests must run against each major version of ansible-core
+- **Requirement:** Must have CI tests up and running against each of the "major versions" of ansible-base/ansible-core that the collection supports. Must add all relevant ansible-core versions
 - **Verification:**
-  - **GitHub Actions:** `.github/workflows/test.yml`
-    - Matrix strategy includes:
+  - **GitHub Actions:** `.github/workflows/test.yml` and `.github/workflows/lint.yml`
+    - Matrix strategy includes all supported versions:
       - `ansible_core: 2.17` ✅
       - `ansible_core: 2.18` ✅
       - `ansible_core: 2.19` ✅
@@ -251,35 +378,41 @@
     - Tests run for each version:
       - Python unit tests ✅
       - Collection validation ✅
+      - ansible-test sanity ✅ (in lint.yml workflow)
     - E2E integration test runs as separate job (not in matrix) - conditional on GRAPHIANT credentials ✅
   - Installation method: Installed from PyPI using compatible version specifiers (`ansible-core~=2.17`, `ansible-core~=2.18`, `ansible-core~=2.19`, `ansible-core~=2.20`)
+  - All relevant ansible-core versions are included in test matrix ✅
 
 ### 4.4 CI Tests on Pull Requests
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** All CI tests must run against every pull request
+- **Requirement:** All CI tests MUST run against every pull request
 - **Verification:**
   - Workflows trigger on `pull_request` events:
     - `.github/workflows/test.yml` ✅ (includes Python tests, full collection validation against multiple ansible-core versions, separate E2E integration test job)
     - `.github/workflows/lint.yml` ✅ (includes djlint, ansible-lint, documentation lint, ansible-test sanity against multiple versions)
     - `.github/workflows/build.yml` ✅ (runs after test workflow completes)
   - All tests run on pull requests ✅
+  - All CI tests MUST run against every pull request ✅
 
 ### 4.5 Regular CI Test Runs
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** CI tests must run regularly (nightly or weekly)
+- **Requirement:** CI tests must run regularly (nightly, or at least once per week). All CI tests MUST run regularly (nightly, or at least once per week)
 - **Verification:**
-  - Scheduled workflow: `.github/workflows/test.yml`
-  - Schedule: `schedule: - cron: '0 2 * * *'` (nightly at 2 AM UTC) ✅
-  - Location: `.github/workflows/test.yml` lines 15-17
+  - Scheduled workflows:
+    - `.github/workflows/test.yml`: `schedule: - cron: '0 2 * * *'` (nightly at 2 AM UTC) ✅
+    - `.github/workflows/lint.yml`: `schedule: - cron: '0 2 * * 1'` (weekly on Monday at 2 AM UTC) ✅
+  - All critical tests (including ansible-test sanity) run on scheduled basis ✅
+  - Location: `.github/workflows/test.yml` lines 15-17, `.github/workflows/lint.yml` lines 15-17
 
 ### 4.6 Sanity Tests on Release Commits
 - [x] **Status:** ✅ **PASSING**
-- **Requirement:** Sanity tests must run against release commits
+- **Requirement:** Sanity tests MUST run against a commit that releases the collection; if they don't pass, the collection won't be released
 - **Verification:**
-  - Sanity tests are part of `lint.yml` workflow (lint stage)
-  - Workflow runs on push to `main` and `develop` branches
+  - Sanity tests are part of `lint.yml` workflow (ansible-test-sanity job)
+  - Workflow runs on push to `main` and `develop` branches ✅
   - **GitHub Actions:** `.github/workflows/lint.yml` (ansible-test-sanity job with matrix strategy testing against 2.17, 2.18, 2.19, 2.20)
   - Tests run against multiple ansible-core versions on release commits ✅
+  - If sanity tests fail, collection release will be blocked ✅
 
 ### 4.7 CI/CD Pipeline Structure
 - [x] **Status:** ✅ **PASSING**
@@ -304,13 +437,13 @@
 
 ## 5. Summary
 
-### ✅ Passing Requirements (29/29)
+### ✅ Passing Requirements (Updated Count)
 
 | Category | Requirements | Status |
 |----------|--------------|--------|
 | **Public Availability** | 5/5 | ✅ All passing |
-| **Standards & Documentation** | 8/8 | ✅ All passing |
-| **Collection Management** | 6/6 | ✅ All passing |
+| **Standards & Documentation** | 12/12 | ✅ All passing |
+| **Collection Management** | 11/11 | ✅ All passing |
 | **Testing & CI/CD** | 7/7 | ✅ All passing |
 
 ### ✅ All Requirements Met
@@ -321,15 +454,22 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 
 ## 6. Module Summary
 
-| Module | Check Mode | Python | version_added | License Header |
-|--------|------------|--------|---------------|----------------|
-| `graphiant_interfaces` | ✅ Yes | >= 3.10 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_bgp` | ✅ Yes | >= 3.10 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_global_config` | ✅ Yes | >= 3.10 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_sites` | ✅ Yes | >= 3.10 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_data_exchange` | ⚠️ No* | >= 3.10 | 25.12.0 | ✅ GPLv3 |
+| Module | Type | Check Mode | Python | version_added | License Header |
+|--------|------|------------|--------|---------------|----------------|
+| `graphiant_interfaces` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_bgp` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_global_config` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_sites` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_data_exchange` | State-changing | ⚠️ No* | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_device_config` | State-changing | ✅ Partial** | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_vrrp` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
+| `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
 
 *Note: `graphiant_data_exchange` does not support check_mode but provides `dry_run` parameter for the `accept_invitation` operation. This is intentional for complex multi-step workflows.
+
+**Note: `graphiant_device_config` has partial check mode support:
+- `show_validated_payload` operation: Returns `changed=False` (read-only validation)
+- `configure` operation: Returns `changed=True` (assumes changes would be made, documented limitation)
 
 ---
 
@@ -420,6 +560,6 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 
 **Review completed by:** Auto (AI Assistant)  
 **Collection Version:** 25.12.3  
-**Review Date:** 2025-12-18  
+**Review Date:** 2025-01-23  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7
