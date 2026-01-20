@@ -1,0 +1,470 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# Copyright: (c) 2025, Graphiant Team <support@graphiant.com>
+# GNU General Public License v3.0+ (see COPYING or
+# https://www.gnu.org/licenses/gpl-3.0.txt)
+
+"""
+Ansible module for managing Graphiant LAG configuration.
+
+This module provides LAG interface management capabilities including:
+- Configure LAG on Physical interfaces
+- Add/remove LAG members
+- Update LACP settings
+- Configure LAG subinterfaces
+- Delete LAG subinterfaces
+- Deconfigure LAG
+"""
+
+DOCUMENTATION = r'''
+---
+module: graphiant_lag_interfaces
+short_description: Manage Graphiant LAG (Link Aggregation Group) configuration
+description:
+  - This module provides comprehensive LAG management for Graphiant Edge and
+    Gateway devices.
+  - Supports configuring and deconfiguring LAGs, adding/removing LAG members,
+    updating LACP settings, and managing LAG subinterfaces (VLANs).
+  - All operations use Jinja2 templates for consistent configuration
+    deployment.
+  - Configuration files support Jinja2 templating for dynamic generation.
+version_added: 25.13.0
+notes:
+  - "LAG Operations:"
+  - >
+    - configure: Configure LAG on physical interfaces (and optionally
+      subinterfaces).
+  - >
+    - deconfigure: Delete LAG subinterfaces (if present) and then delete the
+      LAG.
+  - >
+    - add_lag_members / remove_lag_members: Add or remove member interfaces for
+      an existing LAG.
+  - >
+    - update_lacp_configs: Update LACP mode/timer on an existing LAG.
+  - >
+    - add_lag_subinterfaces / delete_lag_subinterfaces: Add or delete VLAN
+      subinterfaces under the LAG.
+  - >
+    Configuration files support Jinja2 templating syntax for dynamic
+    configuration generation.
+  - "The module automatically resolves device names to IDs."
+  - "All operations are idempotent and safe to run multiple times."
+  - >
+    Member interfaces must exist on the device; interface names in the config
+    are resolved to interface IDs via device info.
+options:
+  host:
+    description:
+      - Graphiant portal host URL for API connectivity.
+      - 'Example: "https://api.graphiant.com"'
+    type: str
+    required: true
+    aliases: [ base_url ]
+  username:
+    description:
+      - Graphiant portal username for authentication.
+    type: str
+    required: true
+  password:
+    description:
+      - Graphiant portal password for authentication.
+    type: str
+    required: true
+  config_yaml_file:
+    description:
+      - Path to the LAG configuration YAML file.
+      - Required for all operations.
+      - Can be an absolute path or relative path. Relative paths are resolved
+        using the configured config_path.
+      - Configuration files support Jinja2 templating syntax for dynamic
+        generation.
+      - File must contain LAG definitions with device names, LAG name/alias,
+        segment, mtu, ipv4, ipv6, lacpMode, lacpTimer, member interfaces, and
+        optional subinterfaces.
+    type: str
+    required: true
+  operation:
+    description:
+      - "The specific LAG operation to perform."
+      - "V(configure): Configure LAG for devices in the config file."
+      - >
+        "V(deconfigure): Delete subinterfaces (if present) and then delete the
+        LAG."
+      - "V(add_lag_members): Add member interfaces to an existing LAG."
+      - "V(remove_lag_members): Remove member interfaces from an existing LAG."
+      - "V(update_lacp_configs): Update LACP mode/timer."
+      - "V(add_lag_subinterfaces): Add VLAN subinterfaces under the LAG."
+      - "V(delete_lag_subinterfaces): Delete VLAN subinterfaces under the LAG."
+    type: str
+    choices:
+      - configure
+      - deconfigure
+      - add_lag_members
+      - remove_lag_members
+      - update_lacp_configs
+      - add_lag_subinterfaces
+      - delete_lag_subinterfaces
+  state:
+    description:
+      - "The desired state of the LAG configuration."
+      - "V(present): Maps to V(configure) when O(operation) is not specified."
+      - "V(absent): Maps to V(deconfigure) when O(operation) is not specified."
+    type: str
+    choices: [ present, absent ]
+    default: present
+  detailed_logs:
+    description:
+      - Enable detailed logging output for troubleshooting and monitoring.
+      - When enabled, provides comprehensive logs of all LAG operations.
+      - Logs are captured and included in the result_msg for display using
+        M(ansible.builtin.debug) module.
+    type: bool
+    default: false
+
+attributes:
+  check_mode:
+    description: Supports check mode with partial support.
+    support: partial
+    details: >
+      The module cannot determine whether changes would actually be made
+      without querying the current state via API calls. In check mode, the
+      module
+      assumes changes and returns V(changed=True) for all operations.
+      This means that check mode may report changes even when the
+      configuration is already applied. The module does not perform state
+      comparison in check mode due to API limitations.
+
+requirements:
+  - python >= 3.7
+  - graphiant-sdk >= 25.12.1
+
+seealso:
+  - module: graphiant.naas.graphiant_interfaces
+    description: Manage LAN/WAN interface and circuit configuration
+
+author:
+  - Graphiant Team (@graphiant)
+
+'''
+
+EXAMPLES = r'''
+- name: Configure LAG
+  graphiant.naas.graphiant_lag_interfaces:
+    operation: configure
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+  register: lag_result
+
+- name: Add LAG members
+  graphiant.naas.graphiant_lag_interfaces:
+    operation: add_lag_members
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Remove LAG members
+  graphiant.naas.graphiant_lag_interfaces:
+    operation: remove_lag_members
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Update LACP settings
+  graphiant.naas.graphiant_lag_interfaces:
+    operation: update_lacp_configs
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Configure LAG subinterfaces
+  graphiant.naas.graphiant_lag_interfaces:
+    operation: add_lag_subinterfaces
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Delete LAG subinterfaces
+  graphiant.naas.graphiant_lag_interfaces:
+    operation: delete_lag_subinterfaces
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Deconfigure LAG using state parameter
+  graphiant.naas.graphiant_lag_interfaces:
+    state: absent
+    config_yaml_file: "sample_lag_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+'''
+
+RETURN = r'''
+msg:
+  description:
+    - Result message from the operation, including detailed logs when
+      O(detailed_logs) is enabled.
+  type: str
+  returned: always
+  sample: "Successfully configured LAG interfaces"
+changed:
+  description:
+    - Whether the operation made changes to the system.
+  type: bool
+  returned: always
+  sample: true
+operation:
+  description:
+    - The operation that was performed.
+    - One of configure, deconfigure, add_lag_members, remove_lag_members,
+      update_lacp_configs, add_lag_subinterfaces, or delete_lag_subinterfaces.
+  type: str
+  returned: always
+  sample: "configure"
+config_yaml_file:
+  description:
+    - The LAG configuration file used for the operation.
+  type: str
+  returned: always
+  sample: "sample_lag_interface_config.yaml"
+'''
+
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+
+from ansible_collections.graphiant.naas.plugins.module_utils import (  # noqa: E402
+    graphiant_utils,
+    logging_decorator,
+)
+
+
+@logging_decorator.capture_library_logs
+def execute_with_logging(module, func, *args, **kwargs):
+    """
+    Execute a function with optional detailed logging.
+
+    Args:
+        module: Ansible module instance
+        func: Function to execute
+        *args: Arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
+
+    Returns:
+        dict: Result with 'changed' and 'result_msg' keys
+    """
+    # Extract success_msg from kwargs before passing to func
+    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+
+    try:
+        result = func(*args, **kwargs)
+
+        # If the function returns a dict with 'changed' key, use it
+        if isinstance(result, dict) and 'changed' in result:
+            return {
+                'changed': result['changed'],
+                'result_msg': success_msg,
+                'details': result
+            }
+
+        # Fallback for functions that don't return change status
+        return {
+            'changed': True,
+            'result_msg': success_msg
+        }
+    except Exception as e:
+        raise e
+
+
+def main():
+    """
+    Main function for the Graphiant LAG module.
+    """
+
+    # Define module arguments
+    argument_spec = dict(
+        host=dict(type='str', required=True, aliases=['base_url']),
+        username=dict(type='str', required=True),
+        password=dict(type='str', required=True, no_log=True),
+        config_yaml_file=dict(type='str', required=True),
+        operation=dict(
+            type='str',
+            required=False,
+            choices=[
+                'configure',
+                'deconfigure',
+                'add_lag_members',
+                'remove_lag_members',
+                'update_lacp_configs',
+                'add_lag_subinterfaces',
+                'delete_lag_subinterfaces'
+            ]
+        ),
+        state=dict(
+            type='str',
+            required=False,
+            default='present',
+            choices=['present', 'absent']
+        ),
+        detailed_logs=dict(
+            type='bool',
+            required=False,
+            default=False
+        )
+    )
+
+    # Create Ansible module
+    module = AnsibleModule(
+        argument_spec=argument_spec,
+        supports_check_mode=True
+    )
+
+    # Get parameters
+    params = module.params
+    operation = params.get('operation')
+    state = params.get('state', 'present')
+    config_yaml_file = params['config_yaml_file']
+
+    # Validate that at least one of operation or state is provided
+    if not operation and not state:
+        supported_operations = [
+            'configure',
+            'deconfigure',
+            'add_lag_members',
+            'remove_lag_members',
+            'update_lacp_configs',
+            'add_lag_subinterfaces',
+            'delete_lag_subinterfaces',
+        ]
+        module.fail_json(
+            msg="Either 'operation' or 'state' parameter must be provided. "
+                f"Supported operations: {', '.join(supported_operations)}"
+        )
+
+    # If operation is not specified, use state to determine operation
+    if not operation:
+        if state == 'present':
+            operation = 'configure'
+        elif state == 'absent':
+            operation = 'deconfigure'
+
+    # If operation is specified, it takes precedence over state
+    # No additional mapping needed as operation is explicit
+
+    # Handle check mode
+    if module.check_mode:
+        module.exit_json(
+            changed=True,
+            msg=f"Check mode: Would execute {operation}",
+            operation=operation,
+            config_yaml_file=config_yaml_file
+        )
+
+    try:
+        # Get Graphiant connection
+        connection = graphiant_utils.get_graphiant_connection(params)
+        graphiant_config = connection.graphiant_config
+
+        # Execute the requested operation
+        changed = False
+        result_msg = ""
+
+        if operation == 'configure':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.configure,
+                config_yaml_file,
+                success_msg="Successfully configured LAG interfaces",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'deconfigure':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.deconfigure,
+                config_yaml_file,
+                success_msg="Successfully deconfigured LAG",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'add_lag_members':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.add_lag_members,
+                config_yaml_file,
+                success_msg="Successfully added LAG members",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'remove_lag_members':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.remove_lag_members,
+                config_yaml_file,
+                success_msg="Successfully removed LAG members",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'update_lacp_configs':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.update_lacp_configs,
+                config_yaml_file,
+                success_msg="Successfully updated LACP configuration",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'add_lag_subinterfaces':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.add_lag_subinterfaces,
+                config_yaml_file,
+                success_msg="Successfully configured LAG subinterfaces",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'delete_lag_subinterfaces':
+            result = execute_with_logging(
+                module,
+                graphiant_config.lag_interfaces.delete_lag_subinterfaces,
+                config_yaml_file,
+                success_msg="Successfully deleted LAG subinterfaces",
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        else:
+            module.fail_json(
+                msg=f"Invalid operation: {operation}",
+                operation=operation,
+            )
+
+        # Return success
+        module.exit_json(
+            changed=changed,
+            msg=result_msg,
+            operation=operation,
+            config_yaml_file=config_yaml_file
+        )
+
+    except Exception as e:
+        error_msg = graphiant_utils.handle_graphiant_exception(e, operation)
+        module.fail_json(msg=error_msg, operation=operation)
+
+
+if __name__ == '__main__':
+    main()

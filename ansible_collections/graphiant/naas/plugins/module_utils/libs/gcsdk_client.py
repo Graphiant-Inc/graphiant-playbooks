@@ -1670,3 +1670,28 @@ class GraphiantPortalClient():
         except Exception as e:
             LOG.error("get_global_ipsec_profiles: Unexpected error: %s", e)
             return {}
+
+    def get_device_info(self, device_id: int):
+        """
+        Get device information.
+
+        Args:
+            device_id (int): The device ID
+
+        Returns:
+            API response object
+        """
+        try:
+            LOG.info("get_device_info: Retrieving information for device ID %s", device_id)
+            response = self.api.v1_devices_device_id_get(authorization=self.bearer_token, device_id=device_id)
+            LOG.info("get_device_info: Successfully retrieved information for device ID %s", device_id)
+            return response
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/devices/{device_id}"
+            self._log_api_error(
+                method_name="get_device_info",
+                api_url=api_url,
+                path_params={"device_id": device_id},
+                exception=e
+            )
+            return None

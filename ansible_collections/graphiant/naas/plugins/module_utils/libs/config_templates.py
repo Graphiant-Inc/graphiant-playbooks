@@ -47,6 +47,7 @@ class ConfigTemplates:
     # Template mapping for different configuration types
     TEMPLATE_MAPPING = {
         'interface': 'interface_template.yaml',
+        'lag_interfaces': 'lag_interfaces_template.yaml',
         'circuit': 'circuit_template.yaml',
         'global_prefix_set': 'global_prefix_set_template.yaml',
         'global_bgp_filter': 'global_bgp_routing_policies_template.yaml',
@@ -160,6 +161,10 @@ class ConfigTemplates:
     def render_circuit(self, **kwargs) -> Dict[str, Any]:
         """Render circuit template."""
         return self.render_by_type('circuit', **kwargs)
+
+    def render_lag_interfaces(self, **kwargs) -> Dict[str, Any]:
+        """Render LAG interfaces template."""
+        return self.render_by_type('lag_interfaces', **kwargs)
 
     def render_global_prefix_set(self, **kwargs) -> Dict[str, Any]:
         """Render global prefix set template."""

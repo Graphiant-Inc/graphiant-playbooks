@@ -51,7 +51,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         enterprise_id = graphiant_config.config_utils.gsdk.get_enterprise_id()
-        LOG.info(f"Enterprise ID: {enterprise_id}")
+        LOG.info("Enterprise ID: %s", enterprise_id)
 
     def test_configure_global_lan_segments(self):
         """
@@ -78,7 +78,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         lan_segments = graphiant_config.config_utils.gsdk.get_lan_segments_dict()
-        LOG.info(f"Lan Segments: {lan_segments}")
+        LOG.info("Lan Segments: %s", lan_segments)
 
     def test_configure_global_site_lists(self):
         """
@@ -103,9 +103,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         site_lists = graphiant_config.config_utils.gsdk.get_global_site_lists()
-        LOG.info(f"Global Site Lists: {len(site_lists)} found")
+        LOG.info("Global Site Lists: %s found", len(site_lists))
         for site_list in site_lists:
-            LOG.info(f"Site List: {site_list.name} (ID: {site_list.id})")
+            LOG.info("Site List: %s (ID: %s)", site_list.name, site_list.id)
 
     def test_configure_sites(self):
         """
@@ -138,9 +138,15 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         sites_details = graphiant_config.config_utils.gsdk.get_sites_details()
-        LOG.info(f"Sites Details: {len(sites_details)} sites found")
+        LOG.info("Sites Details: %s sites found", len(sites_details))
         for site in sites_details:
-            LOG.info(f"Site: {site.name} (ID: {site.id}, Edges: {site.edge_count}, Segments: {site.segment_count})")
+            LOG.info(
+                "Site: %s (ID: %s, Edges: %s, Segments: %s)",
+                site.name,
+                site.id,
+                site.edge_count,
+                site.segment_count,
+            )
 
     def test_detach_objects_and_deconfigure_sites(self):
         """
@@ -259,6 +265,62 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
+
+    def test_configure_lag_interfaces(self):
+        """
+        Configure LAG (Link Aggregation Group) on interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.configure("sample_lag_interface_config.yaml")
+
+    def test_update_lacp_configs(self):
+        """
+        Update LACP configurations for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.update_lacp_configs("sample_lag_interface_config.yaml")
+
+    def test_add_lag_members(self):
+        """
+        Add LAG members to interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.add_lag_members("sample_lag_interface_config.yaml")
+
+    def test_remove_lag_members(self):
+        """
+        Remove LAG members from interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.remove_lag_members("sample_lag_interface_config.yaml")
+
+    def test_add_lag_subinterfaces(self):
+        """
+        Configure LAG subinterfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.add_lag_subinterfaces("sample_lag_interface_config.yaml")
+
+    def test_delete_lag_subinterfaces(self):
+        """
+        Delete LAG subinterfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.delete_lag_subinterfaces("sample_lag_interface_config.yaml")
+
+    def test_deconfigure_lag_interfaces(self):
+        """
+        Deconfigure LAG (Link Aggregation Group) from interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config.lag_interfaces.deconfigure("sample_lag_interface_config.yaml")
 
     def test_configure_global_config_prefix_lists(self):
         """
@@ -478,9 +540,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             "de_workflows/output/sample_data_exchange_matches_responses_latest.json"
         )
 
-        LOG.info(f"Testing accept_invitation with config: {config_file}")
+        LOG.info("Testing accept_invitation with config: %s", config_file)
         result = graphiant_config.data_exchange.accept_invitation(config_file, matches_file, dry_run=True)
-        LOG.info(f"Accept invitation result: {result}")
+        LOG.info("Accept invitation result: %s", result)
 
     def test_show_validated_payload_for_device_config(self):
         """
@@ -491,7 +553,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         result = graphiant_config.device_config.show_validated_payload(
             config_yaml_file="sample_device_config_payload.yaml"
         )
-        LOG.info(f"Show validated payload result: {result}")
+        LOG.info("Show validated payload result: %s", result)
 
     def test_configure_device_config(self):
         """
@@ -502,7 +564,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         result = graphiant_config.device_config.configure(
             config_yaml_file="sample_device_config_with_template.yaml",
             template_file="device_config_template.yaml")
-        LOG.info(f"Configure device configuration result: {result}")
+        LOG.info("Configure device configuration result: %s", result)
 
 
 if __name__ == '__main__':
@@ -556,6 +618,10 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))
+
+    # LAG Interface Configuration Management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_lag_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lag_interfaces'))
 
     '''
     # Device Interface Configuration Management

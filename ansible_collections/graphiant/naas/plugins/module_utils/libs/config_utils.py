@@ -143,6 +143,30 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process device interface %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Device interface processing failed: {str(e)}")
 
+    def lag_interfaces(self, config_payload, action="add", **kwargs):
+        """
+        Update the device interfaces section with LAG configuration.
+
+        Args:
+            config_payload (dict): Dictionary to be updated with LAG data.
+            action (str, optional): Action to perform, either "add" or "delete".
+            **kwargs: Additional parameters passed to the template renderer.
+        """
+        self._validate_required_params(kwargs, ['name'])
+        LOG.info("LAG on interfaces: %s %s", action.upper(), kwargs.get('name'))
+
+        try:
+            result = self.template.render_lag_interfaces(action=action, **kwargs)
+            if "lagInterfaces" in result:
+                config_payload["lagInterfaces"].update(result["lagInterfaces"])
+            elif "interfaces" in result:
+                config_payload["interfaces"].update(result["interfaces"])
+            else:
+                LOG.warning("No lagInterfaces found in LAG template result for %s", kwargs.get('name'))
+        except Exception as e:
+            LOG.error("Failed to process LAG on interfaces %s: %s", kwargs.get('name'), str(e))
+            raise ConfigurationError(f"LAG on interfaces processing failed: {str(e)}")
+
     def vrrp_interfaces(self, config_payload, action="add", **kwargs):
         """
         Update the device interfaces section with VRRP configuration.
