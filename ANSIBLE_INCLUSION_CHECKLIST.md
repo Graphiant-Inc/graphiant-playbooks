@@ -89,6 +89,7 @@
     - `graphiant_interfaces.py` ✅
     - `graphiant_sites.py` ✅
     - `graphiant_vrrp.py` ✅
+    - `graphiant_lag_interfaces.py` ✅
 
 ### 2.3.1 Semantic Markup
 - [x] **Status:** ✅ **PASSING**
@@ -105,19 +106,20 @@
   - Return values use `RV()` markup (e.g., `RV(msg)`)
   - File/input names use `I()` markup (e.g., `I(config_file)`)
   - Code/commands use `C()` markup (e.g., `C(/v1/devices/{device_id}/config)`)
-  - All 8 modules verified ✅
+  - All 9 modules verified ✅
 
 ### 2.3.2 Check Mode Support Information
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** All modules must have check mode support information in the `attributes` field
 - **Verification:**
-  - All 8 modules have `attributes:` section with `check_mode:` information:
+  - All 9 modules have `attributes:` section with `check_mode:` information:
     - `graphiant_bgp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
     - `graphiant_data_exchange.py`: `support: none` (with explanation) ✅
     - `graphiant_data_exchange_info.py`: `support: full` ✅ (read-only _info module)
     - `graphiant_device_config.py`: `support: partial` ✅ (show_validated_payload returns changed=False, configure assumes changes)
     - `graphiant_global_config.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
     - `graphiant_interfaces.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+    - `graphiant_lag_interfaces.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
     - `graphiant_sites.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
     - `graphiant_vrrp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
 
@@ -159,6 +161,7 @@
     - `graphiant_interfaces`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_bgp`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_global_config`: `supports_check_mode=True`, `support: partial` ✅
+    - `graphiant_lag_interfaces`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_sites`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_vrrp`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_device_config`: `supports_check_mode=True`, `support: partial` ✅
@@ -232,7 +235,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must have at least one module
 - **Verification:**
-  - Module count: 8 modules
+  - Module count: 9 modules
   - State-changing modules:
     1. `graphiant_interfaces` - Manage interfaces and circuits
     2. `graphiant_bgp` - Manage BGP peering and routing policies
@@ -241,8 +244,9 @@
     5. `graphiant_data_exchange` - Manage Data Exchange workflows
     6. `graphiant_device_config` - Push raw device configurations
     7. `graphiant_vrrp` - Manage VRRP configuration
+    8. `graphiant_lag_interfaces` - Manage LAG (Link Aggregation Group) configuration
   - Information-gathering modules:
-    8. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
+    9. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
 
 ### 3.3 Changelog
 - [x] **Status:** ✅ **PASSING**
@@ -270,6 +274,7 @@
     - `graphiant_interfaces.py`: `version_added: "25.12.0"` ✅
     - `graphiant_sites.py`: `version_added: "25.12.0"` ✅
     - `graphiant_vrrp.py`: `version_added: "25.13.0"` ✅ (newer module)
+    - `graphiant_lag_interfaces.py`: `version_added: "25.13.0"` ✅ (newer module)
 
 ### 3.5 galaxy.yml Tags Field
 - [x] **Status:** ✅ **PASSING**
@@ -463,6 +468,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 | `graphiant_data_exchange` | State-changing | ⚠️ No* | >= 3.7 | 25.12.0 | ✅ GPLv3 |
 | `graphiant_device_config` | State-changing | ✅ Partial** | >= 3.7 | 25.12.0 | ✅ GPLv3 |
 | `graphiant_vrrp` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
+| `graphiant_lag_interfaces` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
 | `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
 
 *Note: `graphiant_data_exchange` does not support check_mode but provides `dry_run` parameter for the `accept_invitation` operation. This is intentional for complex multi-step workflows.
