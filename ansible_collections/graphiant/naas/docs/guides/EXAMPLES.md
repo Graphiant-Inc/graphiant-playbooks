@@ -140,6 +140,42 @@ ansible-playbook playbooks/complete_network_setup.yml
     detailed_logs: true
 ```
 
+## Site-to-Site VPN
+
+Site-to-Site VPN supports static and BGP routing. Preshared keys and BGP MD5 passwords are supplied via Ansible Vault when using the playbook; the vault key must match the VPN `name` in the config. See `configs/vault_secrets.yml.example` and `configs/sample_site_to_site_vpn.yaml`.
+
+### Create Site-to-Site VPN
+
+```yaml
+# playbooks/site_to_site_vpn.yml (create)
+- name: Create Site-to-Site VPN
+  graphiant.naas.graphiant_site_to_site_vpn:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: create
+    site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+    detailed_logs: true
+```
+
+Run with vault (required for create):
+```bash
+ansible-playbook playbooks/site_to_site_vpn.yml --tags create --ask-vault-pass
+# or: --vault-password-file ~/.vault_pass
+```
+
+### Delete Site-to-Site VPN
+
+```yaml
+- name: Delete Site-to-Site VPN
+  graphiant.naas.graphiant_site_to_site_vpn:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: delete
+    site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+```
+
 ## Data Exchange Workflows
 
 The Data Exchange module supports multi-step workflows. Run playbooks in order:

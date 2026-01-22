@@ -12,6 +12,7 @@ This collection provides Ansible modules to automate:
 - Interface and circuit configuration
 - VRRP (Virtual Router Redundancy Protocol) configuration
 - BGP peering management
+- Site-to-Site VPN configuration (static and BGP routing)
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
 - Site management and object attachments
 - Data Exchange workflows
@@ -45,6 +46,7 @@ This collection requires **ansible-core >= 2.17.0**.
 | `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
 | `graphiant_bgp` | Manage BGP peering and routing policies |
+| `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
 | `graphiant_sites` | Manage sites and site attachments |
 | `graphiant_data_exchange` | Manage Data Exchange workflows |
@@ -220,6 +222,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `circuit_management.yml` | Circuit-specific operations |
 | `lan_segments_management.yml` | LAN segment configuration |
 | `site_management.yml` | Site creation and management |
+| `site_to_site_vpn.yml` | Site-to-Site VPN create/delete (uses Ansible Vault for preshared keys) |
 | `site_lists_management.yml` | Site list operations |
 | `credential_examples.yml` | Credential management examples |
 | `device_config_management.yml` | Push raw device configurations (Edge/Gateway/Core) |
@@ -255,6 +258,7 @@ View module documentation with `ansible-doc`:
 ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_vrrp
 ansible-doc graphiant.naas.graphiant_bgp
+ansible-doc graphiant.naas.graphiant_site_to_site_vpn
 ansible-doc graphiant.naas.graphiant_global_config
 ansible-doc graphiant.naas.graphiant_sites
 ansible-doc graphiant.naas.graphiant_data_exchange

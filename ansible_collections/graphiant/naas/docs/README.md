@@ -39,6 +39,7 @@ Module documentation is embedded in the module files themselves. Use `ansible-do
 ```bash
 ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_bgp
+ansible-doc graphiant.naas.graphiant_site_to_site_vpn
 ansible-doc graphiant.naas.graphiant_global_config
 ansible-doc graphiant.naas.graphiant_sites
 ansible-doc graphiant.naas.graphiant_data_exchange

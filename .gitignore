@@ -228,3 +228,6 @@ output/
 # Test configuration files (may contain credentials)
 test/test.ini
 
+# Vault secrets
+ansible_collections/graphiant/naas/configs/vault_secrets.yml
+ansible_collections/graphiant/naas/configs/vault_site_to_site_vpn_secrets.yml
