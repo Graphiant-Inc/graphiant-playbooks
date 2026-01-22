@@ -1,0 +1,65 @@
+---
+- name: Manage Graphiant Site-to-Site VPN configuration
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    # Load vault secrets for encrypted preshared keys
+    # Setup:
+    #   1. Copy the example:
+    #      cp configs/vault_secrets.yml.example configs/vault_secrets.yml
+    #   2. Edit vault_secrets.yml with your actual preshared keys
+    #   3. Encrypt it: ansible-vault encrypt configs/vault_secrets.yml
+    #      Or create directly: ansible-vault create configs/vault_secrets.yml
+    #
+    # Running this playbook:
+    #   ansible-playbook playbooks/site_to_site_vpn.yml --ask-vault-pass
+    #   ansible-playbook playbooks/site_to_site_vpn.yml --vault-password-file ~/.vault_pass
+    - "{{ playbook_dir }}/../configs/vault_secrets.yml"
+  vars:
+    # graphiant_host: "https://api.graphiant.com"
+    # graphiant_username: "{{ vault_graphiant_username }}"
+    # graphiant_password: "{{ vault_graphiant_password }}"
+
+    # Use YAML anchors to avoid repetition
+    graphiant_client_params: &graphiant_client_params
+      host: "{{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}"
+      username: "{{ graphiant_username | default(lookup('env', 'GRAPHIANT_USERNAME')) }}"
+      password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
+      # host: "{{ graphiant_host | default(lookup('ini', 'url file=/absolute/path/credentials.ini section=host')) }}"
+      # username: "{{ graphiant_username | default(lookup('ini', 'username file=/absolute/path/credentials.ini section=credentials')) }}"
+      # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/credentials.ini section=credentials')) }}"
+
+  tasks:
+    # Note: Vault variables are automatically loaded by the manager from vault_secrets.yml
+    # No template rendering needed - the config file is used directly
+    - name: Configure Site-to-Site VPN
+      graphiant.naas.graphiant_site_to_site_vpn:
+        <<: *graphiant_client_params
+        operation: configure
+        site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+        detailed_logs: true
+        state: present
+      register: configure_result
+      tags: ['site_to_site_vpn', 'configure']
+
+    - name: Display Site-to-Site VPN Configuration Results
+      ansible.builtin.debug:
+        msg: "{{ configure_result.msg }}"
+      when: configure_result is defined and configure_result.msg is defined
+      tags: ['site_to_site_vpn', 'configure']
+
+    - name: Deconfigure Site-to-Site VPN
+      graphiant.naas.graphiant_site_to_site_vpn:
+        <<: *graphiant_client_params
+        operation: deconfigure
+        site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+        detailed_logs: true
+        state: absent
+      register: deconfigure_result
+      tags: ['site_to_site_vpn', 'deconfigure']
+
+    - name: Display Site-to-Site VPN Deconfiguration Results
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_result.msg }}"
+      when: deconfigure_result is defined and deconfigure_result.msg is defined
+      tags: ['site_to_site_vpn', 'deconfigure']

@@ -1,0 +1,80 @@
+# Sample Site-to-Site VPN Configuration for Graphiant Playbooks
+# This file demonstrates how to configure site-to-site VPN connections
+#
+# SECURITY: Preshared Keys and MD5 Passwords
+# -------------------------------------------
+# The presharedKey and md5Password are automatically populated from Ansible Vault variables.
+# - Copy vault_secrets.yml.example to vault_secrets.yml, add your keys, encrypt it.
+#   Example: cp configs/vault_secrets.yml.example configs/vault_secrets.yml
+#
+# IMPORTANT: Automatic Vault Lookup by VPN Name
+# - presharedKey and md5Password are automatically looked up from vault using the VPN 'name' field
+# - The vault key MUST match the 'name' field value exactly
+# - Example: If name is 'my-vpn', use 'my-vpn' as the key in vault_secrets.yml
+# - You can omit presharedKey and md5Password fields - they will be auto-populated
+# - This allows multiple VPNs to have different preshared keys and MD5 passwords
+#
+# See: configs/vault_secrets.yml.example for the vault file template
+
+# Vault variables are automatically loaded from vault_secrets.yml by the manager
+# No need to include them here - the manager will read them directly from the vault file
+# Ensure vault_secrets.yml is in the same directory as this config file or in the configs directory
+
+siteToSiteVpn:
+  # Example with Static Routing
+  - edge-1-sdktest:
+    - name: testing-static
+      lan: lan-1-test
+      destinationAddress: "100.0.1.1"
+      # remoteIkePeerIdentity: "" # Optional, Default is destinationAddress if not provided
+      # localIkePeerIdentity: "" # Optional, Default is localAddressV4 if not provided
+      localAddressV4: "169.254.1.1/24"
+      remoteAddressV4: "169.254.1.2/24"
+      # localAddressV6: "2001:db8:1::1/64"
+      # remoteAddressV6: "2001:db8:1::2/64"
+      localCircuit: c-gigabitethernet2-0-0
+      # Default is true(initiator), Options: true(initiator), false(responder)
+      ikeInitiator: false
+      vpnProfile: "global_sdktest" # Default is "Default VPN Profile"
+      # presharedKey is automatically populated from vault using the VPN name above
+      # Just ensure the vault key matches the 'name' field (e.g., 'testing-static')
+      # Options: "ipsec_label_1", "ipsec_label_2", "ipsec_label_3", "ipsec_label_4", "ipsec_label_5", "ipsec_label_6"
+      ipsecLabel: "ipsec_label_1"
+      routing:
+        static:
+          destinationPrefix:
+            - "0.0.0.0/0"
+
+  # Example with BGP Routing
+  - edge-2-sdktest:
+    - name: testing-bgp
+      lan: lan-1-test
+      destinationAddress: "100.0.2.1"
+      # remoteIkePeerIdentity: "" # Optional, Default is destinationAddress if not provided
+      # localIkePeerIdentity: "" # Optional, Default is localAddressV4 if not provided
+      localAddressV4: "169.254.2.1/24"
+      remoteAddressV4: "169.254.2.2/24"
+      # localAddressV6: "2001:db8:1::1/64"
+      # remoteAddressV6: "2001:db8:1::2/64"
+      localCircuit: c-gigabitethernet2-0-0
+      ikeInitiator: true # Options: true(initiator), false(responder)
+      vpnProfile: "global_sdktest"
+      # presharedKey is automatically populated from vault using the VPN name above
+      # Just ensure the vault key matches the 'name' field (e.g., 'testing-bgp')
+      # Options: "ipsec_label_1", "ipsec_label_2", "ipsec_label_3", "ipsec_label_4", "ipsec_label_5", "ipsec_label_6"
+      ipsecLabel: "ipsec_label_2"
+      routing:
+        bgp:
+          peerAsn: 123
+          # sendCommunity: true # Default is true
+          # holdTimer: 180 # Default is 90 seconds
+          # keepaliveTimer: 60 # Default is 30 seconds
+          # md5Password is automatically populated from vault using the VPN name above
+          # Just ensure the vault key matches the 'name' field (e.g., 'testing-bgp')
+          # Or set to null explicitly if not needed:
+          #   md5Password: null
+          addressFamilies:
+            ipv4:
+              addressFamily: ipv4
+              # inboundPolicy: null # Default is null
+              # outboundPolicy: null # Default is null
