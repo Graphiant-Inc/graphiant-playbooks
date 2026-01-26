@@ -29,28 +29,47 @@ description:
   - All operations use Jinja2 templates for consistent configuration
     deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
+  - All operations are idempotent - safe to run multiple times without
+    causing errors or unintended changes.
 version_added: 25.13.0
 notes:
   - "LAG Operations:"
   - >
     - configure: Configure LAG on physical interfaces (and optionally
-      subinterfaces).
+      subinterfaces). Idempotent - creates new LAGs or updates existing ones.
   - >
-    - deconfigure: Delete LAG subinterfaces (if present) and then delete the
-      LAG.
+    - deconfigure: Delete ALL subinterfaces (if present) and then delete the
+      main LAG interface. This is a complete cleanup operation that removes
+      everything. Idempotent - skips non-existent LAGs and subinterfaces.
   - >
-    - add_lag_members / remove_lag_members: Add or remove member interfaces for
-      an existing LAG.
+    - add_lag_members: Add member interfaces to an existing LAG. Idempotent -
+      skips members already added.
   - >
-    - update_lacp_configs: Update LACP mode/timer on an existing LAG.
+    - remove_lag_members: Remove member interfaces from an existing LAG.
+      Idempotent - skips members already removed.
   - >
-    - add_lag_subinterfaces / delete_lag_subinterfaces: Add or delete VLAN
-      subinterfaces under the LAG.
+    - update_lacp_configs: Update LACP mode/timer. Idempotent - skips if
+      config already matches desired state.
+  - >
+    - delete_lag_subinterfaces: Delete specified VLAN subinterfaces under the
+      LAG. Only deletes subinterfaces listed in the config file. Idempotent -
+      skips non-existent LAGs and subinterfaces.
   - >
     Configuration files support Jinja2 templating syntax for dynamic
     configuration generation.
   - "The module automatically resolves device names to IDs."
-  - "All operations are idempotent and safe to run multiple times."
+  - "Idempotency Details:"
+  - >
+    The module queries existing LAG state before making changes. For configure
+    operations, duplicate alias assignments are automatically handled by
+    removing the alias from the payload when it matches the existing alias.
+    For member operations, existing members are checked and only necessary
+    changes are applied. For LACP updates, current mode/timer are compared
+    before pushing configuration. For deconfigure, all existing subinterfaces
+    are automatically detected and deleted before removing the main LAG.
+    For delete_lag_subinterfaces, only specified subinterfaces are deleted. For deconfigure, all existing subinterfaces
+    are automatically detected and deleted before removing the main LAG.
+    For delete_lag_subinterfaces, only specified subinterfaces are deleted.
   - >
     Member interfaces must exist on the device; interface names in the config
     are resolved to interface IDs via device info.
@@ -72,7 +91,7 @@ options:
       - Graphiant portal password for authentication.
     type: str
     required: true
-  config_yaml_file:
+  lag_config_file:
     description:
       - Path to the LAG configuration YAML file.
       - Required for all operations.
@@ -90,13 +109,13 @@ options:
       - "The specific LAG operation to perform."
       - "V(configure): Configure LAG for devices in the config file."
       - >
-        "V(deconfigure): Delete subinterfaces (if present) and then delete the
-        LAG."
+        "V(deconfigure): Delete ALL subinterfaces (if present) and then delete
+        the main LAG interface. Complete cleanup operation."
       - "V(add_lag_members): Add member interfaces to an existing LAG."
       - "V(remove_lag_members): Remove member interfaces from an existing LAG."
       - "V(update_lacp_configs): Update LACP mode/timer."
-      - "V(add_lag_subinterfaces): Add VLAN subinterfaces under the LAG."
       - "V(delete_lag_subinterfaces): Delete VLAN subinterfaces under the LAG."
+      - "Note: To add/configure LAG subinterfaces, use V(configure) operation with subinterfaces in the config file."
     type: str
     choices:
       - configure
@@ -104,7 +123,6 @@ options:
       - add_lag_members
       - remove_lag_members
       - update_lacp_configs
-      - add_lag_subinterfaces
       - delete_lag_subinterfaces
   state:
     description:
@@ -153,7 +171,7 @@ EXAMPLES = r'''
 - name: Configure LAG
   graphiant.naas.graphiant_lag_interfaces:
     operation: configure
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -163,7 +181,7 @@ EXAMPLES = r'''
 - name: Add LAG members
   graphiant.naas.graphiant_lag_interfaces:
     operation: add_lag_members
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -171,7 +189,7 @@ EXAMPLES = r'''
 - name: Remove LAG members
   graphiant.naas.graphiant_lag_interfaces:
     operation: remove_lag_members
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -179,15 +197,15 @@ EXAMPLES = r'''
 - name: Update LACP settings
   graphiant.naas.graphiant_lag_interfaces:
     operation: update_lacp_configs
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
 
-- name: Configure LAG subinterfaces
+- name: Configure LAG subinterfaces (use configure operation with subinterfaces in config)
   graphiant.naas.graphiant_lag_interfaces:
-    operation: add_lag_subinterfaces
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    operation: configure
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -195,7 +213,7 @@ EXAMPLES = r'''
 - name: Delete LAG subinterfaces
   graphiant.naas.graphiant_lag_interfaces:
     operation: delete_lag_subinterfaces
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -203,7 +221,7 @@ EXAMPLES = r'''
 - name: Deconfigure LAG using state parameter
   graphiant.naas.graphiant_lag_interfaces:
     state: absent
-    config_yaml_file: "sample_lag_interface_config.yaml"
+    lag_config_file: "sample_lag_interface_config.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -227,11 +245,11 @@ operation:
   description:
     - The operation that was performed.
     - One of configure, deconfigure, add_lag_members, remove_lag_members,
-      update_lacp_configs, add_lag_subinterfaces, or delete_lag_subinterfaces.
+      update_lacp_configs, or delete_lag_subinterfaces.
   type: str
   returned: always
   sample: "configure"
-config_yaml_file:
+lag_config_file:
   description:
     - The LAG configuration file used for the operation.
   type: str
@@ -294,7 +312,7 @@ def main():
         host=dict(type='str', required=True, aliases=['base_url']),
         username=dict(type='str', required=True),
         password=dict(type='str', required=True, no_log=True),
-        config_yaml_file=dict(type='str', required=True),
+        lag_config_file=dict(type='str', required=True),
         operation=dict(
             type='str',
             required=False,
@@ -304,7 +322,6 @@ def main():
                 'add_lag_members',
                 'remove_lag_members',
                 'update_lacp_configs',
-                'add_lag_subinterfaces',
                 'delete_lag_subinterfaces'
             ]
         ),
@@ -331,7 +348,7 @@ def main():
     params = module.params
     operation = params.get('operation')
     state = params.get('state', 'present')
-    config_yaml_file = params['config_yaml_file']
+    lag_config_file = params['lag_config_file']
 
     # Validate that at least one of operation or state is provided
     if not operation and not state:
@@ -341,7 +358,6 @@ def main():
             'add_lag_members',
             'remove_lag_members',
             'update_lacp_configs',
-            'add_lag_subinterfaces',
             'delete_lag_subinterfaces',
         ]
         module.fail_json(
@@ -365,7 +381,7 @@ def main():
             changed=True,
             msg=f"Check mode: Would execute {operation}",
             operation=operation,
-            config_yaml_file=config_yaml_file
+            lag_config_file=lag_config_file
         )
 
     try:
@@ -381,7 +397,7 @@ def main():
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.configure,
-                config_yaml_file,
+                lag_config_file,
                 success_msg="Successfully configured LAG interfaces",
             )
             changed = result['changed']
@@ -391,7 +407,7 @@ def main():
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.deconfigure,
-                config_yaml_file,
+                lag_config_file,
                 success_msg="Successfully deconfigured LAG",
             )
             changed = result['changed']
@@ -401,7 +417,7 @@ def main():
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.add_lag_members,
-                config_yaml_file,
+                lag_config_file,
                 success_msg="Successfully added LAG members",
             )
             changed = result['changed']
@@ -411,7 +427,7 @@ def main():
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.remove_lag_members,
-                config_yaml_file,
+                lag_config_file,
                 success_msg="Successfully removed LAG members",
             )
             changed = result['changed']
@@ -421,18 +437,8 @@ def main():
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.update_lacp_configs,
-                config_yaml_file,
+                lag_config_file,
                 success_msg="Successfully updated LACP configuration",
-            )
-            changed = result['changed']
-            result_msg = result['result_msg']
-
-        elif operation == 'add_lag_subinterfaces':
-            result = execute_with_logging(
-                module,
-                graphiant_config.lag_interfaces.add_lag_subinterfaces,
-                config_yaml_file,
-                success_msg="Successfully configured LAG subinterfaces",
             )
             changed = result['changed']
             result_msg = result['result_msg']
@@ -441,7 +447,7 @@ def main():
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.delete_lag_subinterfaces,
-                config_yaml_file,
+                lag_config_file,
                 success_msg="Successfully deleted LAG subinterfaces",
             )
             changed = result['changed']
@@ -458,7 +464,7 @@ def main():
             changed=changed,
             msg=result_msg,
             operation=operation,
-            config_yaml_file=config_yaml_file
+            lag_config_file=lag_config_file
         )
 
     except Exception as e:

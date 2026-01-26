@@ -33,9 +33,14 @@ notes:
   - "  - Circuits only: Update circuit configurations including static routes without touching interfaces."
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves device names to IDs and validates configurations."
-  - "All operations are idempotent and safe to run multiple times."
-  - "For WAN operations, deconfigure_circuits should be run before deconfigure_wan_circuits_interfaces
-  to remove static routes first."
+  - "Deconfigure operations are idempotent and safe to run multiple times."
+  - "Configure operations always push the desired config (they may report changed even if the device is already configured)."
+  - "WAN static-route cleanup (important):"
+  - "  - Detaching a WAN interface from a circuit may be treated by the backend as a circuit removal."
+  - "    If that circuit still has static routes, the operation can fail with:"
+  - "    'error removing circuit \"<name>\". Remove static routes first.'"
+  - "  - V(deconfigure_wan_circuits_interfaces) and V(deconfigure_interfaces) automatically remove static routes first (when a circuit config is provided)."
+  - "  - Use V(deconfigure_circuits) when you only want to remove static routes and keep interfaces/circuits attached."
 options:
   host:
     description:
@@ -77,11 +82,11 @@ options:
     description:
       - "The specific interface operation to perform."
       - "V(configure_interfaces): Configure all interfaces (LAN and WAN) in one operation."
-      - "V(deconfigure_interfaces): Deconfigure all interfaces. Resets parent interface to default LAN and deletes subinterfaces."
+      - "V(deconfigure_interfaces): Deconfigure all interfaces. Removes WAN static routes first (when circuit config provided), then resets parent interface to default LAN and deletes subinterfaces."
       - "V(configure_lan_interfaces): Configure LAN interfaces (subinterfaces) only."
       - "V(deconfigure_lan_interfaces): Deconfigure LAN interfaces (subinterfaces) only."
       - "V(configure_wan_circuits_interfaces): Configure WAN circuits and interfaces together."
-      - "V(deconfigure_wan_circuits_interfaces): Deconfigure WAN circuits and interfaces together."
+      - "V(deconfigure_wan_circuits_interfaces): Deconfigure WAN circuits and interfaces together (two-stage: static routes first, then interface reset)."
       - "V(configure_circuits): Configure circuits only. Can be called separately after interface is configured."
       - "V(deconfigure_circuits): Deconfigure circuits only. Removes static routes if any."
     type: str
@@ -104,9 +109,9 @@ options:
     default: present
   circuits_only:
     description:
-      - If V(true), only circuits are affected in deconfigure operations.
-      - Used with V(deconfigure_interfaces) and V(deconfigure_wan_circuits_interfaces) operations.
-      - When V(true), static routes are removed but interfaces remain configured.
+      - If V(true), perform a circuits-only deconfigure (static route removal) and skip interface changes.
+      - Supported for V(deconfigure_interfaces) and V(deconfigure_wan_circuits_interfaces).
+      - When V(true), static routes are removed from referenced circuits, but interfaces remain configured.
     type: bool
     default: false
   detailed_logs:
@@ -233,7 +238,8 @@ msg:
 changed:
   description:
     - Whether the operation made changes to the system.
-    - V(true) for all configure/deconfigure operations.
+    - Configure operations typically return V(true) because the configuration is pushed via PUT.
+    - Deconfigure operations may return V(false) when nothing needs to be removed (idempotent).
   type: bool
   returned: always
   sample: true

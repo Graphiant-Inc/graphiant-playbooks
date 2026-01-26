@@ -178,10 +178,16 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.configure_wan_circuits_interfaces(
+        result = graphiant_config.interfaces.configure_wan_circuits_interfaces(
             circuit_config_file="sample_circuit_config.yaml",
             interface_config_file="sample_interface_config.yaml"
         )
+        LOG.info("Configure WAN circuits and interfaces result: %s", result)
+        result = graphiant_config.interfaces.configure_wan_circuits_interfaces(
+            circuit_config_file="sample_circuit_config.yaml",
+            interface_config_file="sample_interface_config.yaml"
+        )
+        LOG.info("Configure WAN circuits and interfaces result (rerun check): %s", result)
 
     def test_configure_circuits(self):
         """
@@ -189,9 +195,14 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.configure_circuits(
+        result = graphiant_config.interfaces.configure_circuits(
             circuit_config_file="sample_circuit_config.yaml",
             interface_config_file="sample_interface_config.yaml")
+        LOG.info("Configure Circuits result: %s", result)
+        result = graphiant_config.interfaces.configure_circuits(
+            circuit_config_file="sample_circuit_config.yaml",
+            interface_config_file="sample_interface_config.yaml")
+        LOG.info("Configure Circuits result (rerun check): %s", result)
 
     def test_deconfigure_circuits(self):
         """
@@ -199,9 +210,15 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.deconfigure_circuits(
+        result = graphiant_config.interfaces.deconfigure_circuits(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
+        LOG.info("Deconfigure Circuits result: %s", result)
+        result = graphiant_config.interfaces.deconfigure_circuits(
+            interface_config_file="sample_interface_config.yaml",
+            circuit_config_file="sample_circuit_config.yaml")
+        LOG.info("Deconfigure Circuits result (rerun check): %s", result)
+        assert result['changed'] is False, "Deconfigure circuits idempotency failed"
 
     def test_deconfigure_wan_circuits_interfaces(self):
         """
@@ -209,10 +226,17 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.deconfigure_wan_circuits_interfaces(
+        result = graphiant_config.interfaces.deconfigure_wan_circuits_interfaces(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml"
         )
+        LOG.info("Deconfigure WAN circuits and interfaces result: %s", result)
+        result = graphiant_config.interfaces.deconfigure_wan_circuits_interfaces(
+            interface_config_file="sample_interface_config.yaml",
+            circuit_config_file="sample_circuit_config.yaml"
+        )
+        LOG.info("Deconfigure WAN circuits and interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure WAN circuits and interfaces idempotency failed"
 
     def test_configure_lan_interfaces(self):
         """
@@ -220,7 +244,10 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.configure_lan_interfaces("sample_interface_config.yaml")
+        result = graphiant_config.interfaces.configure_lan_interfaces("sample_interface_config.yaml")
+        LOG.info("Configure LAN interfaces result: %s", result)
+        result = graphiant_config.interfaces.configure_lan_interfaces("sample_interface_config.yaml")
+        LOG.info("Configure LAN interfaces result (rerun check): %s", result)
 
     def test_deconfigure_lan_interfaces(self):
         """
@@ -228,7 +255,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.deconfigure_lan_interfaces("sample_interface_config.yaml")
+        result = graphiant_config.interfaces.deconfigure_lan_interfaces("sample_interface_config.yaml")
+        LOG.info("Deconfigure LAN interfaces result: %s", result)
+        result = graphiant_config.interfaces.deconfigure_lan_interfaces("sample_interface_config.yaml")
+        LOG.info("Deconfigure LAN interfaces result (rerun check): %s", result)
+        assert result['changed'] is False, "Deconfigure LAN interfaces idempotency failed"
 
     def test_configure_interfaces(self):
         """
@@ -236,9 +267,14 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.configure_interfaces(
+        result = graphiant_config.interfaces.configure_interfaces(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
+        LOG.info("Configure Interfaces result: %s", result)
+        result = graphiant_config.interfaces.configure_interfaces(
+            interface_config_file="sample_interface_config.yaml",
+            circuit_config_file="sample_circuit_config.yaml")
+        LOG.info("Configure Interfaces result (rerun check): %s", result)
 
     def test_deconfigure_interfaces(self):
         """
@@ -246,9 +282,15 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.interfaces.deconfigure_interfaces(
+        result = graphiant_config.interfaces.deconfigure_interfaces(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
+        LOG.info("Deconfigure Interfaces result: %s", result)
+        result = graphiant_config.interfaces.deconfigure_interfaces(
+            interface_config_file="sample_interface_config.yaml",
+            circuit_config_file="sample_circuit_config.yaml")
+        LOG.info("Deconfigure Interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure Interfaces idempotency failed"
 
     def test_configure_vrrp_interfaces(self):
         """
@@ -256,7 +298,10 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
+        result = graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
+        LOG.info("Configure VRRP interfaces result: %s", result)
+        result = graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
+        LOG.info("Configure VRRP interfaces result (rerun check): %s", result)
 
     def test_deconfigure_vrrp_interfaces(self):
         """
@@ -264,7 +309,23 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
+        result = graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
+        LOG.info("Deconfigure VRRP interfaces result: %s", result)
+        result = graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
+        LOG.info("Deconfigure VRRP interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure VRRP interfaces idempotency failed"
+
+    def test_enable_vrrp_interfaces(self):
+        """
+        Enable existing VRRP (Virtual Router Redundancy Protocol) configurations on interfaces for multiple devices.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.vrrp_interfaces.enable_vrrp_interfaces("sample_vrrp_config.yaml")
+        LOG.info("Enable VRRP interfaces result: %s", result)
+        result = graphiant_config.vrrp_interfaces.enable_vrrp_interfaces("sample_vrrp_config.yaml")
+        LOG.info("Enable VRRP interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Enable VRRP interfaces idempotency failed"
 
     def test_configure_lag_interfaces(self):
         """
@@ -272,7 +333,10 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.configure("sample_lag_interface_config.yaml")
+        result = graphiant_config.lag_interfaces.configure("sample_lag_interface_config.yaml")
+        LOG.info("Configure LAG interfaces result: %s", result)
+        result = graphiant_config.lag_interfaces.configure("sample_lag_interface_config.yaml")
+        LOG.info("Configure LAG interfaces result (rerun check): %s", result)
 
     def test_update_lacp_configs(self):
         """
@@ -280,7 +344,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.update_lacp_configs("sample_lag_interface_config.yaml")
+        result = graphiant_config.lag_interfaces.update_lacp_configs("sample_lag_interface_config.yaml")
+        LOG.info("Update LACP configurations result: %s", result)
+        result = graphiant_config.lag_interfaces.update_lacp_configs("sample_lag_interface_config.yaml")
+        LOG.info("Update LACP configurations result (idempotency check): %s", result)
+        assert result['changed'] is False, "Update LACP configurations idempotency failed"
 
     def test_add_lag_members(self):
         """
@@ -288,7 +356,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.add_lag_members("sample_lag_interface_config.yaml")
+        result = graphiant_config.lag_interfaces.add_lag_members("sample_lag_interface_config.yaml")
+        LOG.info("Add LAG members result: %s", result)
+        result = graphiant_config.lag_interfaces.add_lag_members("sample_lag_interface_config.yaml")
+        LOG.info("Add LAG members result (idempotency check): %s", result)
+        assert result['changed'] is False, "Add LAG members idempotency failed"
 
     def test_remove_lag_members(self):
         """
@@ -296,15 +368,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.remove_lag_members("sample_lag_interface_config.yaml")
-
-    def test_add_lag_subinterfaces(self):
-        """
-        Configure LAG subinterfaces for multiple devices.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.add_lag_subinterfaces("sample_lag_interface_config.yaml")
+        result = graphiant_config.lag_interfaces.remove_lag_members("sample_lag_interface_config.yaml")
+        LOG.info("Remove LAG members result: %s", result)
+        result = graphiant_config.lag_interfaces.remove_lag_members("sample_lag_interface_config.yaml")
+        LOG.info("Remove LAG members result (idempotency check): %s", result)
+        assert result['changed'] is False, "Remove LAG members idempotency failed"
 
     def test_delete_lag_subinterfaces(self):
         """
@@ -312,7 +380,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.delete_lag_subinterfaces("sample_lag_interface_config.yaml")
+        result = graphiant_config.lag_interfaces.delete_lag_subinterfaces("sample_lag_interface_config.yaml")
+        LOG.info("Delete LAG subinterfaces result: %s", result)
+        result = graphiant_config.lag_interfaces.delete_lag_subinterfaces("sample_lag_interface_config.yaml")
+        LOG.info("Delete LAG subinterfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Delete LAG subinterfaces idempotency failed"
 
     def test_deconfigure_lag_interfaces(self):
         """
@@ -320,7 +392,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.lag_interfaces.deconfigure("sample_lag_interface_config.yaml")
+        result = graphiant_config.lag_interfaces.deconfigure("sample_lag_interface_config.yaml")
+        LOG.info("Deconfigure LAG interfaces result: %s", result)
+        result = graphiant_config.lag_interfaces.deconfigure("sample_lag_interface_config.yaml")
+        LOG.info("Deconfigure LAG interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure LAG interfaces idempotency failed"
 
     def test_configure_global_config_prefix_lists(self):
         """
@@ -619,25 +695,29 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))
 
-    # LAG Interface Configuration Management
-    suite.addTest(TestGraphiantPlaybooks('test_configure_lag_interfaces'))
-    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lag_interfaces'))
-
-    '''
     # Device Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lan_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lan_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_wan_circuits_interfaces'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_circuits'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_circuits'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_circuits'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_wan_circuits_interfaces'))
-    # To configure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
+    # suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
+
     # VRRP Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_vrrp_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vrrp_interfaces'))
-    # To deconfigure all interfaces (reset parent interface to default lan and delete subinterfaces)
-    # suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_enable_vrrp_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vrrp_interfaces'))
+
+    # LAG Interface Configuration Management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_lag_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_lacp_configs'))
+    suite.addTest(TestGraphiantPlaybooks('test_remove_lag_members'))
+    suite.addTest(TestGraphiantPlaybooks('test_add_lag_members'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_lag_subinterfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lag_interfaces'))
 
     # Global Configuration Management and BGP Peering
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
@@ -671,11 +751,10 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services'))
 
     # To deconfigure all interfaces
-    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_circuits'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
 
     # Device Configuration Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_show_validated_payload_for_device_config'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_config'))
-    '''
+
     runner = unittest.TextTestRunner(verbosity=2).run(suite)
