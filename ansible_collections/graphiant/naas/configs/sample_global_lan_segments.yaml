@@ -18,3 +18,15 @@ lan_segments:
 
   - name: "lan-8-test"
     description: "LAN segment for testing"
+
+  - name: "lag-test"
+    description: "LAN segment for testing lag interface"
+
+  - name: "lag-test-2"
+    description: "LAN segment for testing lag interface"
+
+  - name: "lag-test-101"
+    description: "LAN segment for testing lag interface"
+
+  - name: "lag-test-102"
+    description: "LAN segment for testing lag interface"

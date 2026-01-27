@@ -1,6 +1,6 @@
 # VRRP Configuration Parameters:
 # ==============================
-# interfaceName: Name of the interface (e.g., "GigabitEthernet7/0/0")
+# name: Name of the interface (e.g., "GigabitEthernet7/0/0")
 # vlan: (optional) VLAN ID of the subinterface. Omit for main interface VRRP.
 # vrrp_ipv4 / vrrp_ipv6:
 #   enabled: true/false - Enable or disable VRRP group
@@ -17,14 +17,14 @@
 vrrp_config:
   # Edge Device 1: Configure VRRP on main interface
   - edge-1-sdktest:
-    - interfaceName: GigabitEthernet7/0/0
+    - name: GigabitEthernet7/0/0
       # No vlan specified = main interface
       # VRRP IPv4 configuration
       vrrp_ipv4:
         enabled: true
         virtualRouterId: 1
         priority: 120
-        virtualIp: "10.1.1.100"
+        virtualIp: "10.1.11.100"
         preempt: true
         allowInterOperability: true
         trackedInterfaces:
@@ -33,14 +33,14 @@ vrrp_config:
 
   # Edge Device 2: Configure VRRP on subinterface (VLAN)
   - edge-2-sdktest:
-    - interfaceName: GigabitEthernet8/0/0
+    - name: GigabitEthernet8/0/0
       vlan: 28
       # VRRP IPv4 configuration
       vrrp_ipv4:
         enabled: true
         virtualRouterId: 10
         priority: 120
-        virtualIp: "10.2.7.100"
+        virtualIp: "10.3.177.100"
         preempt: true
         allowInterOperability: false
         trackedInterfaces:
@@ -51,20 +51,20 @@ vrrp_config:
         enabled: true
         virtualRouterId: 11
         priority: 120
-        virtualIp: "2001:10:2:7::100"
+        virtualIp: "2001:10:3:177::100"
         preempt: false
         allowInterOperability: false
 
   # Edge Device 3: Configure VRRP on subinterface
   - edge-3-sdktest:
     # Subinterface VRRP
-    - interfaceName: GigabitEthernet8/0/0
+    - name: GigabitEthernet8/0/0
       vlan: 28
       vrrp_ipv4:
-        enabled: true
+        enabled: false
         virtualRouterId: 10
         priority: 100
-        virtualIp: "10.2.7.100"
+        virtualIp: "10.3.177.100"
         preempt: true
         allowInterOperability: false
         trackedInterfaces:
@@ -74,6 +74,6 @@ vrrp_config:
         enabled: true
         virtualRouterId: 11
         priority: 110
-        virtualIp: "2001:10:2:7::100"
+        virtualIp: "2001:10:3:177::100"
         preempt: false
         allowInterOperability: false

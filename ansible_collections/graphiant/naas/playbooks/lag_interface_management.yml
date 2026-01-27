@@ -17,11 +17,14 @@
       # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/credentials.ini section=credentials')) }}"
 
   tasks:
+    # Note: All LAG operations are idempotent - safe to run multiple times
+    # The module automatically checks existing state and skips if already configured/added/removed/updated
+
     - name: Configure LAG interfaces (LAG + optional subinterfaces)
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: configure
-        config_yaml_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "sample_lag_interface_config.yaml"
         detailed_logs: true
         state: present
       register: configure_result
@@ -37,7 +40,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: add_lag_members
-        config_yaml_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "sample_lag_interface_config.yaml"
         detailed_logs: true
       register: add_members_result
       tags: ['add_lag_members']
@@ -52,7 +55,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: remove_lag_members
-        config_yaml_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "sample_lag_interface_config.yaml"
         detailed_logs: true
       register: remove_members_result
       tags: ['remove_lag_members']
@@ -67,7 +70,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: update_lacp_configs
-        config_yaml_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "sample_lag_interface_config.yaml"
         detailed_logs: true
       register: update_lacp_result
       tags: ['update_lacp_configs']
@@ -78,26 +81,12 @@
       when: update_lacp_result is defined and update_lacp_result.msg is defined
       tags: ['update_lacp_configs']
 
-    - name: Configure LAG subinterfaces (VLANs)
-      graphiant.naas.graphiant_lag_interfaces:
-        <<: *graphiant_client_params
-        operation: add_lag_subinterfaces
-        config_yaml_file: "sample_lag_interface_config.yaml"
-        detailed_logs: true
-      register: add_subif_result
-      tags: ['add_lag_subinterfaces']
-
-    - name: Display Configure LAG Subinterfaces Results
-      ansible.builtin.debug:
-        msg: "{{ add_subif_result.msg }}"
-      when: add_subif_result is defined and add_subif_result.msg is defined
-      tags: ['add_lag_subinterfaces']
-
     - name: Delete LAG subinterfaces (VLANs)
+      # Idempotent: Skips if LAG or subinterface doesn't exist
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: delete_lag_subinterfaces
-        config_yaml_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "sample_lag_interface_config.yaml"
         detailed_logs: true
       register: delete_subif_result
       tags: ['delete_lag_subinterfaces']
@@ -112,7 +101,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: deconfigure
-        config_yaml_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "sample_lag_interface_config.yaml"
         detailed_logs: true
         state: absent
       register: deconfigure_result

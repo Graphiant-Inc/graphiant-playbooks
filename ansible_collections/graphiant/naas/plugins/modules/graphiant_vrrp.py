@@ -9,7 +9,8 @@ Ansible module for managing Graphiant VRRP (Virtual Router Redundancy Protocol) 
 
 This module provides VRRP management capabilities including:
 - VRRP configuration on main interfaces and subinterfaces
-- VRRP deconfiguration
+- VRRP deconfiguration (disable)
+- VRRP enable (enable existing configurations)
 """
 
 DOCUMENTATION = r'''
@@ -18,17 +19,32 @@ module: graphiant_vrrp
 short_description: Manage Graphiant VRRP (Virtual Router Redundancy Protocol) configuration
 description:
   - This module provides comprehensive VRRP management for Graphiant Edge devices.
-  - Supports VRRP configuration and deconfiguration on both main interfaces and subinterfaces (VLANs).
+  - Supports VRRP configuration, deconfiguration, and enable operations on both main interfaces and subinterfaces (VLANs).
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
+  - All operations are idempotent - safe to run multiple times without causing errors or unintended changes.
 version_added: "25.13.0"
 notes:
   - "VRRP Operations:"
-  - "  - Configure: Configure VRRP groups on interfaces and subinterfaces."
-  - "  - Deconfigure: Remove VRRP groups from interfaces and subinterfaces."
-  - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
+  - >
+    - configure: Configure VRRP groups on interfaces and subinterfaces.
+      Creates new VRRP configurations with specified virtual router IDs and IP addresses.
+  - >
+    - deconfigure: Disable VRRP groups from interfaces and subinterfaces.
+      Idempotent - skips if VRRP is already disabled.
+  - >
+    - enable: Enable existing VRRP configurations. Fails if VRRP doesn't exist.
+      Idempotent - skips if already enabled.
+  - >
+    Configuration files support Jinja2 templating syntax for dynamic
+    configuration generation.
   - "The module automatically resolves device names to IDs."
-  - "All operations are idempotent and safe to run multiple times."
+  - "Idempotency Details:"
+  - >
+    The module queries existing VRRP state before making changes. For deconfigure
+    operations, it checks if VRRP is already disabled and skips if so. For enable
+    operations, it checks if VRRP is already enabled and skips if so. This ensures
+    safe repeated execution without errors.
   - "Interfaces must be configured first before applying VRRP using M(graphiant.naas.graphiant_interfaces) module."
 options:
   host:
@@ -62,10 +78,12 @@ options:
       - "The specific VRRP operation to perform."
       - "V(configure): Configure VRRP groups on interfaces and subinterfaces."
       - "V(deconfigure): Deconfigure VRRP groups from interfaces and subinterfaces."
+      - "V(enable): Enable existing VRRP configurations. Fails if VRRP doesn't exist. Idempotent - skips if already enabled."
     type: str
     choices:
       - configure
       - deconfigure
+      - enable
   state:
     description:
       - "The desired state of the VRRP configuration."
@@ -89,7 +107,7 @@ attributes:
     details: >
       The module cannot accurately determine whether changes would actually be made without
       querying the current state via API calls. In check mode, the module assumes that changes
-      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure)).
+      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure), V(enable)).
       This means that check mode may report changes even when the configuration is already
       applied. The module does not perform state comparison in check mode due to API limitations.
 
@@ -140,6 +158,15 @@ EXAMPLES = r'''
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
+
+- name: Enable existing VRRP configuration
+  graphiant.naas.graphiant_vrrp:
+    operation: enable
+    vrrp_config_file: "sample_vrrp_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
 '''
 
 RETURN = r'''
@@ -152,14 +179,15 @@ msg:
 changed:
   description:
     - Whether the operation made changes to the system.
-    - V(true) for all configure/deconfigure operations.
+    - V(true) when VRRP configuration was applied, enabled, or disabled.
+    - V(false) when operation was skipped due to idempotency (e.g., already enabled/disabled).
   type: bool
   returned: always
   sample: true
 operation:
   description:
     - The operation that was performed.
-    - One of V(configure) or V(deconfigure).
+    - One of V(configure), V(deconfigure), or V(enable).
   type: str
   returned: always
   sample: "configure"
@@ -234,7 +262,8 @@ def main():
             required=False,
             choices=[
                 'configure',
-                'deconfigure'
+                'deconfigure',
+                'enable'
             ]
         ),
         state=dict(
@@ -264,7 +293,7 @@ def main():
 
     # Validate that at least one of operation or state is provided
     if not operation and not state:
-        supported_operations = ['configure', 'deconfigure']
+        supported_operations = ['configure', 'deconfigure', 'enable']
         module.fail_json(
             msg="Either 'operation' or 'state' parameter must be provided. "
                 f"Supported operations: {', '.join(supported_operations)}"
@@ -311,6 +340,12 @@ def main():
         elif operation == 'deconfigure':
             result = execute_with_logging(module, graphiant_config.vrrp_interfaces.deconfigure_vrrp_interfaces, vrrp_config_file,
                                           success_msg="Successfully deconfigured VRRP interfaces")
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'enable':
+            result = execute_with_logging(module, graphiant_config.vrrp_interfaces.enable_vrrp_interfaces, vrrp_config_file,
+                                          success_msg="Successfully enabled VRRP interfaces")
             changed = result['changed']
             result_msg = result['result_msg']
 

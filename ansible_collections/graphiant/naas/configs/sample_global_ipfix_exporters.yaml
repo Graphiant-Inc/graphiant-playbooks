@@ -2,7 +2,7 @@ ipfix_exporters:
   # Global IPFIX Exporter Configuration
   - name: ipfix-global-test
     exporter:
-      destinationAddress: 10.1.7.2
+      destinationAddress: 10.1.17.2
       destinationPort: 70
       monitoredSegments:
         - lan-7-test

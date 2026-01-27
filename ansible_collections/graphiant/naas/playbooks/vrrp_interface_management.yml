@@ -17,6 +17,9 @@
       # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/credentials.ini section=credentials')) }}"
 
   tasks:
+    # Note: All VRRP operations are idempotent - safe to run multiple times
+    # The module automatically checks existing state and skips if already configured/enabled/disabled
+
     - name: Configure VRRP on interfaces
       graphiant.naas.graphiant_vrrp:
         <<: *graphiant_client_params
@@ -33,7 +36,22 @@
       when: configure_result is defined and configure_result.msg is defined
       tags: ['vrrp_interfaces', 'configure']
 
-    - name: Deconfigure VRRP from interfaces
+    - name: Enable existing VRRP configurations
+      graphiant.naas.graphiant_vrrp:
+        <<: *graphiant_client_params
+        operation: enable
+        vrrp_config_file: "sample_vrrp_config.yaml"
+        detailed_logs: true
+      register: enable_result
+      tags: ['vrrp_interfaces', 'enable']
+
+    - name: Display VRRP Enable Results
+      ansible.builtin.debug:
+        msg: "{{ enable_result.msg }}"
+      when: enable_result is defined and enable_result.msg is defined
+      tags: ['vrrp_interfaces', 'enable']
+
+    - name: Deconfigure VRRP from interfaces (disable)
       graphiant.naas.graphiant_vrrp:
         <<: *graphiant_client_params
         operation: deconfigure
