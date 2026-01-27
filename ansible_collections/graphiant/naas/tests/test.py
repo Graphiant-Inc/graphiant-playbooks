@@ -642,6 +642,24 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             template_file="device_config_template.yaml")
         LOG.info("Configure device configuration result: %s", result)
 
+    def test_configure_site_to_site_vpn(self):
+        """
+        Configure Site-to-Site VPN.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.site_to_site_vpn.configure("sample_site_to_site_vpn.yaml")
+        LOG.info(f"Configure Site-to-Site VPN result: {result}")
+
+    def test_deconfigure_site_to_site_vpn(self):
+        """
+        Deconfigure Site-to-Site VPN.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.site_to_site_vpn.deconfigure("sample_site_to_site_vpn.yaml")
+        LOG.info(f"Deconfigure Site-to-Site VPN result: {result}")
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -727,6 +745,10 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_bgp_peering'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_bgp_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
+
+    # Site-to-Site VPN Management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_site_to_site_vpn')) # Pre-req: Configure interfaces and circuits and VPN Profiles
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_site_to_site_vpn'))
 
     # Global Configuration Management and Attaching System Objects (SNMP, Syslog, IPFIX etc) to Sites
     suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))

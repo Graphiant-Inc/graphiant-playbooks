@@ -1,0 +1,118 @@
+# yamllint disable-file
+{
+    "edge": {
+        "siteToSiteVpn": {
+            "{{ name }}": {
+                {% if action == "delete" %}
+                    "siteToSiteVpn": null
+                {% else %}
+                    "siteToSiteVpn": {
+                        "name": "{{ name }}",
+                        "lan": "{{ lan }}",
+                        "destinationAddress": "{{ destinationAddress }}",
+                        {% if remoteIkePeerIdentity is defined and remoteIkePeerIdentity %}
+                            "remoteIkePeerIdentity": "{{ remoteIkePeerIdentity }}",
+                        {% endif %}
+                        {% if localIkePeerIdentity is defined and localIkePeerIdentity %}
+                            "localIkePeerIdentity": "{{ localIkePeerIdentity }}",
+                        {% endif %}
+                        {% if localAddressV4 is defined and localAddressV4 %}
+                            "localAddressV4": "{{ localAddressV4 }}",
+                        {% endif %}
+                        {% if remoteAddressV4 is defined and remoteAddressV4 %}
+                            "remoteAddressV4": "{{ remoteAddressV4 }}",
+                        {% endif %}
+                        {% if localAddressV6 is defined and localAddressV6 %}
+                            "localAddressV6": "{{ localAddressV6 }}",
+                        {% endif %}
+                        {% if remoteAddressV6 is defined and remoteAddressV6 %}
+                            "remoteAddressV6": "{{ remoteAddressV6 }}",
+                        {% endif %}
+                        "localCircuit": "{{ localCircuit }}",
+                        "ikeInitiator": {{ ikeInitiator | default(true) }},
+                        "vpnProfile": "{{ vpnProfile | default('Default VPN Profile') }}",
+                        "presharedKey": "{{ presharedKey }}",
+                        "ipsecLabel": "{{ ipsecLabel | default('ipsec_label_1') }}",
+                        "routing": {
+                            {% if routing.static is defined %}
+                                "static": {
+                                    "destinationPrefix": [
+                                        {% for prefix in routing.static.destinationPrefix %}
+                                            "{{ prefix }}"{% if not loop.last %},{% endif %}
+                                        {% endfor %}
+                                    ]
+                                }
+                            {% elif routing.bgp is defined %}
+                                "bgp": {
+                                    {% if routing.bgp.holdTimer is defined and routing.bgp.holdTimer is not none %}
+                                    "holdTimer": {{ routing.bgp.holdTimer }},
+                                    {% endif %}
+                                    "addressFamilies": {
+                                        {% if routing.bgp.addressFamilies.ipv4 is defined %}
+                                        {% set ipv4_family = routing.bgp.addressFamilies.ipv4.family if routing.bgp.addressFamilies.ipv4.family is defined else routing.bgp.addressFamilies.ipv4 %}
+                                        {% set ipv4_addr_family = ipv4_family.addressFamily if ipv4_family.addressFamily is defined else 'ipv4' %}
+                                        {% set ipv4_inbound = ipv4_family.inboundPolicy if ipv4_family.inboundPolicy is defined else none %}
+                                        {% set ipv4_outbound = ipv4_family.outboundPolicy if ipv4_family.outboundPolicy is defined else none %}
+                                        "ipv4": {
+                                            "family": {
+                                                "addressFamily": {{ ipv4_addr_family | tojson }},
+                                                {% if ipv4_inbound is defined and ipv4_inbound is not none %}
+                                                "inboundPolicy": {
+                                                    "policy": {{ (ipv4_inbound.policy if ipv4_inbound.policy is defined else ipv4_inbound) | tojson }}
+                                                },
+                                                {% endif %}
+                                                {% if ipv4_outbound is defined and ipv4_outbound is not none %}
+                                                "outboundPolicy": {
+                                                    "policy": {{ (ipv4_outbound.policy if ipv4_outbound.policy is defined else ipv4_outbound) | tojson }}
+                                                }
+                                                {% endif %}
+                                            }
+                                        },
+                                        {% endif %}
+                                        {% if routing.bgp.addressFamilies.ipv6 is defined %}
+                                        {% set ipv6_family = routing.bgp.addressFamilies.ipv6.family if routing.bgp.addressFamilies.ipv6.family is defined else routing.bgp.addressFamilies.ipv6 %}
+                                        {% set ipv6_addr_family = ipv6_family.addressFamily if ipv6_family.addressFamily is defined else 'ipv6' %}
+                                        {% set ipv6_inbound = ipv6_family.inboundPolicy if ipv6_family.inboundPolicy is defined else none %}
+                                        {% set ipv6_outbound = ipv6_family.outboundPolicy if ipv6_family.outboundPolicy is defined else none %}
+                                        "ipv6": {
+                                            "family": {
+                                                "addressFamily": {{ ipv6_addr_family | tojson }},
+                                                {% if ipv6_inbound is defined and ipv6_inbound is not none %}
+                                                "inboundPolicy": {
+                                                    "policy": {{ (ipv6_inbound.policy if ipv6_inbound.policy is defined else ipv6_inbound) | tojson }}
+                                                },
+                                                {% endif %}
+                                                {% if ipv6_outbound is defined and ipv6_outbound is not none %}
+                                                "outboundPolicy": {
+                                                    "policy": {{ (ipv6_outbound.policy if ipv6_outbound.policy is defined else ipv6_outbound) | tojson }}
+                                                }
+                                                {% endif %}
+                                            }
+                                        }
+                                        {% endif %}
+                                    },
+                                    {% if routing.bgp.keepaliveTimer is defined and routing.bgp.keepaliveTimer is not none %}
+                                    "keepaliveTimer": {{ routing.bgp.keepaliveTimer }},
+                                    {% endif %}
+                                    {% if routing.bgp.md5Password is defined and routing.bgp.md5Password is not none and routing.bgp.md5Password %}
+                                    "md5Password": {
+                                        "md5Password": {{ routing.bgp.md5Password | tojson }}
+                                    },
+                                    {% else %}
+                                    "md5Password": null,
+                                    {% endif %}
+                                    "peerAsn": {{ routing.bgp.peerAsn }},
+                                    {% if routing.bgp.sendCommunity is defined %}
+                                    "sendCommunity": {{ routing.bgp.sendCommunity | default(true) }}
+                                    {% else %}
+                                    "sendCommunity": true
+                                    {% endif %}
+                                }
+                            {% endif %}
+                        }
+                    }
+                {% endif %}
+            }
+        }
+    }
+}
