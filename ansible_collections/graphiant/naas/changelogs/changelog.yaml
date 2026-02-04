@@ -5,6 +5,32 @@
 
 ancestor: null
 releases:
+  "26.1.1":
+    release_date: "2026-02-01"
+    changes:
+      added:
+        - "Updated to Graphiant SDK 26.1.1 for latest API support (use C(graphiant-sdk>=26.1.1))"
+        - "Enhanced compatibility with Graphiant API v26.1.1"
+        - "TE-4349: LAG (Link Aggregation) configuration support - new C(graphiant_lag_interfaces) module and playbook support"
+        - "TE-4354: BFD (Bidirectional Forwarding Detection) support in BGP peering - configurable BFD parameters"
+        - "TE-4331: VRRP (Virtual Router Redundancy Protocol) configuration on interfaces - C(graphiant_vrrp) module and tests"
+      changed:
+        - "Updated Graphiant SDK dependency to >= 26.1.1 across all modules and documentation"
+        - "Collection version bumped to 26.1.1; module version_added to 26.1.0 format where applicable"
+        - "TE-4366: Fix idempotency in interface modules operations (part 1) and add tests (#33)"
+        - "TE-4357: Enforcing Ansible inclusion checklist compliance (#29)"
+        - "Config and documentation: camelCase alignment and config changes"
+        - "Removed dependency version pinning in favor of minimum version (C(graphiant-sdk>=26.1.1))"
+      bugfixes:
+        - "TE-4366: Idempotent behavior fixes in interface module operations"
+        - "Fixes for corner cases in module and playbook behavior"
+        - "PEP8: remove trailing whitespace and add newline at EOF where missing"
+      security_fixes:
+        - "Updated security documentation to reflect 26.1.x as current stable release"
+        - "Workflow permissions: add permissions to GitHub Actions workflows for code scanning (alerts #38, #39, #40)"
+      notes:
+        - "VRRP configure/deconfigure test coverage added in test suite"
+        - "Refer to commits since 25.12.4 for full detail: TE-4331, TE-4349, TE-4354, TE-4357, TE-4366, workflow permissions"
   "25.12.4":
     release_date: "TBD"
     changes:

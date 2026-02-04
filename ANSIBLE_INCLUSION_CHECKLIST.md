@@ -1,8 +1,8 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2025-01-23  
-**Collection Version:** 25.12.3  
+**Review Date:** 2026-02-01  
+**Collection Version:** 26.1.1  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
@@ -14,7 +14,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `25.12.3` (meets requirement: >= 1.0.0)
+  - Collection version: `26.1.1` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -47,7 +47,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `25.12.3` is specified in `galaxy.yml`
+  - Version `26.1.1` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -58,7 +58,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `25.12.3` (follows semantic versioning)
+  - Current version: `26.1.1` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py` line 9
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -229,7 +229,7 @@
     - `meta/runtime.yml` ✅
     - `galaxy.yml` ✅
     - `README.md` ✅
-    - `CHANGELOG.md` ✅
+    - `changelogs/changelog.yaml` ✅ (changelog in recommended YAML format)
 
 ### 3.2 Module Count
 - [x] **Status:** ✅ **PASSING**
@@ -263,18 +263,18 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
-  - All modules use `version_added: "25.12.0"` (major.minor format, collection version) ✅
-  - Centralized in `_version.py` as `MODULE_VERSION_ADDED`
+  - All modules use `version_added` in major.minor format (collection version) ✅
+  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.1.0"`)
   - Modules verified:
-    - `graphiant_bgp.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_data_exchange.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_data_exchange_info.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_device_config.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_global_config.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_interfaces.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_sites.py`: `version_added: "25.12.0"` ✅
-    - `graphiant_vrrp.py`: `version_added: "25.13.0"` ✅ (newer module)
-    - `graphiant_lag_interfaces.py`: `version_added: "25.13.0"` ✅ (newer module)
+    - `graphiant_bgp.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_data_exchange.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_data_exchange_info.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_device_config.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_global_config.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_interfaces.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_sites.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_vrrp.py`: `version_added: "25.13.0"` ✅ (added in 25.13.0)
+    - `graphiant_lag_interfaces.py`: `version_added: "25.13.0"` ✅ (added in 25.13.0)
 
 ### 3.5 galaxy.yml Tags Field
 - [x] **Status:** ✅ **PASSING**
@@ -307,7 +307,7 @@
 - **Verification:**
   - All module files include GPLv3 license header after shebang
   - Format: `# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)`
-  - All 8 modules verified ✅
+  - All 9 modules verified ✅
   - Collection license: GPLv3+ (consistent across all files) ✅
 
 ### 3.9 Public Plugins, Roles, and Playbooks
@@ -461,15 +461,15 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 
 | Module | Type | Check Mode | Python | version_added | License Header |
 |--------|------|------------|--------|---------------|----------------|
-| `graphiant_interfaces` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_bgp` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_global_config` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_sites` | State-changing | ✅ Yes | >= 3.7 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_data_exchange` | State-changing | ⚠️ No* | >= 3.7 | 25.12.0 | ✅ GPLv3 |
-| `graphiant_device_config` | State-changing | ✅ Partial** | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_interfaces` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_bgp` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_global_config` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_sites` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_data_exchange` | State-changing | ⚠️ No* | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_device_config` | State-changing | ✅ Partial** | >= 3.7 | 26.1.0 | ✅ GPLv3 |
 | `graphiant_vrrp` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
 | `graphiant_lag_interfaces` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
-| `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 26.1.0 | ✅ GPLv3 |
 
 *Note: `graphiant_data_exchange` does not support check_mode but provides `dry_run` parameter for the `accept_invitation` operation. This is intentional for complex multi-step workflows.
 
@@ -534,7 +534,7 @@ These are not blocking requirements but are recommended for better collection qu
 All critical action items have been completed:
 
 - [x] ✅ Code of Conduct - `CODE_OF_CONDUCT.md` exists
-- [x] ✅ version_added - All modules use `"25.12.0"` (major.minor format)
+- [x] ✅ version_added - All modules use major.minor format (`"26.1.0"` or `"25.13.0"` for VRRP/LAG)
 - [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19, 2.20
 - [x] ✅ Scheduled CI runs - Nightly runs at 2 AM UTC
 - [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
@@ -565,7 +565,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 25.12.3  
-**Review Date:** 2025-01-23  
+**Collection Version:** 26.1.1  
+**Review Date:** 2026-02-01  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7

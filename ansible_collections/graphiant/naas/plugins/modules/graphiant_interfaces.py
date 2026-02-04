@@ -25,7 +25,7 @@ description:
   - Supports circuit-only operations for updating static routes without reconfiguring interfaces.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "25.12.0"
+version_added: "26.1.0"
 notes:
   - "Interface Operations:"
   - "  - LAN interfaces: Configure/deconfigure subinterfaces for LAN connectivity."
@@ -135,7 +135,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.1.1
 
 seealso:
   - module: graphiant.naas.graphiant_global_config
