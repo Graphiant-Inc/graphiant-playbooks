@@ -31,7 +31,7 @@ description:
   - Configuration files support Jinja2 templating for dynamic generation.
   - All operations are idempotent - safe to run multiple times without
     causing errors or unintended changes.
-version_added: 25.13.0
+version_added: "25.13.0"
 notes:
   - "LAG Operations:"
   - >
@@ -156,7 +156,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.1.1
 
 seealso:
   - module: graphiant.naas.graphiant_interfaces

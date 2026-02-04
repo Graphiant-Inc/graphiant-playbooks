@@ -746,7 +746,7 @@ class DataExchangeManager(BaseManager):
                     response = self.gsdk.match_service_to_customer(match_payload)
                 except Exception as e:
                     error_msg = str(e)
-                    # Handle "match already exists" errors gracefully till new sdk version 25.12.1 is released.
+                    # Handle "match already exists" errors gracefully (SDK 26.1.1+).
                     if "match already exists" in error_msg.lower():
                         LOG.info("Service '%s' is already matched to customer '%s', skipping match as it already exists.",
                                  service_name, customer_name)

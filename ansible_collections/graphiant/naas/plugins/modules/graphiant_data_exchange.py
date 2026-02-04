@@ -23,7 +23,7 @@ description:
   - Enables creating and deleting Data Exchange services and customers.
   - Provides service-to-customer matching operations with automatic match response file management.
   - Supports invitation acceptance with gateway service deployment and VPN configuration.
-version_added: "25.12.0"
+version_added: "26.1.0"
 notes:
   - "Data Exchange Workflows:"
   - "  - Workflow 1 (Create Services): Create Data Exchange services that can be shared with customers."
@@ -149,7 +149,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.1.1
   - tabulate
 
 seealso:
