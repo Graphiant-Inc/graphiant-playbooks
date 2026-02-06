@@ -22,7 +22,7 @@ description:
   - Returns summary information about Data Exchange services and customers.
   - Provides service health monitoring information for matched customers.
   - All operations return read-only information and never modify the system.
-version_added: "25.12.0"
+version_added: "26.1.0"
 notes:
   - "This is a read-only module that queries information only."
   - "All operations return tabulated output for easy reading."
@@ -90,7 +90,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.1.1
   - tabulate
 
 seealso:

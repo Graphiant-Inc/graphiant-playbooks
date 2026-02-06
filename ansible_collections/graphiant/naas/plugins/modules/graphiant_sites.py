@@ -24,7 +24,7 @@ description:
   - Can perform site-only operations or object attachment operations independently.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "25.12.0"
+version_added: "26.1.0"
 notes:
   - "Site Operations:"
   - "  - Configure: Create sites and attach global objects in one operation."
@@ -110,7 +110,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.1.1
 
 seealso:
   - module: graphiant.naas.graphiant_global_config

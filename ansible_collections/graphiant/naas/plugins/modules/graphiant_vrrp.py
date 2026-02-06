@@ -113,7 +113,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.1.1
 
 seealso:
   - module: graphiant.naas.graphiant_interfaces

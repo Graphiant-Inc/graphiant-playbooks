@@ -33,7 +33,7 @@ This collection requires **ansible-core >= 2.17.0**.
 ## Python Requirements
 
 - Python >= 3.7 (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
-- Graphiant SDK >= 25.12.1
+- Graphiant SDK >= 26.1.1
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](docs/guides/VERSION_MANAGEMENT.md) for details.
 
@@ -444,7 +444,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 25.12.3
+python scripts/bump_version.py 26.1.1
 ```
 
 After bumping version, remember to:

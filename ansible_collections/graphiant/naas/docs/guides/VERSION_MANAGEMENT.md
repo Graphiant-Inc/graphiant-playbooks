@@ -21,10 +21,10 @@ python -c "from _version import __version__; print(__version__)"
 ### Bump Version
 ```bash
 # From repository root
-python scripts/bump_version.py patch    # 25.11.1 -> 25.11.2
-python scripts/bump_version.py minor    # 25.11.1 -> 25.12.0
-python scripts/bump_version.py major    # 25.11.1 -> 26.0.0
-python scripts/bump_version.py 25.12.0  # Set specific version
+python scripts/bump_version.py patch    # 26.1.1 -> 26.1.2
+python scripts/bump_version.py minor    # 26.1.1 -> 26.2.0
+python scripts/bump_version.py major    # 26.1.1 -> 27.0.0
+python scripts/bump_version.py 26.1.1   # Set specific version
 ```
 
 ### Sync Requirements
@@ -83,7 +83,7 @@ Dependencies are managed in `_version.py` and synced to `requirements-ee.txt`:
 - tabulate: 0.9.0
 
 **Graphiant SDK:**
-- graphiant-sdk: 25.12.1
+- graphiant-sdk: >= 26.1.1
 
 **Ansible:**
 - ansible-core: >=2.17.0
@@ -99,7 +99,7 @@ Dependencies are managed in `_version.py` and synced to `requirements-ee.txt`:
 
 **Option 1: During version bump**
 ```bash
-python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
+python scripts/bump_version.py patch --update-deps graphiant-sdk=26.1.1
 ```
 
 **Option 2: Manual update**
@@ -148,10 +148,10 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 25.12.0
+python scripts/bump_version.py 26.1.1
 
 # Update dependency during bump
-python scripts/bump_version.py patch --update-deps graphiant-sdk=25.12.0
+python scripts/bump_version.py patch --update-deps graphiant-sdk=26.1.1
 
 # Sync requirements-ee.txt
 # Note: requirements-ee.txt is manually maintained (no version pins)

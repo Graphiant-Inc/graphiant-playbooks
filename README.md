@@ -14,17 +14,17 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 - **Official Documentation**: [Graphiant Playbooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
 - **Ansible Collection**: [Ansible Galaxy Collection - graphiant.naas](https://galaxy.ansible.com/ui/repo/published/graphiant/naas)
-- **Changelog**: [CHANGELOG.md](ansible_collections/graphiant/naas/CHANGELOG.md) - Version history and release notes
-- **Security Policy**: [SECURITY.md](SECURITY.md) - Security best practices and vulnerability reporting
+- **Changelog**: [changelogs/changelog.yaml](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/changelogs/changelog.yaml) - Version history and release notes
+- **Security Policy**: [SECURITY.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/SECURITY.md) - Security best practices and vulnerability reporting
 
 ## Components
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v25.12.3) | [📖 Documentation](ansible_collections/graphiant/naas/README.md) |
-| **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](terraform/README.md) |
-| **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](.github/workflows/README.md) |
-| **Docker Support** | Containerized execution environment | [📖 Documentation](Docker.md) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.1.1) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
+| **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/terraform/README.md) |
+| **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/.github/workflows/README.md) |
+| **Docker Support** | Containerized execution environment | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/Docker.md) |
 
 ## Quick Start
 
@@ -76,7 +76,7 @@ ansible-galaxy collection install graphiant.naas
         operation: "configure_lan_interfaces"
 ```
 
-**See the [Ansible Collection README](ansible_collections/graphiant/naas/README.md) for complete documentation and [Examples Guide](ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md) for detailed usage examples.**
+**See the [Ansible Collection README](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) for complete documentation and [Examples Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md) for detailed usage examples.**
 
 ### Key Features
 
@@ -107,7 +107,7 @@ config = GraphiantConfig(
 config.interfaces.configure_lan_interfaces("interface_config.yaml")
 ```
 
-See `ansible_collections/graphiant/naas/tests/test.py` for comprehensive Python library usage examples.
+See [ansible_collections/graphiant/naas/tests/test.py](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/tests/test.py) for comprehensive Python library usage examples.
 
 ### Terraform Modules
 
@@ -133,20 +133,20 @@ terraform plan -var-file="../../configs/gateway_services/gcp_config.tfvars"
 terraform apply -var-file="../../configs/gateway_services/gcp_config.tfvars"
 ```
 
-**See the [Terraform README](terraform/README.md) for detailed setup instructions.**
+**See the [Terraform README](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/terraform/README.md) for detailed setup instructions.**
 
 ## Project Structure
 
 ```
 graphiant-playbooks/
-├── ansible_collections/graphiant/naas/                # Ansible collection (v25.12.3)
-│   ├── plugins/modules/                              # Ansible modules (6 modules)
+├── ansible_collections/graphiant/naas/                # Ansible collection (v26.1.1)
+│   ├── plugins/modules/                              # Ansible modules (9 modules)
 │   ├── plugins/module_utils/                         # Python library code
 │   ├── playbooks/                                    # Example playbooks
 │   ├── configs/                                      # Configuration templates
 │   ├── templates/                                    # Jinja2 templates
 │   ├── docs/                                         # Documentation
-│   ├── CHANGELOG.md                                  # Version history
+│   ├── changelogs/changelog.yaml                     # Version history
 │   ├── README.md                                     # Collection documentation
 │   └── _version.py                                   # Centralized version management
 ├── terraform/                                        # Terraform modules
@@ -171,7 +171,7 @@ graphiant-playbooks/
 
 ## 🤝 Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+We welcome contributions! See [CONTRIBUTING.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/CONTRIBUTING.md) for:
 - Development setup
 - Code standards
 - Testing requirements
@@ -179,17 +179,17 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - Branch protection requirements
 - GPG signing requirements
 
-See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community guidelines.
+See [CODE_OF_CONDUCT.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/CODE_OF_CONDUCT.md) for our community guidelines.
 
 ## 📄 License
 
-This project is licensed under the GNU General Public License v3.0 or later (GPLv3+) - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 or later (GPLv3+) - see the [LICENSE](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/LICENSE) file for details.
 
 ## 🆘 Support
 
 - **Official Documentation**: [Graphiant Playbooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
-- **Changelog**: [CHANGELOG.md](ansible_collections/graphiant/naas/CHANGELOG.md) - Version history and release notes
-- **Security**: [SECURITY.md](SECURITY.md) - Security policy and vulnerability reporting
+- **Changelog**: [changelogs/changelog.yaml](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/changelogs/changelog.yaml) - Version history and release notes
+- **Security**: [SECURITY.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/SECURITY.md) - Security policy and vulnerability reporting
 - **Issues**: [GitHub Issues](https://github.com/Graphiant-Inc/graphiant-playbooks/issues)
 - **Email**: support@graphiant.com
 
