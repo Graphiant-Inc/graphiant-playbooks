@@ -1,0 +1,87 @@
+---
+- name: Manage Graphiant Site-to-Site VPN configuration
+  hosts: localhost
+  gather_facts: false
+  vars:
+    vault_secrets_path: "{{ playbook_dir }}/../configs/vault_secrets.yml"
+    # Defaults for vault secrets (loaded from configs/vault_secrets.yml when present)
+    vault_site_to_site_vpn_keys: {}
+    vault_bgp_md5_passwords: {}
+    # graphiant_host: "https://api.graphiant.com"
+    # graphiant_username: "{{ graphiant_username }}"
+    # graphiant_password: "{{ graphiant_password }}"
+
+    # Use YAML anchors to avoid repetition
+    graphiant_client_params: &graphiant_client_params
+      host: "{{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}"
+      username: "{{ graphiant_username | default(lookup('env', 'GRAPHIANT_USERNAME')) }}"
+      password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
+      # host: "{{ graphiant_host | default(lookup('ini', 'url file=/absolute/path/credentials.ini section=host')) }}"
+      # username: "{{ graphiant_username | default(lookup('ini', 'username file=/absolute/path/credentials.ini section=credentials')) }}"
+      # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/credentials.ini section=credentials')) }}"
+
+  tasks:
+    # Fail early if vault file is missing when creating (required for presharedKey / md5Password). Not required for delete.
+    - name: Require vault secrets file for Site-to-Site VPN create
+      ansible.builtin.fail:
+        msg: |
+          Vault file is required but not found: {{ vault_secrets_path }}
+          Copy the example and add your secrets:
+            cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example ansible_collections/graphiant/naas/configs/vault_secrets.yml
+          Then encrypt with: ansible-vault encrypt {{ vault_secrets_path }}
+          Run the playbook with: ansible-playbook ... --vault-password-file ~/.vault_pass
+      when: vault_secrets_path is not file
+      tags: ['site_to_site_vpn', 'create']
+
+    # Load vault (presharedKey / md5Password by VPN name) for create only. Delete does not need vault.
+    - name: Load vault secrets for Site-to-Site VPN
+      ansible.builtin.include_vars:
+        file: "{{ vault_secrets_path }}"
+      no_log: true
+      tags: ['site_to_site_vpn', 'create']
+
+    # Write decrypted vault vars to config file (fixed name: vault_site_to_site_vpn_secrets.yml).
+    # Use to_json(sort_keys=true) so content is deterministic and the task is idempotent (no changed when unchanged).
+    # changed_when: false so play "changed" count reflects only whether device config was pushed, not this prep step.
+    - name: Prepare vault secrets file for Site-to-Site VPN
+      ansible.builtin.copy:
+        content: |
+          vault_site_to_site_vpn_keys: {{ (vault_site_to_site_vpn_keys | default({})) | to_json(sort_keys=true) }}
+          vault_bgp_md5_passwords: {{ (vault_bgp_md5_passwords | default({})) | to_json(sort_keys=true) }}
+        dest: "{{ playbook_dir }}/../configs/vault_site_to_site_vpn_secrets.yml"
+        mode: '0600'
+      no_log: true
+      changed_when: false
+      tags: ['site_to_site_vpn', 'create']
+
+    - name: Create Site-to-Site VPN
+      graphiant.naas.graphiant_site_to_site_vpn:
+        <<: *graphiant_client_params
+        operation: create
+        site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+        detailed_logs: true
+        state: present
+      register: create_result
+      tags: ['site_to_site_vpn', 'create']
+
+    - name: Display Site-to-Site VPN Creation Results
+      ansible.builtin.debug:
+        msg: "{{ create_result.msg }}"
+      when: create_result is defined and create_result.msg is defined
+      tags: ['site_to_site_vpn', 'create']
+
+    - name: Delete Site-to-Site VPN
+      graphiant.naas.graphiant_site_to_site_vpn:
+        <<: *graphiant_client_params
+        operation: delete
+        site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+        detailed_logs: true
+        state: absent
+      register: delete_result
+      tags: ['site_to_site_vpn', 'delete']
+
+    - name: Display Site-to-Site VPN Deletion Results
+      ansible.builtin.debug:
+        msg: "{{ delete_result.msg }}"
+      when: delete_result is defined and delete_result.msg is defined
+      tags: ['site_to_site_vpn', 'delete']

@@ -1,0 +1,345 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+# Copyright: (c) 2025, Graphiant Team <support@graphiant.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+"""
+Ansible module for managing Graphiant Site-to-Site VPN configuration.
+
+This module provides Site-to-Site VPN management capabilities including:
+- Site-to-Site VPN creation on edge devices
+- Site-to-Site VPN deletion
+"""
+
+DOCUMENTATION = r'''
+---
+module: graphiant_site_to_site_vpn
+short_description: Manage Graphiant Site-to-Site VPN configuration
+description:
+  - This module provides comprehensive Site-to-Site VPN management for Graphiant Edge devices.
+  - Supports Site-to-Site VPN creation and deletion with static or BGP routing.
+  - All operations use Jinja2 templates for consistent configuration deployment.
+  - Configuration files support Jinja2 templating for dynamic generation.
+version_added: "25.13.0"
+notes:
+  - "Site-to-Site VPN Operations:"
+  - "  - Create: Create Site-to-Site VPN connections on edge devices."
+  - "  - Delete: Remove Site-to-Site VPN connections from edge devices."
+  - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
+  - "The module automatically resolves device names to IDs."
+  - "All operations are idempotent and safe to run multiple times."
+  - "Create: The module compares intended config to existing device state (ipsecTunnels). If they match, no config is pushed and V(changed) is V(false)."
+  - "Delete: Only VPNs that exist on the device are removed; a second delete is a no-op and returns V(changed) V(false)."
+  - "Circuits and interfaces must be configured first before applying Site-to-Site VPN."
+  - "Preshared keys and BGP MD5 passwords: When using the playbook (e.g. site_to_site_vpn.yml),"
+  - "C(presharedKey) and C(md5Password) can be supplied via Ansible Vault. The playbook writes decrypted values to a file that the backend reads."
+  - "The vault key must match the VPN C(name) field in the config. See I(configs/vault_secrets.yml.example) and I(configs/sample_site_to_site_vpn.yaml)."
+options:
+  host:
+    description:
+      - Graphiant portal host URL for API connectivity.
+      - 'Example: "https://api.graphiant.com"'
+    type: str
+    required: true
+    aliases: [ base_url ]
+  username:
+    description:
+      - Graphiant portal username for authentication.
+    type: str
+    required: true
+  password:
+    description:
+      - Graphiant portal password for authentication.
+    type: str
+    required: true
+  site_to_site_vpn_config_file:
+    description:
+      - Path to the Site-to-Site VPN configuration YAML file.
+      - Required for all operations.
+      - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
+      - Configuration files support Jinja2 templating syntax for dynamic generation.
+      - File must contain Site-to-Site VPN definitions with device names and VPN configurations.
+    type: str
+    required: true
+  operation:
+    description:
+      - "The specific Site-to-Site VPN operation to perform."
+      - "V(create): Create Site-to-Site VPN connections on edge devices."
+      - "V(delete): Delete Site-to-Site VPN connections from edge devices."
+    type: str
+    choices:
+      - create
+      - delete
+  state:
+    description:
+      - "The desired state of the Site-to-Site VPN configuration."
+      - "V(present): Maps to V(create) when O(operation) not specified."
+      - "V(absent): Maps to V(delete) when O(operation) not specified."
+    type: str
+    choices: [ present, absent ]
+    default: present
+  detailed_logs:
+    description:
+      - Enable detailed logging output for troubleshooting and monitoring.
+      - When enabled, provides comprehensive logs of all Site-to-Site VPN operations.
+      - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
+    type: bool
+    default: false
+
+attributes:
+  check_mode:
+    description: Supports check mode with partial support.
+    support: partial
+    details: >
+      In check mode the module exits without making API calls, so it does not compare
+      intended state to current device state and always returns V(changed=True) for
+      V(create) and V(delete). Check mode may report changes even when the configuration
+      is already applied.
+
+requirements:
+  - python >= 3.7
+  - graphiant-sdk >= 25.12.1
+
+seealso:
+  - module: graphiant.naas.graphiant_interfaces
+    description: Configure interfaces before setting up Site-to-Site VPN
+  - module: graphiant.naas.graphiant_device_config
+    description: Alternative method for device configuration
+
+author:
+  - Graphiant Team (@graphiant)
+
+'''
+
+EXAMPLES = r'''
+- name: Create Site-to-Site VPN
+  graphiant.naas.graphiant_site_to_site_vpn:
+    operation: create
+    site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+  register: vpn_result
+
+- name: Delete Site-to-Site VPN
+  graphiant.naas.graphiant_site_to_site_vpn:
+    operation: delete
+    site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Create Site-to-Site VPN using state parameter
+  graphiant.naas.graphiant_site_to_site_vpn:
+    state: present
+    site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+- name: Delete Site-to-Site VPN using state parameter
+  graphiant.naas.graphiant_site_to_site_vpn:
+    state: absent
+    site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+'''
+
+RETURN = r'''
+msg:
+  description:
+    - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
+  type: str
+  returned: always
+  sample: "Successfully created Site-to-Site VPN"
+changed:
+  description:
+    - Whether the operation made changes to the system.
+    - V(true) when config was pushed to at least one device; V(false) when intended state already matched (create) or no VPNs to delete (delete).
+  type: bool
+  returned: always
+  sample: true
+operation:
+  description:
+    - The operation that was performed.
+    - One of V(create) or V(delete).
+  type: str
+  returned: always
+  sample: "create"
+site_to_site_vpn_config_file:
+  description:
+    - The Site-to-Site VPN configuration file used for the operation.
+  type: str
+  returned: always
+  sample: "sample_site_to_site_vpn.yaml"
+'''
+
+from ansible.module_utils.basic import AnsibleModule
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+    get_graphiant_connection,
+    handle_graphiant_exception
+)
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+    capture_library_logs
+)
+
+
+@capture_library_logs
+def execute_with_logging(module, func, *args, **kwargs):
+    """
+    Execute a function with optional detailed logging.
+
+    Args:
+        module: Ansible module instance
+        func: Function to execute
+        *args: Arguments to pass to the function
+        **kwargs: Keyword arguments to pass to the function
+
+    Returns:
+        dict: Result with 'changed' and 'result_msg' keys
+    """
+    # Extract success_msg from kwargs before passing to func
+    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+
+    try:
+        result = func(*args, **kwargs)
+
+        # If the function returns a dict with 'changed' key, use it
+        if isinstance(result, dict) and 'changed' in result:
+            return {
+                'changed': result['changed'],
+                'result_msg': success_msg,
+                'details': result
+            }
+
+        # Fallback for functions that don't return change status
+        return {
+            'changed': True,
+            'result_msg': success_msg
+        }
+    except Exception as e:
+        raise e
+
+
+def main():
+    """
+    Main function for the Graphiant Site-to-Site VPN module.
+    """
+
+    # Define module arguments
+    argument_spec = dict(
+        host=dict(type='str', required=True, aliases=['base_url']),
+        username=dict(type='str', required=True),
+        password=dict(type='str', required=True, no_log=True),
+        site_to_site_vpn_config_file=dict(type='str', required=True),
+        operation=dict(
+            type='str',
+            required=False,
+            choices=[
+                'create',
+                'delete'
+            ]
+        ),
+        state=dict(
+            type='str',
+            required=False,
+            default='present',
+            choices=['present', 'absent']
+        ),
+        detailed_logs=dict(
+            type='bool',
+            required=False,
+            default=False
+        )
+    )
+
+    # Create Ansible module
+    module = AnsibleModule(
+        argument_spec=argument_spec,
+        supports_check_mode=True
+    )
+
+    # Get parameters
+    params = module.params
+    operation = params.get('operation')
+    state = params.get('state', 'present')
+    site_to_site_vpn_config_file = params['site_to_site_vpn_config_file']
+
+    # Validate that at least one of operation or state is provided
+    if not operation and not state:
+        supported_operations = ['create', 'delete']
+        module.fail_json(
+            msg="Either 'operation' or 'state' parameter must be provided. "
+                f"Supported operations: {', '.join(supported_operations)}"
+        )
+
+    # If operation is not specified, use state to determine operation
+    if not operation:
+        if state == 'present':
+            operation = 'create'
+        elif state == 'absent':
+            operation = 'delete'
+
+    # If operation is specified, it takes precedence over state
+    # No additional mapping needed as operation is explicit
+
+    # Handle check mode
+    if module.check_mode:
+        # All Site-to-Site VPN operations make changes
+        # Note: Check mode assumes changes would be made as we cannot determine
+        # current state without making API calls. In practice, these operations
+        # typically result in changes unless the configuration is already applied.
+        module.exit_json(
+            changed=True,
+            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
+            operation=operation,
+            site_to_site_vpn_config_file=site_to_site_vpn_config_file
+        )
+
+    try:
+        # Get Graphiant connection
+        connection = get_graphiant_connection(params)
+        graphiant_config = connection.graphiant_config
+
+        # Execute the requested operation
+        changed = False
+        result_msg = ""
+
+        if operation == 'create':
+            result = execute_with_logging(
+                module,
+                graphiant_config.site_to_site_vpn.create_site_to_site_vpn,
+                site_to_site_vpn_config_file,
+                success_msg="Successfully created Site-to-Site VPN"
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'delete':
+            result = execute_with_logging(
+                module,
+                graphiant_config.site_to_site_vpn.delete_site_to_site_vpn,
+                site_to_site_vpn_config_file,
+                success_msg="Successfully deleted Site-to-Site VPN"
+            )
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        # Return success
+        module.exit_json(
+            changed=changed,
+            msg=result_msg,
+            operation=operation,
+            site_to_site_vpn_config_file=site_to_site_vpn_config_file
+        )
+
+    except Exception as e:
+        error_msg = handle_graphiant_exception(e, operation)
+        module.fail_json(msg=error_msg, operation=operation)
+
+
+if __name__ == '__main__':
+    main()

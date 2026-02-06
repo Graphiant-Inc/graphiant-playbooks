@@ -80,11 +80,51 @@ ansible-playbook playbook.yml -e "@vars/credentials.yml"
 
 ### Ansible Vault
 
-Encrypt sensitive credentials:
+Encrypt sensitive credentials like preshared keys, passwords, and API keys:
+
+#### Creating and Managing Vault Files
 
 ```bash
-# Create encrypted file
-ansible-vault create vars/secrets.yml
+# Create encrypted file (interactive)
+ansible-vault create ansible_collections/graphiant/naas/configs/vault_secrets.yml
+
+# Encrypt an existing file
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml
+
+# Edit encrypted file
+ansible-vault edit ansible_collections/graphiant/naas/configs/vault_secrets.yml
+
+# View encrypted file
+ansible-vault view ansible_collections/graphiant/naas/configs/vault_secrets.yml
+
+# Decrypt file (use with caution)
+ansible-vault decrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml
+```
+
+#### Running Playbooks with Vault
+
+```bash
+# Option 1: Prompt for vault password (interactive)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --ask-vault-pass
+
+# Option 2: Use a vault password file (recommended for automation)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --vault-password-file ~/.vault_pass
+
+# Option 3: Use environment variable for vault password file
+export ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_pass
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml
+
+# Option 4: Use a script to retrieve vault password (e.g., from a password manager)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --vault-password-file ~/bin/get-vault-pass.sh
+```
+
+#### Example Vault File Structure
+
+```yaml
+# Site-to-Site VPN Preshared Keys
+vault_site_to_site_vpn_keys:
+  vpn-name-1: "your-preshared-key-1"
+  vpn-name-2: "your-preshared-key-2"
 
 # Run with vault
 ansible-playbook playbook.yml --ask-vault-pass

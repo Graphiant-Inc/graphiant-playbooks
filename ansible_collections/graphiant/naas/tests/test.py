@@ -1,5 +1,7 @@
 import os
+import subprocess
 import unittest
+import yaml
 from libs.graphiant_config import GraphiantConfig
 from libs.logger import setup_logger
 
@@ -642,6 +644,91 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             template_file="device_config_template.yaml")
         LOG.info("Configure device configuration result: %s", result)
 
+    def _prepare_s2s_vault_secrets(self, config_path: str) -> None:
+        """
+        Decrypt configs/vault_secrets.yml and write vault_site_to_site_vpn_secrets.yml
+        so the test can run without executing the playbook. Uses ~/.vault_pass or
+        ANSIBLE_VAULT_PASSWORD_FILE and runs ansible-vault view (requires ansible-vault on PATH).
+        """
+        config_path = config_path.rstrip("/")
+        vault_secrets_path = os.path.join(config_path, "vault_secrets.yml")
+        vault_pass_file = os.environ.get(
+            "ANSIBLE_VAULT_PASSWORD_FILE",
+            os.path.expanduser("~/.vault_pass"),
+        )
+        if not os.path.isfile(vault_secrets_path):
+            raise FileNotFoundError(
+                f"Vault file not found: {vault_secrets_path}. "
+                "Create and encrypt it (see configs/vault_secrets.yml.example)."
+            )
+        if not os.path.isfile(vault_pass_file):
+            raise FileNotFoundError(
+                f"Vault password file not found: {vault_pass_file}. "
+                "Set ANSIBLE_VAULT_PASSWORD_FILE or create ~/.vault_pass."
+            )
+        env = os.environ.copy()
+        env["ANSIBLE_VAULT_PASSWORD_FILE"] = os.path.abspath(vault_pass_file)
+        result = subprocess.run(
+            ["ansible-vault", "view", vault_secrets_path],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=config_path,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"ansible-vault view failed: {result.stderr or result.stdout or 'unknown'}. "
+                "Ensure ansible-vault is on PATH (e.g. pip install ansible-core)."
+            )
+        decrypted_bytes = result.stdout.encode("utf-8")
+        data = yaml.safe_load(decrypted_bytes.decode("utf-8"))
+        vault_keys = (data or {}).get("vault_site_to_site_vpn_keys") or {}
+        vault_md5 = (data or {}).get("vault_bgp_md5_passwords") or {}
+        out_path = os.path.join(config_path, "vault_site_to_site_vpn_secrets.yml")
+        with open(out_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {"vault_site_to_site_vpn_keys": vault_keys, "vault_bgp_md5_passwords": vault_md5},
+                f, default_flow_style=False, sort_keys=False,
+            )
+        LOG.info("Prepared %s from vault for test (no playbook run needed)", out_path)
+
+    def test_create_site_to_site_vpn(self):
+        """
+        Create Site-to-Site VPN. Decrypts configs/vault_secrets.yml via ansible-vault view
+        (~/.vault_pass or ANSIBLE_VAULT_PASSWORD_FILE) and writes vault_site_to_site_vpn_secrets.yml
+        so the manager injects vault values. No playbook run required. Requires ansible-vault on PATH.
+        """
+        # Prefer workspace configs when running from source (so vault_secrets.yml is found)
+        if "GRAPHIANT_CONFIGS_PATH" not in os.environ:
+            _workspace_configs = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "configs")
+            )
+            if os.path.isdir(_workspace_configs):
+                os.environ["GRAPHIANT_CONFIGS_PATH"] = _workspace_configs
+                LOG.info("Using workspace configs for test: %s", _workspace_configs)
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        self._prepare_s2s_vault_secrets(graphiant_config.config_utils.config_path)
+        result = graphiant_config.site_to_site_vpn.create_site_to_site_vpn("sample_site_to_site_vpn.yaml")
+        LOG.info("Create Site-to-Site VPN result: %s", result)
+        result = graphiant_config.site_to_site_vpn.create_site_to_site_vpn("sample_site_to_site_vpn.yaml")
+        LOG.info("Create Site-to-Site VPN result (idempotency check): %s", result)
+        assert result['changed'] is False, "Create Site-to-Site VPN idempotency failed"
+
+    def test_delete_site_to_site_vpn(self):
+        """
+        Delete Site-to-Site VPN. Second run is idempotent: no VPNs to delete (already absent),
+        so changed=False and no API push.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.site_to_site_vpn.delete_site_to_site_vpn("sample_site_to_site_vpn.yaml")
+        LOG.info("Delete Site-to-Site VPN result: %s", result)
+        result2 = graphiant_config.site_to_site_vpn.delete_site_to_site_vpn("sample_site_to_site_vpn.yaml")
+        LOG.info("Delete Site-to-Site VPN result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Delete Site-to-Site VPN idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -727,6 +814,12 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_bgp_peering'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_bgp_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
+
+    # Site-to-Site VPN Management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
+    suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))  # Pre-req: Configure interfaces and circuits and VPN Profiles
+    suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
 
     # Global Configuration Management and Attaching System Objects (SNMP, Syslog, IPFIX etc) to Sites
     suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))
