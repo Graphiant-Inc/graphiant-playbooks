@@ -9,6 +9,7 @@
                     "attachPoint": "BGPNeighborOut",
                 {% endif %}
                 "name": "{{ name }}",
+                "description": "{{ description | default('') }}",
                 "defaultAction": "{{ implicit_rule }}",
                 "statements": {
                     {% for policy in policy_statements %}
@@ -30,7 +31,7 @@
                                                     "community": {
                                                         "community": [
                                                             {% for value in policy.match_community %}
-                                                                "{{ value }}"
+                                                                "{{ value }}"{% if not loop.last %},{% endif %}
                                                             {% endfor %}
                                                         ]
                                                     }
@@ -50,7 +51,7 @@
                                             "metric": {
                                                 "modifier": null,
                                                 {% if policy.action_set_med %} 
-                                                    "absolute": "{{ policy.action_set_med }}""
+                                                    "absolute": {{ policy.action_set_med }}
                                                 {% else %}
                                                     "absolute": null
                                                 {% endif %}
@@ -73,7 +74,7 @@
                                                     "community": {
                                                         "communityList": [
                                                             {% for value in policy.action_set_community_list %}
-                                                                "{{ value }}"
+                                                                "{{ value }}"{% if not loop.last %},{% endif %}
                                                             {% endfor %}
                                                         ],
                                                         "additive": {{ policy.action_set_community_additive | default(false) }}
@@ -85,7 +86,7 @@
                                             {% if direction == "inbound" %}
                                                 "weight": {
                                                     {% if policy.action_set_weight %} 
-                                                        "weight": "{{ policy.action_set_weight }}"
+                                                        "weight": {{ policy.action_set_weight }}
                                                     {% else %}
                                                         "weight": null
                                                     {% endif %}

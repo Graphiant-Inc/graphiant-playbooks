@@ -32,9 +32,10 @@ notes:
   - "Create: The module compares intended config to existing device state (ipsecTunnels). If they match, no config is pushed and V(changed) is V(false)."
   - "Delete: Only VPNs that exist on the device are removed; a second delete is a no-op and returns V(changed) V(false)."
   - "Circuits and interfaces must be configured first before applying Site-to-Site VPN."
-  - "Preshared keys and BGP MD5 passwords: When using the playbook (e.g. site_to_site_vpn.yml),"
-  - "C(presharedKey) and C(md5Password) can be supplied via Ansible Vault. The playbook writes decrypted values to a file that the backend reads."
-  - "The vault key must match the VPN C(name) field in the config. See I(configs/vault_secrets.yml.example) and I(configs/sample_site_to_site_vpn.yaml)."
+  - "Vault (create only): O(vault_site_to_site_vpn_keys), O(vault_bgp_md5_passwords)."
+  - "Use encrypted I(configs/vault_secrets.yml), I(configs/vault-password-file.sh); no plaintext."
+  - "Load with M(ansible.builtin.include_vars) (no_log true); pass dicts so secrets stay in memory."
+  - "Vault key must match VPN C(name). See I(configs/vault_secrets.yml.example). Run with C(--vault-password-file configs/vault-password-file.sh)."
 options:
   host:
     description:
@@ -86,6 +87,20 @@ options:
       - Logs are captured and included in the result_msg for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
+  vault_site_to_site_vpn_keys:
+    description:
+      - Dict of VPN name to preshared key (create only). Pass from playbook vars loaded from encrypted I(vault_secrets.yml); secrets in memory only.
+      - Key must match the VPN C(name) in the S2S config. Required for create when the config defines VPNs that need a preshared key.
+    type: dict
+    default: {}
+    required: false
+  vault_bgp_md5_passwords:
+    description:
+      - Dict of VPN name to BGP MD5 password (create only). Pass from playbook vars loaded from encrypted I(vault_secrets.yml); secrets in memory only.
+      - Key must match the VPN C(name) in the config. Optional; BGP VPNs without an entry get no md5Password.
+    type: dict
+    default: {}
+    required: false
 
 attributes:
   check_mode:
@@ -113,14 +128,21 @@ author:
 '''
 
 EXAMPLES = r'''
-- name: Create Site-to-Site VPN
+# Playbook: use encrypted configs/vault_secrets.yml (from vault_secrets.yml.example),
+# decrypt with configs/vault-password-file.sh (ANSIBLE_VAULT_PASSPHRASE). Run with:
+#   ansible-playbook site_to_site_vpn.yml --vault-password-file configs/vault-password-file.sh --tags create
+
+- name: Create Site-to-Site VPN (vault dicts from include_vars; secrets in memory only)
   graphiant.naas.graphiant_site_to_site_vpn:
     operation: create
     site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
+    vault_site_to_site_vpn_keys: "{{ vault_site_to_site_vpn_keys | default({}) }}"
+    vault_bgp_md5_passwords: "{{ vault_bgp_md5_passwords | default({}) }}"
     detailed_logs: true
+  no_log: true
   register: vpn_result
 
 - name: Delete Site-to-Site VPN
@@ -131,15 +153,18 @@ EXAMPLES = r'''
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
 
-- name: Create Site-to-Site VPN using state parameter
+- name: Create using state (pass vault dicts when creating)
   graphiant.naas.graphiant_site_to_site_vpn:
     state: present
     site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
+    vault_site_to_site_vpn_keys: "{{ vault_site_to_site_vpn_keys | default({}) }}"
+    vault_bgp_md5_passwords: "{{ vault_bgp_md5_passwords | default({}) }}"
+  no_log: true
 
-- name: Delete Site-to-Site VPN using state parameter
+- name: Delete using state
   graphiant.naas.graphiant_site_to_site_vpn:
     state: absent
     site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
@@ -253,7 +278,9 @@ def main():
             type='bool',
             required=False,
             default=False
-        )
+        ),
+        vault_site_to_site_vpn_keys=dict(type='dict', required=False, default={}, no_log=True),
+        vault_bgp_md5_passwords=dict(type='dict', required=False, default={}, no_log=True),
     )
 
     # Create Ansible module
@@ -309,10 +336,14 @@ def main():
         result_msg = ""
 
         if operation == 'create':
+            vault_keys = params.get('vault_site_to_site_vpn_keys') or {}
+            vault_md5 = params.get('vault_bgp_md5_passwords') or {}
             result = execute_with_logging(
                 module,
                 graphiant_config.site_to_site_vpn.create_site_to_site_vpn,
                 site_to_site_vpn_config_file,
+                vault_keys,
+                vault_md5,
                 success_msg="Successfully created Site-to-Site VPN"
             )
             changed = result['changed']

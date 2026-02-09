@@ -578,6 +578,15 @@ class VRRPInterfaceManager(BaseManager):
                          "%d interface(s) skipped (changed: %s)",
                          len(output_config), len(result['deconfigured_interfaces']),
                          len(result['skipped_interfaces']), result['changed'])
+
+                # Explicit lists for consistency with global_config deconfigure logging
+                def _entry_name(ent):
+                    suffix = (".%s" % ent["vlan"]) if ent.get("vlan") else ""
+                    return "%s:%s%s" % (ent.get("device", ""), ent.get("interface", ""), suffix)
+
+                deconfigured_names = [_entry_name(e) for e in result['deconfigured_interfaces']]
+                skipped_names = [_entry_name(e) for e in result['skipped_interfaces']]
+                LOG.info("Deconfigure completed: deconfigured_interfaces=%s, skipped_interfaces=%s", deconfigured_names, skipped_names)
             else:
                 LOG.info("No VRRP changes needed - all interfaces already disabled or not configured (changed: %s)",
                          result['changed'])

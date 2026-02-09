@@ -1,4 +1,15 @@
+"""
+Integration tests for the Graphiant NaaS collection.
+
+Runs against a live Graphiant portal. Requires GRAPHIANT_HOST, GRAPHIANT_USERNAME,
+and GRAPHIANT_PASSWORD environment variables.
+
+Run from repo root with PYTHONPATH including the collection module_utils:
+  export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils
+  python ansible_collections/graphiant/naas/tests/test.py
+"""
 import os
+import shutil
 import subprocess
 import unittest
 import yaml
@@ -55,6 +66,236 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         enterprise_id = graphiant_config.config_utils.gsdk.get_enterprise_id()
         LOG.info("Enterprise ID: %s", enterprise_id)
 
+    def test_configure_global_config_prefix_lists(self):
+        """
+        Configure Global Config Prefix Lists.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.configure_prefix_sets("sample_global_prefix_lists.yaml")
+        result = graphiant_config.global_config.configure("sample_global_prefix_lists.yaml")
+        LOG.info("Configure prefix lists result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_prefix_lists.yaml")
+        LOG.info("Configure prefix lists result (rerun check): %s", result)
+
+    def test_deconfigure_global_config_prefix_lists(self):
+        """
+        Deconfigure Global Config Prefix Lists.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_prefix_sets("sample_global_prefix_lists.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_prefix_lists.yaml")
+        LOG.info("Deconfigure prefix lists result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_prefix_lists.yaml")
+        LOG.info("Deconfigure prefix lists result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure prefix lists idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed' key"
+        assert result['failed'] is False, f"Deconfigure Global prefix lists failed: {result}"
+
+    def test_failure_deconfigure_global_config_prefix_lists(self):
+        """
+        Test failure to deconfigure Global Config Prefix Lists if objects are in use.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_prefix_sets("sample_global_prefix_lists.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_prefix_lists.yaml")
+        LOG.info("Deconfigure prefix lists result: %s", result)
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        assert result['failed'] is True, "Deconfigure Global prefix lists not failed"
+        if result['failed']:
+            details = result.get('details', {})
+            prefix_sets = details.get('prefix_sets', {})
+            assert prefix_sets.get('failed_objects'), "When failed is True, details.prefix_sets.failed_objects must be non-empty"
+
+    def test_configure_global_config_bgp_filters(self):
+        """
+        Configure Global BGP Filters.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.configure_bgp_filters("sample_global_bgp_filters.yaml")
+        result = graphiant_config.global_config.configure("sample_global_bgp_filters.yaml")
+        LOG.info("Configure BGP filters result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_bgp_filters.yaml")
+        LOG.info("Configure BGP filters result (rerun check): %s", result)
+
+    def test_deconfigure_global_config_bgp_filters(self):
+        """
+        Deconfigure Global Config BGP Filters.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_bgp_filters("sample_global_bgp_filters.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_bgp_filters.yaml")
+        LOG.info("Deconfigure BGP filters result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_bgp_filters.yaml")
+        LOG.info("Deconfigure BGP filters result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure BGP filters idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            bgp_filters = details.get('bgp_filters', {})
+            assert bgp_filters.get('failed_objects'), "When failed is True, details.bgp_filters.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global BGP filters failed: {result}"
+
+    def test_configure_snmp_service(self):
+        """
+        Configure Global SNMP Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.configure_snmp_services("sample_global_snmp_services.yaml")
+        result = graphiant_config.global_config.configure("sample_global_snmp_services.yaml")
+        LOG.info("Configure SNMP service result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_snmp_services.yaml")
+        LOG.info("Configure SNMP service result (rerun check): %s", result)
+
+    def test_deconfigure_snmp_service(self):
+        """
+        Deconfigure Global SNMP Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_snmp_services("sample_global_snmp_services.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_snmp_services.yaml")
+        LOG.info("Deconfigure SNMP service result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_snmp_services.yaml")
+        LOG.info("Deconfigure SNMP service result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure SNMP service idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            snmp_services = details.get('snmps', {})
+            assert snmp_services.get('failed_objects'), "When failed is True, details.snmp_services.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global SNMP services failed: {result}"
+
+    def test_failure_deconfigure_snmp_service(self):
+        """
+        Test failure to deconfigure Global SNMP Objects if objects are in use.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_snmp_services("sample_global_snmp_services.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_snmp_services.yaml")
+        LOG.info("Deconfigure SNMP service result: %s", result)
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        assert result['failed'] is True, "Deconfigure Global SNMP objects not failed"
+        if result['failed']:
+            details = result.get('details', {})
+            snmp_services = details.get('snmps', {})
+            assert snmp_services.get('failed_objects'), "When failed is True, details.snmp_services.failed_objects must be non-empty"
+
+    def test_configure_syslog_service(self):
+        """
+        Configure Global Syslog Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.configure_syslog_services("sample_global_syslog_servers.yaml")
+        result = graphiant_config.global_config.configure("sample_global_syslog_servers.yaml")
+        LOG.info("Configure syslog service result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_syslog_servers.yaml")
+        LOG.info("Configure syslog service result (rerun check): %s", result)
+
+    def test_deconfigure_syslog_service(self):
+        """
+        Deconfigure Global Syslog Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_syslog_services(("sample_global_syslog_servers.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_syslog_servers.yaml")
+        LOG.info("Deconfigure syslog service result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_syslog_servers.yaml")
+        LOG.info("Deconfigure syslog service result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure syslog service idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            syslog_services = details.get('syslog_services', {})
+            assert syslog_services.get('failed_objects'), "When failed is True, details.syslog_services.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global syslog services failed: {result}"
+
+    def test_configure_ipfix_service(self):
+        """
+        Configure Global IPFIX Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.configure_ipfix_services("sample_global_ipfix_exporters.yaml")
+        result = graphiant_config.global_config.configure("sample_global_ipfix_exporters.yaml")
+        LOG.info("Configure IPFIX service result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_ipfix_exporters.yaml")
+        LOG.info("Configure IPFIX service result (rerun check): %s", result)
+
+    def test_deconfigure_ipfix_service(self):
+        """
+        Deconfigure Global IPFIX Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_ipfix_services("sample_global_ipfix_exporters.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_ipfix_exporters.yaml")
+        LOG.info("Deconfigure IPFIX service result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_ipfix_exporters.yaml")
+        LOG.info("Deconfigure IPFIX service result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure IPFIX service idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            ipfix_services = details.get('ipfix_services', {})
+            assert ipfix_services.get('failed_objects'), "When failed is True, details.ipfix_services.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global IPFIX services failed: {result}"
+
+    def test_configure_vpn_profiles(self):
+        """
+        Configure Global VPN Profile Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.configure_vpn_profiles("sample_global_vpn_profiles.yaml")
+        result = graphiant_config.global_config.configure("sample_global_vpn_profiles.yaml")
+        LOG.info("Configure VPN profiles result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_vpn_profiles.yaml")
+        LOG.info("Configure VPN profiles result (rerun check): %s", result)
+
+    def test_deconfigure_vpn_profiles(self):
+        """
+        Deconfigure Global VPN Profile Objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_vpn_profiles("sample_global_vpn_profiles.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_vpn_profiles.yaml")
+        LOG.info("Deconfigure VPN profiles result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_vpn_profiles.yaml")
+        LOG.info("Deconfigure VPN profiles result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure VPN profiles idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            vpn_profiles = details.get('vpn_profiles', {})
+            assert vpn_profiles.get('failed_objects'), "When failed is True, details.vpn_profiles.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global VPN profiles failed: {result}"
+
+    def test_failure_deconfigure_vpn_profiles(self):
+        """
+        Test failure to deconfigure Global VPN Profiles if objects are in use.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_vpn_profiles("sample_global_vpn_profiles.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_vpn_profiles.yaml")
+        LOG.info("Deconfigure VPN profiles result: %s", result)
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        assert result['failed'] is True, "Deconfigure Global VPN profiles not failed"
+        if result['failed']:
+            details = result.get('details', {})
+            vpn_profiles = details.get('vpn_profiles', {})
+            assert vpn_profiles.get('failed_objects'), "When failed is True, details.vpn_profiles.failed_objects must be non-empty"
+
     def test_configure_global_lan_segments(self):
         """
         Configure Global LAN Segments.
@@ -62,7 +303,10 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         # graphiant_config.global_config.configure_lan_segments("sample_global_lan_segments.yaml")
-        graphiant_config.global_config.configure("sample_global_lan_segments.yaml")
+        result = graphiant_config.global_config.configure("sample_global_lan_segments.yaml")
+        LOG.info("Configure Global LAN segments result: %s", result)
+        result = graphiant_config.global_config.configure("sample_global_lan_segments.yaml")
+        LOG.info("Configure Global LAN segments result (rerun check): %s", result)
 
     def test_deconfigure_global_lan_segments(self):
         """
@@ -71,7 +315,17 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         # graphiant_config.global_config.deconfigure_lan_segments("sample_global_lan_segments.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_lan_segments.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_lan_segments.yaml")
+        LOG.info("Deconfigure Global LAN segments result: %s", result)
+        result = graphiant_config.global_config.deconfigure("sample_global_lan_segments.yaml")
+        LOG.info("Deconfigure Global LAN segments result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure Global LAN segments idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            lan = details.get('lan_segments', {})
+            assert lan.get('failed_objects'), "When failed is True, details.lan_segments.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global LAN segments failed: {result}"
 
     def test_get_lan_segments(self):
         """
@@ -82,13 +336,33 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         lan_segments = graphiant_config.config_utils.gsdk.get_lan_segments_dict()
         LOG.info("Lan Segments: %s", lan_segments)
 
+    def test_failure_deconfigure_global_lan_segments(self):
+        """
+        Test failure to deconfigure Global LAN Segments if objects are in use.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        # graphiant_config.global_config.deconfigure_lan_segments("sample_global_lan_segments.yaml")
+        result = graphiant_config.global_config.deconfigure("sample_global_lan_segments.yaml")
+        LOG.info("Deconfigure Global LAN segments result: %s", result)
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        assert result['failed'] is True, "Deconfigure Global LAN segments not failed"
+        if result['failed']:
+            details = result.get('details', {})
+            lan_segments = details.get('lan_segments', {})
+            assert lan_segments.get('failed_objects'), "When failed is True, details.lan_segments.failed_objects must be non-empty"
+
     def test_configure_global_site_lists(self):
         """
         Configure Global Site Lists.
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.global_config.configure_site_lists("sample_global_site_lists.yaml")
+        result = graphiant_config.global_config.configure_site_lists("sample_global_site_lists.yaml")
+        LOG.info("Configure Global Site Lists result: %s", result)
+        result = graphiant_config.global_config.configure_site_lists("sample_global_site_lists.yaml")
+        LOG.info("Configure Global Site Lists result (idempotency check): %s", result)
+        assert result['changed'] is False, "Configure Global Site Lists idempotency failed"
 
     def test_deconfigure_global_site_lists(self):
         """
@@ -96,7 +370,17 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.global_config.deconfigure_site_lists("sample_global_site_lists.yaml")
+        result = graphiant_config.global_config.deconfigure_site_lists("sample_global_site_lists.yaml")
+        LOG.info("Deconfigure Global Site Lists result: %s", result)
+        result = graphiant_config.global_config.deconfigure_site_lists("sample_global_site_lists.yaml")
+        LOG.info("Deconfigure Global Site Lists result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure Global Site Lists idempotency failed"
+        assert 'failed' in result, "Deconfigure Global config result must include top-level 'failed'"
+        if result['failed']:
+            details = result.get('details', {})
+            site_lists = details.get('site_lists', {})
+            assert site_lists.get('failed_objects'), "When failed is True, details.site_lists.failed_objects must be non-empty"
+        assert result['failed'] is False, f"Deconfigure Global Site Lists failed: {result}"
 
     def test_get_global_site_lists(self):
         """
@@ -115,7 +399,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.configure_sites("sample_sites.yaml")
+        result = graphiant_config.sites.configure_sites("sample_sites.yaml")
+        LOG.info("Configure Sites result: %s", result)
+        result = graphiant_config.sites.configure_sites("sample_sites.yaml")
+        LOG.info("Configure Sites result (idempotency check): %s", result)
+        assert result['changed'] is False, "Configure Sites idempotency failed"
 
     def test_deconfigure_sites(self):
         """
@@ -123,7 +411,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.deconfigure_sites("sample_sites.yaml")
+        result = graphiant_config.sites.deconfigure_sites("sample_sites.yaml")
+        LOG.info("Deconfigure Sites result: %s", result)
+        result = graphiant_config.sites.deconfigure_sites("sample_sites.yaml")
+        LOG.info("Deconfigure Sites result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure Sites idempotency failed"
 
     def test_configure_sites_and_attach_objects(self):
         """
@@ -131,7 +423,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.configure("sample_sites.yaml")
+        result = graphiant_config.sites.configure("sample_sites.yaml")
+        LOG.info("Configure Sites and attach objects result: %s", result)
+        result = graphiant_config.sites.configure("sample_sites.yaml")
+        LOG.info("Configure Sites and attach objects result (idempotency check): %s", result)
+        assert result['changed'] is False, "Configure Sites and attach objects idempotency failed"
 
     def test_get_sites_details(self):
         """
@@ -156,7 +452,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.deconfigure("sample_sites.yaml")
+        result = graphiant_config.sites.deconfigure("sample_sites.yaml")
+        LOG.info("Detach objects and deconfigure sites result: %s", result)
+        result = graphiant_config.sites.deconfigure("sample_sites.yaml")
+        LOG.info("Detach objects and deconfigure sites result (idempotency check): %s", result)
+        assert result['changed'] is False, "Detach objects and deconfigure sites idempotency failed"
 
     def test_attach_objects_to_sites(self):
         """
@@ -164,7 +464,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.attach_objects("sample_sites.yaml")
+        result = graphiant_config.sites.attach_objects("sample_sites.yaml")
+        LOG.info("Attach objects to sites result: %s", result)
+        result = graphiant_config.sites.attach_objects("sample_sites.yaml")
+        LOG.info("Attach objects to sites result (idempotency check): %s", result)
+        assert result['changed'] is False, "Attach objects to sites idempotency failed"
 
     def test_detach_objects_from_sites(self):
         """
@@ -172,7 +476,35 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.detach_objects("sample_sites.yaml")
+        result = graphiant_config.sites.detach_objects("sample_sites.yaml")
+        LOG.info("Detach objects from sites result: %s", result)
+        result = graphiant_config.sites.detach_objects("sample_sites.yaml")
+        LOG.info("Detach objects from sites result (idempotency check): %s", result)
+        assert result['changed'] is False, "Detach objects from sites idempotency failed"
+
+    def test_attach_global_system_objects_to_site(self):
+        """
+        Attach Global System Objects (SNMP, Syslog, IPFIX etc) to Sites.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.sites.attach_objects("sample_site_attachments.yaml")
+        LOG.info("Attach global system objects to site result: %s", result)
+        result = graphiant_config.sites.attach_objects("sample_site_attachments.yaml")
+        LOG.info("Attach global system objects to site result (idempotency check): %s", result)
+        assert result['changed'] is False, "Attach global system objects to site idempotency failed"
+
+    def test_detach_global_system_objects_from_site(self):
+        """
+        Detach Global System Objects (SNMP, Syslog, IPFIX etc) from Sites.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.sites.detach_objects("sample_site_attachments.yaml")
+        LOG.info("Detach global system objects from site result: %s", result)
+        result = graphiant_config.sites.detach_objects("sample_site_attachments.yaml")
+        LOG.info("Detach global system objects from site result (idempotency check): %s", result)
+        assert result['changed'] is False, "Detach global system objects from site idempotency failed"
 
     def test_configure_wan_circuits_interfaces(self):
         """
@@ -400,42 +732,6 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure LAG interfaces result (idempotency check): %s", result)
         assert result['changed'] is False, "Deconfigure LAG interfaces idempotency failed"
 
-    def test_configure_global_config_prefix_lists(self):
-        """
-        Configure Global Config Prefix Lists.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.configure_prefix_sets("sample_global_prefix_lists.yaml")
-        graphiant_config.global_config.configure("sample_global_prefix_lists.yaml")
-
-    def test_deconfigure_global_config_prefix_lists(self):
-        """
-        Deconfigure Global Config Prefix Lists.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.deconfigure_prefix_sets("sample_global_prefix_lists.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_prefix_lists.yaml")
-
-    def test_configure_global_config_bgp_filters(self):
-        """
-        Configure Global BGP Filters.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.configure_bgp_filters("sample_global_bgp_filters.yaml")
-        graphiant_config.global_config.configure("sample_global_bgp_filters.yaml")
-
-    def test_deconfigure_global_config_bgp_filters(self):
-        """
-        Deconfigure Global Config BGP Filters.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.deconfigure_bgp_filters("sample_global_bgp_filters.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_bgp_filters.yaml")
-
     def test_configure_bgp_peering(self):
         """
         Configure BGP Peering.
@@ -459,94 +755,6 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
         graphiant_config.bgp.detach_policies("sample_bgp_peering.yaml")
-
-    def test_configure_snmp_service(self):
-        """
-        Configure Global SNMP Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.configure_snmp_services("sample_global_snmp_services.yaml")
-        graphiant_config.global_config.configure("sample_global_snmp_services.yaml")
-
-    def test_deconfigure_snmp_service(self):
-        """
-        Deconfigure Global SNMP Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.deconfigure_snmp_services("sample_global_snmp_services.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_snmp_services.yaml")
-
-    def test_configure_syslog_service(self):
-        """
-        Configure Global Syslog Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.configure_syslog_services("sample_global_syslog_servers.yaml")
-        graphiant_config.global_config.configure("sample_global_syslog_servers.yaml")
-
-    def test_deconfigure_syslog_service(self):
-        """
-        Deconfigure Global Syslog Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.deconfigure_syslog_services(("sample_global_syslog_servers.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_syslog_servers.yaml")
-
-    def test_configure_ipfix_service(self):
-        """
-        Configure Global IPFIX Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.configure_ipfix_services("sample_global_ipfix_exporters.yaml")
-        graphiant_config.global_config.configure("sample_global_ipfix_exporters.yaml")
-
-    def test_deconfigure_ipfix_service(self):
-        """
-        Deconfigure Global IPFIX Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.deconfigure_ipfix_services("sample_global_ipfix_exporters.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_ipfix_exporters.yaml")
-
-    def test_configure_vpn_profiles(self):
-        """
-        Configure Global VPN Profile Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.configure_vpn_profiles("sample_global_vpn_profiles.yaml")
-        graphiant_config.global_config.configure("sample_global_vpn_profiles.yaml")
-
-    def test_deconfigure_vpn_profiles(self):
-        """
-        Deconfigure Global VPN Profile Objects.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        # graphiant_config.global_config.deconfigure_vpn_profiles("sample_global_vpn_profiles.yaml")
-        graphiant_config.global_config.deconfigure("sample_global_vpn_profiles.yaml")
-
-    def test_attach_global_system_objects_to_site(self):
-        """
-        Attach Global System Objects (SNMP, Syslog, IPFIX etc) to Sites.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.attach_objects("sample_site_attachments.yaml")
-
-    def test_detach_global_system_objects_from_site(self):
-        """
-        Detach Global System Objects (SNMP, Syslog, IPFIX etc) from Sites.
-        """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        graphiant_config.sites.detach_objects("sample_site_attachments.yaml")
 
     def test_create_data_exchange_services(self):
         """
@@ -644,75 +852,63 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             template_file="device_config_template.yaml")
         LOG.info("Configure device configuration result: %s", result)
 
-    def _prepare_s2s_vault_secrets(self, config_path: str) -> None:
-        """
-        Decrypt configs/vault_secrets.yml and write vault_site_to_site_vpn_secrets.yml
-        so the test can run without executing the playbook. Uses ~/.vault_pass or
-        ANSIBLE_VAULT_PASSWORD_FILE and runs ansible-vault view (requires ansible-vault on PATH).
-        """
-        config_path = config_path.rstrip("/")
-        vault_secrets_path = os.path.join(config_path, "vault_secrets.yml")
-        vault_pass_file = os.environ.get(
-            "ANSIBLE_VAULT_PASSWORD_FILE",
-            os.path.expanduser("~/.vault_pass"),
-        )
-        if not os.path.isfile(vault_secrets_path):
-            raise FileNotFoundError(
-                f"Vault file not found: {vault_secrets_path}. "
-                "Create and encrypt it (see configs/vault_secrets.yml.example)."
-            )
-        if not os.path.isfile(vault_pass_file):
-            raise FileNotFoundError(
-                f"Vault password file not found: {vault_pass_file}. "
-                "Set ANSIBLE_VAULT_PASSWORD_FILE or create ~/.vault_pass."
-            )
-        env = os.environ.copy()
-        env["ANSIBLE_VAULT_PASSWORD_FILE"] = os.path.abspath(vault_pass_file)
-        result = subprocess.run(
-            ["ansible-vault", "view", vault_secrets_path],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=config_path,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"ansible-vault view failed: {result.stderr or result.stdout or 'unknown'}. "
-                "Ensure ansible-vault is on PATH (e.g. pip install ansible-core)."
-            )
-        decrypted_bytes = result.stdout.encode("utf-8")
-        data = yaml.safe_load(decrypted_bytes.decode("utf-8"))
-        vault_keys = (data or {}).get("vault_site_to_site_vpn_keys") or {}
-        vault_md5 = (data or {}).get("vault_bgp_md5_passwords") or {}
-        out_path = os.path.join(config_path, "vault_site_to_site_vpn_secrets.yml")
-        with open(out_path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(
-                {"vault_site_to_site_vpn_keys": vault_keys, "vault_bgp_md5_passwords": vault_md5},
-                f, default_flow_style=False, sort_keys=False,
-            )
-        LOG.info("Prepared %s from vault for test (no playbook run needed)", out_path)
-
     def test_create_site_to_site_vpn(self):
         """
-        Create Site-to-Site VPN. Decrypts configs/vault_secrets.yml via ansible-vault view
-        (~/.vault_pass or ANSIBLE_VAULT_PASSWORD_FILE) and writes vault_site_to_site_vpn_secrets.yml
-        so the manager injects vault values. No playbook run required. Requires ansible-vault on PATH.
+        Create Site-to-Site VPN. Copies vault_secrets.yml.example to vault_secrets.yml,
+        encrypts with vault-password-file.sh (uses ANSIBLE_VAULT_PASSPHRASE or 'test-vault-pass' if unset), then creates VPN.
         """
-        # Prefer workspace configs when running from source (so vault_secrets.yml is found)
-        if "GRAPHIANT_CONFIGS_PATH" not in os.environ:
-            _workspace_configs = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "configs")
-            )
-            if os.path.isdir(_workspace_configs):
-                os.environ["GRAPHIANT_CONFIGS_PATH"] = _workspace_configs
-                LOG.info("Using workspace configs for test: %s", _workspace_configs)
         base_url, username, password = read_config()
         graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
-        self._prepare_s2s_vault_secrets(graphiant_config.config_utils.config_path)
-        result = graphiant_config.site_to_site_vpn.create_site_to_site_vpn("sample_site_to_site_vpn.yaml")
+        config_path = graphiant_config.config_utils.config_path
+
+        # Copy example to vault_secrets.yml and encrypt (use ANSIBLE_VAULT_PASSPHRASE or default for tests)
+        if not os.environ.get("ANSIBLE_VAULT_PASSPHRASE"):
+            os.environ["ANSIBLE_VAULT_PASSPHRASE"] = "test-vault-pass"
+        vault_secrets_path = os.path.join(config_path, "vault_secrets.yml")
+        example_path = os.path.join(config_path, "vault_secrets.yml.example")
+        if not os.path.isfile(example_path):
+            raise FileNotFoundError(f"Vault example not found: {example_path}")
+        shutil.copy(example_path, vault_secrets_path)
+        vault_pass_file = os.path.join(config_path, "vault-password-file.sh")
+        if not os.path.isfile(vault_pass_file):
+            raise FileNotFoundError(f"Vault password script not found: {vault_pass_file}")
+        env = os.environ.copy()
+        env["ANSIBLE_VAULT_PASSWORD_FILE"] = os.path.abspath(vault_pass_file)
+        enc = subprocess.run(
+            ["ansible-vault", "encrypt", vault_secrets_path],
+            capture_output=True, text=True, env=env, cwd=config_path, check=False,
+        )
+        if enc.returncode != 0:
+            err = (enc.stderr and enc.stderr.strip()) or "unknown"
+            raise RuntimeError(f"ansible-vault encrypt failed: {err}")
+
+        # Decrypt to get vault dicts
+        view = subprocess.run(
+            ["ansible-vault", "view", vault_secrets_path],
+            capture_output=True, text=True, env=env, cwd=config_path, check=False,
+        )
+        if view.returncode != 0:
+            err = (view.stderr and view.stderr.strip()) or "unknown"
+            raise RuntimeError(f"ansible-vault view failed: {err}")
+        data = yaml.safe_load(view.stdout) or {}
+        vault_keys = data.get("vault_site_to_site_vpn_keys") or {}
+        vault_md5 = data.get("vault_bgp_md5_passwords") or {}
+        if not isinstance(vault_keys, dict):
+            vault_keys = {}
+        if not isinstance(vault_md5, dict):
+            vault_md5 = {}
+
+        result = graphiant_config.site_to_site_vpn.create_site_to_site_vpn(
+            "sample_site_to_site_vpn.yaml",
+            vault_site_to_site_vpn_keys=vault_keys,
+            vault_bgp_md5_passwords=vault_md5,
+        )
         LOG.info("Create Site-to-Site VPN result: %s", result)
-        result = graphiant_config.site_to_site_vpn.create_site_to_site_vpn("sample_site_to_site_vpn.yaml")
+        result = graphiant_config.site_to_site_vpn.create_site_to_site_vpn(
+            "sample_site_to_site_vpn.yaml",
+            vault_site_to_site_vpn_keys=vault_keys,
+            vault_bgp_md5_passwords=vault_md5,
+        )
         LOG.info("Create Site-to-Site VPN result (idempotency check): %s", result)
         assert result['changed'] is False, "Create Site-to-Site VPN idempotency failed"
 
@@ -735,52 +931,64 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_get_login_token'))
     suite.addTest(TestGraphiantPlaybooks('test_get_enterprise_id'))
 
+    # Global Configuration Management (Prefix Lists and BGP Filters)
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_bgp_filters'))  # Pre-req: Configure prefix sets.
+    #   Failure is expected as prefix_sets are in use by BGP filters
+    suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_global_config_prefix_lists'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_bgp_filters'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
+
     # LAN Segments Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_get_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_get_lan_segments'))
-    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_get_lan_segments'))
 
-    # Site Management Tests
+    # Global Configuration Management (SNMP, Syslog, IPFIX)
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))  # Pre-req: Create Lan segments.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))
+    #   Failure is expected as lan segments are in use by SNMP, Syslog, IPFIX.
+    suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_global_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_syslog_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_ipfix_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
+
+    # Site Management Tests (sample_sites.yaml)
     suite.addTest(TestGraphiantPlaybooks('test_get_sites_details'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_sites'))
     suite.addTest(TestGraphiantPlaybooks('test_get_sites_details'))
-
+    #    Create Lan segments and SNMP system object before attaching SNMP objects to sites.
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))  # Pre-req: Create Lan segments.
     suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))  # Pre-req: SNMP system object.
-
     suite.addTest(TestGraphiantPlaybooks('test_attach_objects_to_sites'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_sites_and_attach_objects'))
+    #   Failure is expected as SNMP objects are in use by sites.
+    suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_snmp_service'))
     suite.addTest(TestGraphiantPlaybooks('test_detach_objects_from_sites'))
-    suite.addTest(TestGraphiantPlaybooks('test_detach_objects_and_deconfigure_sites'))
+    #   Failure is not expected as SNMP objects are not in use by sites.
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_sites'))
     suite.addTest(TestGraphiantPlaybooks('test_get_sites_details'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))  # Pre-req: SNMP system object.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_sites_and_attach_objects'))
+    suite.addTest(TestGraphiantPlaybooks('test_detach_objects_and_deconfigure_sites'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))
 
     # Global Configuration Management (Site Lists)
     suite.addTest(TestGraphiantPlaybooks('test_get_global_site_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_sites'))  # Pre-req: Create sites.
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_site_lists'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_site_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_get_global_site_lists'))
-    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_site_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_site_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_get_global_site_lists'))
 
     # Global Configuration Management (VPN Profiles)
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
-
-    # Global Configuration Management (Prefix Lists and BGP Filters)
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_bgp_filters'))
-
-    # Global Configuration Management (SNMP, Syslog, IPFIX)
-    suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))
 
     # Device Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lan_interfaces'))
@@ -818,13 +1026,16 @@ if __name__ == '__main__':
     # Site-to-Site VPN Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))  # Pre-req: Configure interfaces and circuits and VPN Profiles
+    #    Failure is expected as VPN profiles are in use by Site-to-Site VPNs.
+    suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
 
-    # Global Configuration Management and Attaching System Objects (SNMP, Syslog, IPFIX etc) to Sites
-    suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))
+    # Site Management Tests (sample_site_attachments.yaml) Attach/Detatch Objects (SNMP, Syslog, IPFIX ) to Sites.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))  # Pre-req: SNMP system object.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))  # Pre-req: Syslog system object.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))  # Pre-req: IPFIX system object.
     suite.addTest(TestGraphiantPlaybooks('test_attach_global_system_objects_to_site'))
     suite.addTest(TestGraphiantPlaybooks('test_detach_global_system_objects_from_site'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))

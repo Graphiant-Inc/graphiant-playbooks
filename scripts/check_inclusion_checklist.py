@@ -94,7 +94,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
     module_names = [
         'graphiant_bgp', 'graphiant_data_exchange', 'graphiant_data_exchange_info',
         'graphiant_device_config', 'graphiant_global_config', 'graphiant_interfaces',
-        'graphiant_sites', 'graphiant_vrrp',
+        'graphiant_sites', 'graphiant_vrrp', 'graphiant_lag_interfaces', 'graphiant_site_to_site_vpn'
     ]
     
     for module_file in module_files:

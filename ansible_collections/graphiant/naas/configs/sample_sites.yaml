@@ -46,6 +46,16 @@ sites:
 site_attachments:
   - UAT-Site1:
       syslog_servers: []
-      snmp_servers:
-        - snmp-global-test-noauth
+      snmps:
+        - snmp-global-test-authnopriv
+      ipfix_exporters: []
+  - UAT-Site2:
+      syslog_servers: []
+      snmps:
+        - snmp-global-test-authpriv
+      ipfix_exporters: []
+  - UAT-Site3:
+      syslog_servers: []
+      snmps:
+        - snmp-global-test-v2c
       ipfix_exporters: []

@@ -11,6 +11,7 @@ The Ansible Graphiant NaaS collection includes modules for automating the manage
 This collection provides Ansible modules to automate:
 - Interface and circuit configuration
 - VRRP (Virtual Router Redundancy Protocol) configuration
+- LAG (Link Aggregation Group) interface configuration
 - BGP peering management
 - Site-to-Site VPN configuration (static and BGP routing)
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
@@ -45,6 +46,7 @@ This collection requires **ansible-core >= 2.17.0**.
 |------|-------------|
 | `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
+| `graphiant_lag_interfaces` | Manage LAG interfaces configuration |
 | `graphiant_bgp` | Manage BGP peering and routing policies |
 | `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
@@ -377,7 +379,11 @@ export GRAPHIANT_HOST="https://api.graphiant.com"
 export GRAPHIANT_USERNAME="your_username"
 export GRAPHIANT_PASSWORD="your_password"
 
-# Run tests
+# From repo root (recommended): set PYTHONPATH then run
+export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils
+python ansible_collections/graphiant/naas/tests/test.py
+
+# Or from the collection directory
 cd ansible_collections/graphiant/naas
 python -m unittest tests.test
 ```

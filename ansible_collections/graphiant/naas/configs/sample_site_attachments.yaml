@@ -4,13 +4,13 @@ site_attachments:
       syslog_servers:
         - name: syslog-global-test
           interface: GigabitEthernet7/0/0.18
-      snmp_servers:
+      snmps:
         - snmp-global-test-authpriv
       ipfix_exporters:
         - name: ipfix-global-test
           interface: GigabitEthernet7/0/0.18
   - Liverpool-sdktest:
-      snmp_servers:
+      snmps:
         - snmp-global-test-authpriv
       ipfix_exporters:
         - name: ipfix-global-test

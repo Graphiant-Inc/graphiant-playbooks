@@ -551,6 +551,21 @@ class GraphiantPortalClient():
                 v1_global_config_patch_request=patch_global_config_request
             )
             return response
+        except ForbiddenException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/global/config"
+            self._log_api_error(
+                method_name="v1_global_config_patch",
+                api_url=api_url,
+                exception=e
+            )
+            error_msg = (
+                f"patch_global_config: Got ForbiddenException (403). "
+                f"This may indicate insufficient permissions or authentication issues. "
+                f"Please verify that your account has the required permissions to modify global configuration. "
+                f"Error details: {e.body if hasattr(e, 'body') else str(e)}"
+            )
+            LOG.error(error_msg)
+            raise APIError(error_msg)
         except (NotFoundException, ServiceException) as e:
             LOG.error("patch_global_config: Got Exception while v1_global_config_patch request. "
                       "Global object(s) might not exist.")
@@ -561,7 +576,6 @@ class GraphiantPortalClient():
             LOG.warning("patch_global_config : Exception While Global config patch %s", e)
             raise APIError("patch_global_config : Retrying, Exception while Global config patch")
 
-    @poller(retries=3, wait=10)
     def post_global_summary(self, **kwargs):
         """
         Posts global summary configuration to the system.
@@ -576,13 +590,172 @@ class GraphiantPortalClient():
         """
         body = graphiant_sdk.V1GlobalSummaryPostRequest(**kwargs)
         try:
-            LOG.info("post_global_summary : config to be pushed : \n%s", body)
+            LOG.info("post_global_summary: %s", body.to_dict())
             response = self.api.v1_global_summary_post(authorization=self.bearer_token,
                                                        v1_global_summary_post_request=body)
             return response
         except ApiException as e:
             LOG.warning("post_global_summary : Exception While Global config patch %s", e)
             raise APIError("post_global_summary : Retrying, Exception while Global config patch")
+
+    def _get_global_summaries(self, **summary_kwargs):
+        """
+        Call post_global_summary with the given kwargs and return the list of summary
+        dicts. Each summary may include name, id, numAttachedDevices, numPolicies, etc.
+        Used to list existing global config objects and check if they are in use.
+
+        Returns:
+            list: List of summary dicts (e.g. [{"name": "...", "numAttachedDevices": 1}]),
+                  or empty list on failure. Handles both {"summaries": [...]} and legacy
+                  response shapes.
+        """
+        try:
+            result = self.post_global_summary(**summary_kwargs)
+            data = result.to_dict() if hasattr(result, 'to_dict') else result
+            if not isinstance(data, dict):
+                return []
+            raw_list = None
+            for key in ('summaries', 'Summaries'):
+                if key in data and isinstance(data[key], list):
+                    raw_list = data[key]
+                    break
+            if raw_list is None:
+                for key, value in data.items():
+                    if isinstance(value, list) and value:
+                        raw_list = value
+                        break
+            if not raw_list:
+                return []
+            # Normalize to list of dicts when possible (SDK may return model objects)
+            out = []
+            for item in raw_list:
+                if isinstance(item, dict):
+                    out.append(item)
+                elif hasattr(item, 'to_dict'):
+                    out.append(item.to_dict())
+                else:
+                    out.append(item)  # keep as-is; is_global_object_in_use handles objects
+            return out
+        except Exception as e:
+            LOG.warning("_get_global_summaries(%s): %s", summary_kwargs, e)
+            return []
+
+    def _summary_int(self, summary, *keys):
+        """Get first present key from summary (dict or object); keys can be snake_case or camelCase."""
+        for k in keys:
+            v = summary.get(k) if isinstance(summary, dict) else getattr(summary, k, None)
+            if v is not None:
+                return int(v)
+        return 0
+
+    def is_global_object_in_use(self, summary, check_num_policies: bool = False) -> bool:
+        """
+        Return True if the global object is in use and cannot be deleted.
+
+        Uses ManaV2GlobalObjectSummary fields: num_attached_devices, num_attached_sites,
+        and optionally num_policies (for prefix sets). Accepts dict or SDK model object,
+        and both snake_case and camelCase keys.
+
+        Args:
+            summary: One summary from get_global_*_summaries() (dict or model).
+            check_num_policies: If True, also treat num_policies > 0 as in use (prefix sets).
+        """
+        num_devices = self._summary_int(
+            summary,
+            'num_attached_devices', 'numAttachedDevices',
+        )
+        if num_devices > 0:
+            return True
+        num_sites = self._summary_int(
+            summary,
+            'num_attached_sites', 'numAttachedSites',
+        )
+        if num_sites > 0:
+            return True
+        if check_num_policies:
+            num_policies = self._summary_int(
+                summary,
+                'num_policies', 'numPolicies',
+            )
+            if num_policies > 0:
+                return True
+        return False
+
+    def _get_existing_global_names_from_summary(self, **summary_kwargs):
+        """
+        Call post_global_summary with the given kwargs and return a set of object names
+        from the response. Used to list existing global config objects by type.
+
+        Returns:
+            set: Names from the summary response, or empty set on failure.
+        """
+        summaries = self._get_global_summaries(**summary_kwargs)
+        return {s.get('name') for s in summaries if s.get('name')}
+
+    def get_global_routing_policy_summaries(self):
+        """Return list of routing policy (BGP filter) summary dicts from the portal."""
+        return self._get_global_summaries(routing_policy_type=True)
+
+    def get_global_prefix_set_summaries(self):
+        """Return list of prefix set summary dicts from the portal."""
+        return self._get_global_summaries(prefix_set_type=True)
+
+    def get_global_snmp_summaries(self):
+        """Return list of SNMP object summary dicts from the portal."""
+        return self._get_global_summaries(snmp_type=True)
+
+    def get_global_syslog_server_summaries(self):
+        """Return list of syslog server summary dicts from the portal."""
+        return self._get_global_summaries(syslog_server_type=True)
+
+    def get_global_ipfix_exporter_summaries(self):
+        """Return list of IPFIX exporter summary dicts from the portal."""
+        return self._get_global_summaries(ipfix_exported_type=True)
+
+    def get_existing_global_routing_policy_names(self):
+        """
+        Return the set of names of global routing policies (BGP filters) that exist on the portal.
+
+        Returns:
+            set: Names of existing routing policies, or empty set if the API call fails.
+        """
+        return self._get_existing_global_names_from_summary(routing_policy_type=True)
+
+    def get_existing_global_prefix_set_names(self):
+        """
+        Return the set of names of global prefix sets that exist on the portal.
+
+        Returns:
+            set: Names of existing global prefix sets, or empty set if the API call fails.
+        """
+        return self._get_existing_global_names_from_summary(prefix_set_type=True)
+
+    def get_existing_global_snmp_names(self):
+        """
+        Return the set of names of global SNMP objects that exist on the portal.
+
+        Returns:
+            set: Names of existing SNMP objects, or empty set if the API call fails.
+        """
+        return self._get_existing_global_names_from_summary(snmp_type=True)
+
+    def get_existing_global_syslog_server_names(self):
+        """
+        Return the set of names of global syslog servers that exist on the portal.
+
+        Returns:
+            set: Names of existing syslog servers, or empty set if the API call fails.
+        """
+        return self._get_existing_global_names_from_summary(syslog_server_type=True)
+
+    def get_existing_global_ipfix_exporter_names(self):
+        """
+        Return the set of names of global IPFIX exporters that exist on the portal.
+
+        Returns:
+            set: Names of existing IPFIX exporters, or empty set if the API call fails.
+        """
+        return self._get_existing_global_names_from_summary(ipfix_exported_type=True)
 
     def get_global_routing_policy_id(self, policy_name):
         """
@@ -594,11 +767,9 @@ class GraphiantPortalClient():
         Returns:
             str or None: The ID of the routing policy if found, otherwise None.
         """
-        result = self.post_global_summary(routing_policy_type=True)
-        for key, value in result.to_dict().items():
-            for config in value:
-                if config['name'] == policy_name:
-                    return config['id']
+        for summary in self.get_global_routing_policy_summaries():
+            if summary.get('name') == policy_name:
+                return summary.get('id')
         return None
 
     # Site API methods
@@ -816,14 +987,8 @@ class GraphiantPortalClient():
             LOG.info("delete_global_lan_segments: Successfully deleted LAN segment with ID: %s", lan_segment_id)
             return True
         except Exception as e:
-            # Check if it's a validation error that we can ignore
-            if "validation error" in str(e) and "V1GlobalLanSegmentsIdDeleteResponse" in str(e):
-                LOG.info("delete_global_lan_segments: Delete operation completed (validation error can be ignored): %s",
-                         lan_segment_id)
-                return True
-            else:
-                LOG.error("delete_global_lan_segments: Got Exception while deleting LAN segment %s: %s", lan_segment_id, e)
-                return False
+            LOG.error("delete_global_lan_segments: Got Exception while deleting LAN segment %s: %s", lan_segment_id, e)
+            return False
 
     def get_global_lan_segments(self):
         """

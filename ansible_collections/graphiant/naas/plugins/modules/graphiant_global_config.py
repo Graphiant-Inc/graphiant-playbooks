@@ -262,6 +262,41 @@ from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator i
 )
 
 
+def get_deconfigure_summary(result):
+    """
+    Extract deleted, skipped, failed (bool), and failed_objects (list) from a deconfigure result.
+
+    result['details'] is either:
+    - Single op: { changed, deleted, skipped, failed (bool), failed_objects (list) }
+    - Generic:   { changed, details: { routing_policies: {...}, lan_segments: {...}, ... } }
+    """
+    details = result.get('details') or {}
+    if not isinstance(details, dict):
+        return {'deleted': [], 'skipped': [], 'failed': False, 'failed_objects': []}
+    list_keys = ('deleted', 'skipped', 'failed_objects')
+    # Support both failed_objects (new) and failed (legacy list)
+    failed_objects = list(details.get('failed_objects') or details.get('failed') or [])
+    out = {
+        'deleted': list(details.get('deleted') or []),
+        'skipped': list(details.get('skipped') or []),
+        'failed_objects': failed_objects,
+        'failed': bool(failed_objects),
+    }
+    if list(details.get('deleted') or []) or list(details.get('skipped') or []) or failed_objects:
+        return out  # Single-op: details had the lists
+    out = {'deleted': [], 'skipped': [], 'failed_objects': [], 'failed': False}
+    for v in details.values():
+        if not isinstance(v, dict):
+            continue
+        for sub in v.values():
+            if isinstance(sub, dict):
+                out['deleted'].extend(sub.get('deleted') or [])
+                out['skipped'].extend(sub.get('skipped') or [])
+                out['failed_objects'].extend(sub.get('failed_objects') or sub.get('failed') or [])
+    out['failed'] = bool(out['failed_objects'])
+    return out
+
+
 @capture_library_logs
 def execute_with_logging(module, func, *args, **kwargs):
     """
@@ -529,6 +564,27 @@ def main():
                                           success_msg="Successfully deconfigured global site lists")
             changed = result['changed']
             result_msg = result['result_msg']
+
+        # Deconfigure: fail task if any objects could not be deleted (in use); report deleted/skipped/failed
+        if operation.startswith('deconfigure'):
+            summary = get_deconfigure_summary(result)
+            if summary['failed']:
+                parts = []
+                if summary['deleted']:
+                    parts.append("Deleted: %s" % summary['deleted'])
+                if summary['skipped']:
+                    parts.append("Skipped: %s" % summary['skipped'])
+                parts.append("Failed (in use): %s. Remove from devices or policies first." % summary['failed_objects'])
+                module.fail_json(
+                    msg=" ".join(parts),
+                    deleted=summary['deleted'],
+                    skipped=summary['skipped'],
+                    failed=True,
+                    failed_objects=summary['failed_objects'],
+                    changed=changed or bool(summary['deleted']),
+                    operation=operation,
+                    config_file=config_file
+                )
 
         # Return success
         module.exit_json(

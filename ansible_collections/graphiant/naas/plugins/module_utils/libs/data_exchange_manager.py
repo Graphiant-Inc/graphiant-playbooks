@@ -1,10 +1,18 @@
 """
-Data Exchange Manager for Graphiant Playbooks
+Data Exchange Manager for Graphiant Playbooks.
 
 This module provides functionality for managing Data Exchange workflows including:
 - Create New Services
 - Create New Customers
 - Match Services to Customers
+
+Deconfigure workflow consistency (with global_config_manager, site_manager):
+- Idempotency: delete_customers/delete_services skip when customer/service not found.
+  match_service_to_customers and accept_invitation report 'failed' and raise when failures > 0.
+- Result shape: delete_* return changed, deleted, skipped (no 'failed'); match_* returns
+  matched, skipped, failed and raises if failed non-empty; accept_* raises if total_failed > 0.
+- Logging: "Attempting to delete ..." with target names, then "Deconfigure completed: ..."
+  with explicit lists (aligned with global_config and site_manager).
 """
 
 import os
@@ -425,7 +433,8 @@ class DataExchangeManager(BaseManager):
             if not isinstance(customers, list):
                 raise ConfigurationError("Configuration error: 'data_exchange_customers' must be a list.")
 
-            # Print current enterprise info
+            customer_names = [c.get('name') for c in customers if c.get('name')]
+            LOG.info("Attempting to delete Data Exchange customers: %s", customer_names)
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             for customer_config in customers:
@@ -451,6 +460,7 @@ class DataExchangeManager(BaseManager):
 
             LOG.info("Data Exchange customer deletion completed: %s deleted, %s skipped (changed: %s)",
                      len(result['deleted']), len(result['skipped']), result['changed'])
+            LOG.info("Deconfigure completed: deleted=%s, skipped=%s", result['deleted'], result['skipped'])
             return result
 
         except ConfigurationError:
@@ -483,7 +493,8 @@ class DataExchangeManager(BaseManager):
             if not isinstance(services, list):
                 raise ConfigurationError("Configuration error: 'data_exchange_services' must be a list.")
 
-            # Print current enterprise info
+            service_names = [s.get('serviceName') for s in services if s.get('serviceName')]
+            LOG.info("Attempting to delete Data Exchange services: %s", service_names)
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
             for service_config in services:
@@ -509,6 +520,7 @@ class DataExchangeManager(BaseManager):
 
             LOG.info("Data Exchange service deletion completed: %s deleted, %s skipped (changed: %s)",
                      len(result['deleted']), len(result['skipped']), result['changed'])
+            LOG.info("Deconfigure completed: deleted=%s, skipped=%s", result['deleted'], result['skipped'])
             return result
 
         except ConfigurationError:

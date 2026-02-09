@@ -615,6 +615,13 @@ class LagInterfaceManager(BaseManager):
                         device_configs[device_name] = []
                     device_configs[device_name].extend(config_list)
 
+            lag_names_per_device = {d: [c.get('name') for c in configs] for d, configs in device_configs.items()}
+            LOG.info(
+                "Attempting to deconfigure LAG interfaces for devices: %s (LAGs: %s)",
+                list(device_configs.keys()),
+                lag_names_per_device,
+            )
+
             for device_name, configs in device_configs.items():
                 LOG.info("Processing device: %s (%d LAG config(s) to be deconfigured)", device_name, len(configs))
 
@@ -728,6 +735,12 @@ class LagInterfaceManager(BaseManager):
 
             LOG.info("LAG interface deconfiguration completed: %s deleted, %s skipped (changed: %s)",
                      len(result['deconfigured_lags']), len(result['skipped_lags']), result['changed'])
+            # Explicit lists for consistency with global_config deconfigure logging
+            LOG.info(
+                "Deconfigure completed: deconfigured_lags=%s, skipped_lags=%s",
+                [e.get('lag') for e in result['deconfigured_lags']],
+                [e.get('lag') for e in result['skipped_lags']],
+            )
 
             return result
 
