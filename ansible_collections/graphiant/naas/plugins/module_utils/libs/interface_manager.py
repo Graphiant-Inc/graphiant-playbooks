@@ -419,6 +419,12 @@ class InterfaceManager(BaseManager):
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
                         device_configs[device_name]["circuits"] = config_list
 
+            LOG.info(
+                "Attempting to deconfigure interfaces for devices: %s (circuits_only=%s)",
+                list(device_configs.keys()),
+                circuits_only,
+            )
+
             # Process each device's configurations
             for device_name, configs in device_configs.items():
                 try:
@@ -678,6 +684,21 @@ class InterfaceManager(BaseManager):
                     LOG.warning("No valid circuit configurations found")
                 else:
                     LOG.warning("No valid device configurations found")
+
+            # Summary with explicit lists (consistent with global_config deconfigure logging)
+            deconfigured_names = [
+                "%s:%s%s" % (e.get("device", ""), e.get("interface", ""), (".%s" % e["vlan"]) if e.get("vlan") else "")
+                for e in result['deconfigured_interfaces']
+            ]
+            skipped_names = [
+                "%s:%s%s (%s)" % (e.get("device", ""), e.get("interface", ""), (".%s" % e["vlan"]) if e.get("vlan") else "", e.get("reason", ""))
+                for e in result['skipped_interfaces']
+            ]
+            LOG.info(
+                "Deconfigure completed: deconfigured_interfaces=%s, skipped_interfaces=%s",
+                deconfigured_names,
+                skipped_names,
+            )
 
             return result
 

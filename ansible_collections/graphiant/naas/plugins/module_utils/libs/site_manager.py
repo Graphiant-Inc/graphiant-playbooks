@@ -3,6 +3,14 @@ Site Manager for Graphiant Playbooks.
 
 This module handles site management operations including
 attachment and detachment of global system objects to/from sites.
+
+Deconfigure workflow consistency (with global_config_manager, interface_manager):
+- Idempotency: Delete only removes sites that exist (_delete_site_if_exists); detach
+  skips when site not found or object already detached. Safe to run multiple times.
+- Result shape: _manage_sites returns changed, created/deleted, skipped; _manage_site_objects
+  returns changed, attached/detached, skipped. No 'failed' list (errors raise).
+- Logging: "Attempting to delete/detach ..." with target names, then "Deconfigure completed: ..."
+  with explicit lists (aligned with global_config and interface_manager).
 """
 
 from typing import Dict, Any, Union
@@ -140,6 +148,12 @@ class SiteManager(BaseManager):
                 LOG.info("No sites configuration found in %s, skipping site %s", config_yaml_file, operation)
                 return result
 
+            site_names = [s.get('name') for s in config_data.get('sites') if s.get('name')]
+            if operation == "delete":
+                LOG.info("Attempting to delete sites: %s", site_names)
+            elif operation == "create":
+                LOG.info("Attempting to create sites: %s", site_names)
+
             for site_config in config_data.get('sites'):
                 try:
                     site_name = site_config.get('name')
@@ -170,6 +184,11 @@ class SiteManager(BaseManager):
             total_processed = len(result['created']) + len(result['deleted']) + len(result['skipped'])
             LOG.info("Processed %s sites (operation: %s, changed: %s)",
                      total_processed, operation, result['changed'])
+            # Explicit lists for consistency with global_config/interface_manager deconfigure logging
+            if operation == "delete":
+                LOG.info("Deconfigure completed: deleted=%s, skipped=%s", result['deleted'], result['skipped'])
+            elif operation == "create":
+                LOG.info("Configure completed: created=%s, skipped=%s", result['created'], result['skipped'])
 
             return result
 
@@ -311,6 +330,11 @@ class SiteManager(BaseManager):
                 return result
 
             default_operation = 'Attach' if operation.lower().startswith("attach") else 'Detach'
+            attachment_site_names = [list(sc.keys())[0] for sc in config_data.get('site_attachments') if sc]
+            if operation.lower().startswith("detach"):
+                LOG.info("Attempting to detach objects from sites: %s", attachment_site_names)
+            else:
+                LOG.info("Attempting to attach objects to sites: %s", attachment_site_names)
 
             for site_config in config_data.get('site_attachments'):
                 try:
@@ -322,6 +346,12 @@ class SiteManager(BaseManager):
                     site_payload = {"site": {"name": site_name}}
 
                     # Process SNMP operations
+                    if 'snmps' in site_data:
+                        site_payload['site']['snmpOps'] = {}
+                        for snmp_name in site_data.get('snmps'):
+                            site_payload['site']['snmpOps'][snmp_name] = default_operation
+
+                    # Process SNMP operations (Backward compatibility; Can be removed after testing)
                     if 'snmp_servers' in site_data:
                         site_payload['site']['snmpOps'] = {}
                         for snmp_name in site_data.get('snmp_servers'):
@@ -385,6 +415,11 @@ class SiteManager(BaseManager):
             total_processed = len(result['attached']) + len(result['detached']) + len(result['skipped'])
             LOG.info("Processed %s sites for object %s (changed: %s)",
                      total_processed, operation, result['changed'])
+            # Explicit lists for consistency with global_config/interface_manager deconfigure logging
+            if operation.lower().startswith("detach"):
+                LOG.info("Deconfigure completed: detached=%s, skipped=%s", result['detached'], result['skipped'])
+            else:
+                LOG.info("Configure completed: attached=%s, skipped=%s", result['attached'], result['skipped'])
 
             return result
 

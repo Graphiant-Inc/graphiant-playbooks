@@ -55,6 +55,7 @@ def check_structure(base_path):
         'plugins/modules/graphiant_vrrp.py',
         'plugins/modules/graphiant_bgp.py',
         'plugins/modules/graphiant_global_config.py',
+        'plugins/modules/graphiant_site_to_site_vpn.py',     
         'plugins/modules/graphiant_sites.py',
         'plugins/modules/graphiant_data_exchange.py',
         'plugins/modules/graphiant_data_exchange_info.py',  # Info module for query operations

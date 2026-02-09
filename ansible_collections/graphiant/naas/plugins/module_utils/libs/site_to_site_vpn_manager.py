@@ -8,8 +8,7 @@ skips push when intended config matches existing. Delete uses get_device_info to
 VPNs that exist on the device; skips push when none to delete (second delete is no-op).
 """
 
-import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
@@ -78,42 +77,6 @@ class SiteToSiteVpnManager(BaseManager):
         """
         self.delete_site_to_site_vpn(config_yaml_file)
 
-    # Fixed vault filename under config directory (playbook writes decrypted vars here)
-    VAULT_SITE_TO_SITE_VPN_SECRETS_FILE = "vault_site_to_site_vpn_secrets.yml"
-
-    def _get_vault_secrets_path(self) -> str:
-        """Return path to vault secrets file under config directory (fixed name)."""
-        config_path = (self.config_utils.config_path or "").rstrip("/")
-        return os.path.join(config_path, self.VAULT_SITE_TO_SITE_VPN_SECRETS_FILE) if config_path else ""
-
-    def _load_vault_secrets(self) -> tuple:
-        """
-        Load vault secrets from the fixed file under config (vault_site_to_site_vpn_secrets.yml).
-        Playbook must write decrypted vars to this file before the module runs.
-
-        Returns:
-            tuple: (vault_site_to_site_vpn_keys dict, vault_bgp_md5_passwords dict)
-        """
-        import yaml
-        vault_keys = {}
-        vault_md5_passwords = {}
-        file_path = self._get_vault_secrets_path()
-        if not file_path or not os.path.exists(file_path):
-            return vault_keys, vault_md5_passwords
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
-                if data:
-                    vault_keys = data.get('vault_site_to_site_vpn_keys', {}) or {}
-                    vault_md5_passwords = data.get('vault_bgp_md5_passwords', {}) or {}
-            if not isinstance(vault_keys, dict):
-                vault_keys = {}
-            if not isinstance(vault_md5_passwords, dict):
-                vault_md5_passwords = {}
-        except Exception as e:
-            LOG.warning("Could not load vault from %s: %s", file_path, str(e))
-        return vault_keys, vault_md5_passwords
-
     def _inject_vault_secrets(self, vpn_config: Dict[str, Any], vault_keys: Dict[str, Any], vault_md5_passwords: Dict[str, Any]) -> None:
         """
         Inject presharedKey and md5Password from vault only (by VPN name).
@@ -129,7 +92,7 @@ class SiteToSiteVpnManager(BaseManager):
         else:
             raise ConfigurationError(
                 f"presharedKey is required but missing for VPN '{vpn_name}'. "
-                "Set it in vault_site_to_site_vpn_keys in configs/vault_secrets.yml (and ensure the playbook loads it)."
+                "Pass it via vault_site_to_site_vpn_keys from Ansible Vault (see configs/vault_secrets.yml.example)."
             )
         # BGP md5Password: vault only
         routing = vpn_config.get('routing')
@@ -220,13 +183,19 @@ class SiteToSiteVpnManager(BaseManager):
                 normalized[af_name] = {"family": family}
         bgp["addressFamilies"] = normalized
 
-    def create_site_to_site_vpn(self, vpn_config_file: str) -> dict:
+    def create_site_to_site_vpn(
+        self,
+        vpn_config_file: str,
+        vault_site_to_site_vpn_keys: Optional[Dict[str, Any]] = None,
+        vault_bgp_md5_passwords: Optional[Dict[str, Any]] = None,
+    ) -> dict:
         """
         Create Site-to-Site VPN for multiple devices concurrently.
 
         Args:
-            vpn_config_file: Path to the YAML file containing Site-to-Site VPN configurations
-            Vault: presharedKey and md5Password are loaded from config file I(vault_site_to_site_vpn_secrets.yml).
+            vpn_config_file: Path to the YAML file containing Site-to-Site VPN configurations.
+            vault_site_to_site_vpn_keys: Dict of VPN name -> preshared key (pass from Ansible Vault; never written to disk).
+            vault_bgp_md5_passwords: Dict of VPN name -> BGP MD5 password (pass from Ansible Vault; never written to disk).
 
         Returns:
             dict: Result with 'changed' status and list of created devices
@@ -238,9 +207,15 @@ class SiteToSiteVpnManager(BaseManager):
         result = {'changed': False, 'created_devices': []}
 
         try:
+            vault_keys = (vault_site_to_site_vpn_keys if vault_site_to_site_vpn_keys is not None else {}) or {}
+            vault_md5 = (vault_bgp_md5_passwords if vault_bgp_md5_passwords is not None else {}) or {}
+            if not isinstance(vault_keys, dict):
+                vault_keys = {}
+            if not isinstance(vault_md5, dict):
+                vault_md5 = {}
+
             # Load Site-to-Site VPN configurations
             vpn_config_data = self.render_config_file(vpn_config_file)
-            vault_keys, vault_md5 = self._load_vault_secrets()
             output_config = {}
 
             # Config format: siteToSiteVpn is a list of { device_name: [ vpn_config, ... ] }
