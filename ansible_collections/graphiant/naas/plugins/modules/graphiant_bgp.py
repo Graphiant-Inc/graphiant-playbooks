@@ -298,22 +298,11 @@ def main():
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
-    # Handle check mode
-    if module.check_mode:
-        # All BGP operations (configure, deconfigure, detach_policies) make changes
-        # Note: Check mode assumes changes would be made as we cannot determine
-        # current state without making API calls. In practice, these operations
-        # typically result in changes unless the configuration is already applied.
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
-            operation=operation,
-            bgp_config_file=bgp_config_file
-        )
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation

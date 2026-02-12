@@ -93,7 +93,7 @@ class GraphiantConnection:
     Manages connection to Graphiant API and provides common functionality.
     """
 
-    def __init__(self, host: str, username: str, password: str):
+    def __init__(self, host: str, username: str, password: str, check_mode: bool = False):
         """
         Initialize Graphiant connection.
 
@@ -101,10 +101,12 @@ class GraphiantConnection:
             host: Graphiant API host URL
             username: Username for authentication
             password: Password for authentication
+            check_mode: If True, API write operations are skipped and payloads are only logged.
         """
         self.host = host
         self.username = username
         self.password = password
+        self.check_mode = check_mode
         self._graphiant_config = None
 
     @property
@@ -131,7 +133,8 @@ class GraphiantConnection:
                 self._graphiant_config = GraphiantConfig(
                     base_url=self.host,
                     username=self.username,
-                    password=self.password
+                    password=self.password,
+                    check_mode=self.check_mode
                 )
             except Exception as e:
                 raise GraphiantPlaybookError(f"Failed to initialize Graphiant connection: {str(e)}")
@@ -153,12 +156,14 @@ class GraphiantConnection:
             return False
 
 
-def get_graphiant_connection(module_params: Dict[str, Any]) -> GraphiantConnection:
+def get_graphiant_connection(module_params: Dict[str, Any], check_mode: bool = False) -> GraphiantConnection:
     """
     Create and return a Graphiant connection from module parameters.
 
     Args:
         module_params: Ansible module parameters
+        check_mode: If True, API write operations (put_device_config, patch_global_config, etc.)
+            are skipped and only the payload that would be sent is logged.
 
     Returns:
         GraphiantConnection: Initialized connection object
@@ -171,7 +176,8 @@ def get_graphiant_connection(module_params: Dict[str, Any]) -> GraphiantConnecti
     return GraphiantConnection(
         host=module_params['host'],
         username=module_params['username'],
-        password=module_params['password']
+        password=module_params['password'],
+        check_mode=check_mode
     )
 
 

@@ -115,6 +115,30 @@ class InterfaceManager(BaseManager):
         return None
 
     @classmethod
+    def _get_subinterface_lan(cls, gcs_device_info, interface_name, vlan):
+        """
+        Best-effort extraction of a subinterface's LAN segment from device info.
+        Returns None if not available.
+        """
+        interface = cls._get_interface_obj(gcs_device_info, interface_name)
+        if not interface or not hasattr(interface, 'subinterfaces') or not interface.subinterfaces:
+            return None
+        vlan_int = int(vlan) if vlan is not None else None
+        for subintf in interface.subinterfaces:
+            if getattr(subintf, 'vlan', None) == vlan_int:
+                for attr in ('lan', 'lanSegment', 'lan_segment'):
+                    val = getattr(subintf, attr, None)
+                    if val is None:
+                        continue
+                    if isinstance(val, str):
+                        return val
+                    if hasattr(val, 'name'):
+                        return getattr(val, 'name')
+                    return str(val)
+                return None
+        return None
+
+    @classmethod
     def _get_interface_circuit(cls, gcs_device_info, interface_name):
         """
         Best-effort extraction of the interface circuit identifier/name from device info.
@@ -828,6 +852,11 @@ class InterfaceManager(BaseManager):
         Configure LAN interfaces for multiple devices concurrently.
         Only interfaces with 'lan' key will be configured.
 
+        The API does not allow moving an interface to a different LAN segment in the same
+        request as other interface config changes. So when any interface/subinterface has
+        only its segment (lan) changed, we push in two phases: first a segment-only payload,
+        then the full config.
+
         Args:
             interface_config_file: Path to the YAML file containing interface configurations
 
@@ -843,6 +872,7 @@ class InterfaceManager(BaseManager):
         try:
             config_data = self.render_config_file(interface_config_file)
             output_config = {}
+            device_infos = {}  # device_id -> gcs device info for segment-change detection
 
             if 'interfaces' not in config_data:
                 LOG.warning("No interfaces configuration found in %s", interface_config_file)
@@ -910,6 +940,7 @@ class InterfaceManager(BaseManager):
                                 "device_id": device_id,
                                 "edge": device_config
                             }
+                            device_infos[device_id] = self.gsdk.get_device_info(device_id)
                             LOG.info("Device %s summary: %s LAN interfaces to be configured", device_name, lan_interfaces_configured)
                         else:
                             LOG.info("Device %s: No LAN interfaces found to configure", device_name)
@@ -922,6 +953,61 @@ class InterfaceManager(BaseManager):
                         raise ConfigurationError(f"LAN interface configuration failed for {device_name}: {str(e)}")
 
             if output_config:
+                # Build stage1 (segment-only) payloads for devices where an interface is moved to a new LAN.
+                # API rejects moving segment and changing other interface config in the same request.
+                _EMPTY_SEGMENT = {
+                    "networks": [],
+                    "bgpRedistribution": {},
+                    "bgpNeighbors": {},
+                    "syslogTargets": {},
+                    "staticRoutes": {},
+                    "dhcpSubnets": {},
+                    "bgpAggregations": {},
+                    "ipfixExporters": {},
+                }
+                stage1_config = {}
+                for device_id, entry in output_config.items():
+                    device_config = entry["edge"]
+                    gcs_info = device_infos.get(device_id)
+                    if not gcs_info:
+                        continue
+                    segment_changes = []  # list of (interface_name, vlan_or_none, new_lan)
+                    for ifname, ifdata in device_config.get("interfaces", {}).items():
+                        inner = ifdata.get("interface", {})
+                        # Main interface LAN: detect segment change whenever config has 'lan' (with or without subinterfaces)
+                        intended_main_lan = inner.get("lan")
+                        if intended_main_lan:
+                            current_main_lan = self._get_interface_lan(gcs_info, ifname)
+                            if current_main_lan is not None and current_main_lan != intended_main_lan:
+                                segment_changes.append((ifname, None, intended_main_lan))
+                        # Subinterface LANs
+                        subinterfaces = inner.get("subinterfaces")
+                        if subinterfaces:
+                            for vlan_str, sub in subinterfaces.items():
+                                intended_lan = sub.get("interface", {}).get("lan")
+                                if not intended_lan:
+                                    continue
+                                current_lan = self._get_subinterface_lan(gcs_info, ifname, int(vlan_str))
+                                if current_lan is not None and current_lan != intended_lan:
+                                    segment_changes.append((ifname, int(vlan_str), intended_lan))
+                    if not segment_changes:
+                        continue
+                    stage1_edge = {"interfaces": {}, "segments": {}}
+                    for ifname, vlan, new_lan in segment_changes:
+                        stage1_edge["segments"][new_lan] = _EMPTY_SEGMENT.copy()
+                        if vlan is None:
+                            stage1_edge["interfaces"][ifname] = {"interface": {"lan": new_lan}}
+                        else:
+                            if ifname not in stage1_edge["interfaces"]:
+                                stage1_edge["interfaces"][ifname] = {"interface": {"subinterfaces": {}}}
+                            # Interface may already exist from main-interface segment change; ensure subinterfaces exists
+                            stage1_edge["interfaces"][ifname]["interface"].setdefault("subinterfaces", {})[str(vlan)] = {
+                                "interface": {"vlan": vlan, "lan": new_lan}
+                            }
+                    stage1_config[device_id] = {"device_id": device_id, "edge": stage1_edge}
+                if stage1_config:
+                    LOG.info("Pushing segment-only update first for %s device(s) (LAN move), then full config", len(stage1_config))
+                    self.execute_concurrent_tasks(self.gsdk.put_device_config, stage1_config)
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
                 result['changed'] = True
                 result['configured_devices'] = list(output_config.keys())

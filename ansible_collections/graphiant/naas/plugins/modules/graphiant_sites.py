@@ -26,13 +26,16 @@ description:
   - Configuration files support Jinja2 templating for dynamic generation.
 version_added: "26.1.0"
 notes:
+  - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
+  - "Use playbook I(playbooks/site_management.yml) with tags I(configure_sites), I(deconfigure_sites),"
+  - "  I(attach_objects), I(detach_objects), I(configure), I(deconfigure)."
   - "Site Operations:"
-  - "  - Configure: Create sites and attach global objects in one operation."
-  - "  - Deconfigure: Detach global objects and delete sites in one operation."
-  - "  - Configure Sites: Create sites only (without attaching objects)."
-  - "  - Deconfigure Sites: Delete sites only (without detaching objects)."
-  - "  - Attach Objects: Attach global objects to existing sites."
-  - "  - Detach Objects: Detach global objects from sites (without deleting sites)."
+  - "  - V(configure): Create sites and attach global objects in one operation."
+  - "  - V(deconfigure): Detach global objects and delete sites in one operation."
+  - "  - V(configure_sites): Create sites only (without attaching objects)."
+  - "  - V(deconfigure_sites): Delete sites only (without detaching objects)."
+  - "  - V(attach_objects): Attach global objects to existing sites. Prerequisite: global objects created first."
+  - "  - V(detach_objects): Detach global objects from sites (sites remain)."
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves site names and global object names to IDs."
   - "All operations are idempotent and safe to run multiple times."
@@ -99,14 +102,15 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode with partial support.
-    support: partial
+    description: >
+      Supports check mode. In check mode, no configuration is pushed to the devices
+      but payloads that would be pushed are logged with C([check_mode]).
+    support: full
     details: >
-      The module cannot accurately determine whether changes would actually be made without
-      querying the current state via API calls. In check mode, the module assumes that changes
-      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure)).
-      This means that check mode may report changes even when the configuration is already
-      applied. The module does not perform state comparison in check mode due to API limitations.
+      When run with C(--check), the module logs the exact payloads that would be pushed
+      with a C([check_mode]) prefix so you can see what configuration would be applied.
+      The module does not perform state comparison, so V(changed) may be V(True) even
+      when the configuration is already applied.
 
 requirements:
   - python >= 3.7
@@ -329,22 +333,11 @@ def main():
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
-    # Handle check mode
-    if module.check_mode:
-        # All site operations make changes
-        # Note: Check mode assumes changes would be made as we cannot determine
-        # current state without making API calls. In practice, these operations
-        # typically result in changes unless the configuration is already applied.
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
-            operation=operation,
-            site_config_file=site_config_file
-        )
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation

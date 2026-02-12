@@ -17,7 +17,7 @@
       # password: "{{ graphiant_password | default(lookup('ini', 'password file=/absolute/path/credentials.ini section=credentials')) }}"
 
   tasks:
-    - name: Configure circuits only (for static routes)
+    - name: Configure circuits only (Circuit configuration and static routes)
       graphiant.naas.graphiant_interfaces:
         <<: *graphiant_client_params
         interface_config_file: "sample_interface_config.yaml"
@@ -25,9 +25,16 @@
         operation: "configure_circuits"
         detailed_logs: true
         state: present
-      tags: ['circuits', 'static_routes']
+      register: configure_result
+      tags: ['configure', 'static_routes']
 
-    - name: Deconfigure circuits only (removes static routes)
+    - name: Display circuits configuration results
+      ansible.builtin.debug:
+        msg: "{{ configure_result.msg }}"
+      when: configure_result is defined and configure_result.msg is defined
+      tags: ['configure', 'static_routes']
+
+    - name: Deconfigure circuits (i.e removes static routes only)
       graphiant.naas.graphiant_interfaces:
         <<: *graphiant_client_params
         interface_config_file: "sample_interface_config.yaml"
@@ -35,5 +42,11 @@
         operation: "deconfigure_circuits"
         detailed_logs: true
         state: absent
-      when: circuit_cleanup is defined and circuit_cleanup
-      tags: ['circuits', 'cleanup']
+      register: deconfigure_result
+      tags: ['deconfigure']
+
+    - name: Display circuits static routes deconfiguration results
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_result.msg }}"
+      when: deconfigure_result is defined and deconfigure_result.msg is defined
+      tags: ['deconfigure']

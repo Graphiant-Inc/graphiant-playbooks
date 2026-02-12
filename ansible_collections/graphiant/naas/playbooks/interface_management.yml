@@ -30,6 +30,8 @@
     - name: Display LAN Interface Configuration Results
       ansible.builtin.debug:
         msg: "{{ configure_result.msg }}"
+      when: configure_result is defined and configure_result.msg is defined
+      tags: ['interfaces', 'lan']
 
     - name: Configure WAN circuits and interfaces
       graphiant.naas.graphiant_interfaces:
@@ -45,6 +47,8 @@
     - name: Display WAN Interface Configuration Results
       ansible.builtin.debug:
         msg: "{{ configure_result.msg }}"
+      when: configure_result is defined and configure_result.msg is defined
+      tags: ['interfaces', 'wan', 'circuits']
 
     - name: Configure all interfaces (combined operation)
       graphiant.naas.graphiant_interfaces:
@@ -54,20 +58,61 @@
         operation: "configure_interfaces"
         detailed_logs: true
         state: present
-      tags: ['interfaces', 'all']
+      tags: ['interfaces', 'configure']
       register: configure_result
 
     - name: Display All Interfaces Configuration Results
       ansible.builtin.debug:
         msg: "{{ configure_result.msg }}"
+      when: configure_result is defined and configure_result.msg is defined
+      tags: ['interfaces', 'configure']
 
-    # - name: Deconfigure all interfaces (reset to default)
-    #   graphiant.naas.graphiant_interfaces:
-    #     <<: *graphiant_client_params
-    #     interface_config_file: "sample_interface_config.yaml"
-    #     circuit_config_file: "sample_circuit_config.yaml"
-    #     operation: "deconfigure_interfaces"
-    #     detailed_logs: true
-    #     state: absent
-    #   when: interface_cleanup is defined and interface_cleanup
-    #   tags: ['interfaces', 'cleanup']
+    - name: Deconfigure LAN interfaces only
+      graphiant.naas.graphiant_interfaces:
+        <<: *graphiant_client_params
+        interface_config_file: "sample_interface_config.yaml"
+        operation: "deconfigure_lan_interfaces"
+        detailed_logs: true
+        state: absent
+      tags: ['deconfigure_lan']
+      register: deconfigure_lan_result
+
+    - name: Display LAN Interface Deconfiguration Results
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_lan_result.msg }}"
+      when: deconfigure_lan_result is defined and deconfigure_lan_result.msg is defined
+      tags: ['deconfigure_lan']
+
+    - name: Deconfigure WAN circuits and interfaces
+      graphiant.naas.graphiant_interfaces:
+        <<: *graphiant_client_params
+        interface_config_file: "sample_interface_config.yaml"
+        circuit_config_file: "sample_circuit_config.yaml"
+        operation: "deconfigure_wan_circuits_interfaces"
+        detailed_logs: true
+        state: absent
+      tags: ['deconfigure_wan']
+      register: deconfigure_wan_result
+
+    - name: Display WAN Deconfiguration Results
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_wan_result.msg }}"
+      when: deconfigure_wan_result is defined and deconfigure_wan_result.msg is defined
+      tags: ['deconfigure_wan']
+
+    - name: Deconfigure all (WAN and LAN) interfaces (reset to default)
+      graphiant.naas.graphiant_interfaces:
+        <<: *graphiant_client_params
+        interface_config_file: "sample_interface_config.yaml"
+        circuit_config_file: "sample_circuit_config.yaml"
+        operation: "deconfigure_interfaces"
+        detailed_logs: true
+        state: absent
+      tags: ['deconfigure']
+      register: deconfigure_result
+
+    - name: Display Deconfigure Interfaces Result
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_result.msg }}"
+      when: deconfigure_result is defined and deconfigure_result.msg is defined
+      tags: ['deconfigure']

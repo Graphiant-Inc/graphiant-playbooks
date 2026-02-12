@@ -33,6 +33,7 @@ description:
     causing errors or unintended changes.
 version_added: "25.13.0"
 notes:
+  - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "LAG Operations:"
   - >
     - configure: Configure LAG on physical interfaces (and optionally
@@ -143,16 +144,15 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode with partial support.
-    support: partial
+    description: >
+      Supports check mode. In check mode, no configuration is pushed to the devices
+      but payloads that would be pushed are logged with C([check_mode]).
+    support: full
     details: >
-      The module cannot determine whether changes would actually be made
-      without querying the current state via API calls. In check mode, the
-      module
-      assumes changes and returns V(changed=True) for all operations.
-      This means that check mode may report changes even when the
-      configuration is already applied. The module does not perform state
-      comparison in check mode due to API limitations.
+      When run with C(--check), the module logs the exact payloads that would be pushed
+      with a C([check_mode]) prefix so you can see what configuration would be applied.
+      The module does not perform state comparison, so V(changed) may be V(True) even
+      when the configuration is already applied.
 
 requirements:
   - python >= 3.7
@@ -375,18 +375,11 @@ def main():
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
-    # Handle check mode
-    if module.check_mode:
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation}",
-            operation=operation,
-            lag_config_file=lag_config_file
-        )
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = graphiant_utils.get_graphiant_connection(params)
+        connection = graphiant_utils.get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation

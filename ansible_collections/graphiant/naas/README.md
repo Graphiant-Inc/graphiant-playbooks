@@ -174,41 +174,72 @@ antsibull-docs lint-collection-docs ansible_collections/graphiant/naas/
   gather_facts: false
   vars:
     graphiant_client_params: &graphiant_client_params
-      host: "{{ graphiant_host }}"
-      username: "{{ graphiant_username }}"
-      password: "{{ graphiant_password }}"
+      host: "{{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}"
+      username: "{{ graphiant_username | default(lookup('env', 'GRAPHIANT_USERNAME')) }}"
+      password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
 
   tasks:
-    - name: Configure LAN interfaces
+    - name: Configure LAN interfaces only
       graphiant.naas.graphiant_interfaces:
         <<: *graphiant_client_params
-        interface_config_file: "interface_config.yaml"
+        interface_config_file: "sample_interface_config.yaml"
         operation: "configure_lan_interfaces"
-
-    - name: Configure VRRP on interfaces
-      graphiant.naas.graphiant_vrrp:
-        <<: *graphiant_client_params
-        vrrp_config_file: "vrrp_config.yaml"
-        operation: "configure"
+        detailed_logs: true
         state: present
+      tags: ['interfaces', 'lan']
+      register: configure_result
 
-    - name: Configure BGP peering
-      graphiant.naas.graphiant_bgp:
-        <<: *graphiant_client_params
-        bgp_config_file: "bgp_config.yaml"
-        operation: "configure"
+    - name: Display LAN Interface Configuration Results
+      ansible.builtin.debug:
+        msg: "{{ configure_result.msg }}"
+      when: configure_result is defined and configure_result.msg is defined
+      tags: ['interfaces', 'lan']
 
     - name: Configure global prefix sets
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
-        config_file: "global_prefix_lists.yaml"
+        config_file: "sample_global_prefix_lists.yaml"
         operation: "configure"
+        detailed_logs: true
+        state: present
+      register: prefix_sets_result
+      tags: ['global_config', 'prefix_sets']
 
-    - name: Push raw device configuration
-      graphiant.naas.graphiant_device_config:
+    - name: Display prefix sets result
+      ansible.builtin.debug:
+        msg: "{{ prefix_sets_result.msg }}"
+      tags: ['global_config', 'prefix_sets']
+
+    - name: Configure global BGP filters
+      graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
-        config_file: "sample_device_config_payload.yaml"
+        config_file: "sample_global_bgp_filters.yaml"
         operation: "configure"
+        detailed_logs: true
+        state: present
+      register: bgp_filters_result
+      tags: ['global_config', 'bgp_filters']
+
+    - name: Display BGP filters result
+      ansible.builtin.debug:
+        msg: "{{ bgp_filters_result.msg }}"
+      tags: ['global_config', 'bgp_filters']
+
+    - name: Configure BGP peering
+      graphiant.naas.graphiant_bgp:
+        <<: *graphiant_client_params
+        bgp_config_file: "sample_bgp_peering.yaml"
+        operation: "configure"
+        detailed_logs: true
+        state: present
+      ignore_errors: true
+      register: bgp_peering_result
+      tags: ['bgp', 'peering']
+
+    - name: Display BGP peering result
+      ansible.builtin.debug:
+        msg: "{{ bgp_peering_result.msg }}"
+      tags: ['bgp', 'peering']
 ```
 
 ### Example Playbooks
@@ -221,7 +252,8 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `complete_network_setup.yml` | Full network configuration workflow |
 | `interface_management.yml` | Interface and circuit operations |
 | `vrrp_interface_management.yml` | VRRP configuration on interfaces and subinterfaces |
-| `circuit_management.yml` | Circuit-specific operations |
+| `lag_interface_management.yml` | LAG interface configuration |
+| `circuit_management.yml` | Circuit configuration and static routes |
 | `lan_segments_management.yml` | LAN segment configuration |
 | `site_management.yml` | Site creation and management |
 | `site_to_site_vpn.yml` | Site-to-Site VPN create/delete (uses Ansible Vault for preshared keys) |
@@ -259,6 +291,7 @@ View module documentation with `ansible-doc`:
 ```bash
 ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_vrrp
+ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_bgp
 ansible-doc graphiant.naas.graphiant_site_to_site_vpn
 ansible-doc graphiant.naas.graphiant_global_config
