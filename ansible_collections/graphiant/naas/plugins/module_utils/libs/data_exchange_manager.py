@@ -786,8 +786,11 @@ class DataExchangeManager(BaseManager):
                 result['matched'].append(match_key)
                 result['changed'] = True
 
-            # Save match responses to file for next workflow
-            self._save_match_service_to_customer_responses(match_responses, config_yaml_file)
+            # Save match responses to file for next workflow (skip in check_mode to avoid writing files)
+            if not getattr(self.gsdk, 'check_mode', False):
+                self._save_match_service_to_customer_responses(match_responses, config_yaml_file)
+            else:
+                LOG.info("[check_mode] Skipping write of matches file (would save %s entries)", len(match_responses))
 
             LOG.info("Data Exchange service matching completed: %s matched, %s skipped, %s failed (changed: %s)",
                      len(result['matched']), len(result['skipped']), len(result['failed']), result['changed'])

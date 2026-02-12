@@ -30,6 +30,7 @@ description:
   - All operations use Jinja2 templates for consistent configuration deployment.
 version_added: "26.1.0"
 notes:
+  - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "Global Configuration Operations:"
   - "  - General operations (V(configure), V(deconfigure)):
   - Automatically detect and process all configuration types in the YAML file."
@@ -39,6 +40,7 @@ notes:
   - "The module automatically resolves names to IDs for sites, LAN segments, and other referenced objects."
   - "All operations are idempotent and safe to run multiple times."
   - "Global objects can be referenced by other modules (BGP, Sites, Data Exchange) after creation."
+  - "When both O(operation) and O(state) are provided, O(operation) takes precedence."
 options:
   host:
     description:
@@ -125,14 +127,15 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode with partial support.
-    support: partial
+    description: >
+      Supports check mode. In check mode, no configuration is pushed to the devices
+      but payloads that would be pushed are logged with C([check_mode]).
+    support: full
     details: >
-      The module cannot accurately determine whether changes would actually be made without
-      querying the current state via API calls. In check mode, the module assumes that changes
-      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure)).
-      This means that check mode may report changes even when the configuration is already
-      applied. The module does not perform state comparison in check mode due to API limitations.
+      When run with C(--check), the module logs the exact payloads that would be pushed
+      with a C([check_mode]) prefix so you can see what configuration would be applied.
+      The module does not perform state comparison, so V(changed) may be V(True) even
+      when the configuration is already applied.
 
 requirements:
   - python >= 3.7
@@ -274,8 +277,8 @@ def get_deconfigure_summary(result):
     if not isinstance(details, dict):
         return {'deleted': [], 'skipped': [], 'failed': False, 'failed_objects': []}
     list_keys = ('deleted', 'skipped', 'failed_objects')
-    # Support both failed_objects (new) and failed (legacy list)
-    failed_objects = list(details.get('failed_objects') or details.get('failed') or [])
+    # failed_objects must be a list; 'failed' key is bool in both top-level and sub-results
+    failed_objects = list(details.get('failed_objects') or [])
     out = {
         'deleted': list(details.get('deleted') or []),
         'skipped': list(details.get('skipped') or []),
@@ -292,7 +295,7 @@ def get_deconfigure_summary(result):
             if isinstance(sub, dict):
                 out['deleted'].extend(sub.get('deleted') or [])
                 out['skipped'].extend(sub.get('skipped') or [])
-                out['failed_objects'].extend(sub.get('failed_objects') or sub.get('failed') or [])
+                out['failed_objects'].extend(sub.get('failed_objects') or [])
     out['failed'] = bool(out['failed_objects'])
     return out
 
@@ -419,22 +422,11 @@ def main():
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
-    # Handle check mode
-    if module.check_mode:
-        # All global config operations make changes
-        # Note: Check mode assumes changes would be made as we cannot determine
-        # current state without making API calls. In practice, these operations
-        # typically result in changes unless the configuration is already applied.
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
-            operation=operation,
-            config_file=config_file
-        )
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation
@@ -570,6 +562,8 @@ def main():
             summary = get_deconfigure_summary(result)
             if summary['failed']:
                 parts = []
+                if module.check_mode:
+                    parts.append("[check_mode]")
                 if summary['deleted']:
                     parts.append("Deleted: %s" % summary['deleted'])
                 if summary['skipped']:

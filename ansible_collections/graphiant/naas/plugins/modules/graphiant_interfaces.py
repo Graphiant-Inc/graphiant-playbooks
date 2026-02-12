@@ -35,6 +35,8 @@ notes:
   - "The module automatically resolves device names to IDs and validates configurations."
   - "Deconfigure operations are idempotent and safe to run multiple times."
   - "Configure operations always push the desired config (they may report changed even if the device is already configured)."
+  - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
+  - "LAN segment move: When an interface or subinterface is moved to a different LAN segment, the API requires a two-step push (segment-only then full config). The module does this automatically; in check mode both payloads are shown."
   - "WAN static-route cleanup (important):"
   - "  - Detaching a WAN interface from a circuit may be treated by the backend as a circuit removal."
   - "    If that circuit still has static routes, the operation can fail with:"
@@ -124,14 +126,10 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode with partial support.
-    support: partial
+    description: Supports check mode. In check mode, no configuration is pushed to the devices but payloads that would be pushed are logged with C([check_mode]).
+    support: full
     details: >
-      The module cannot accurately determine whether changes would actually be made without
-      querying the current state via API calls. In check mode, the module assumes that changes
-      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure)).
-      This means that check mode may report changes even when the configuration is already
-      applied. The module does not perform state comparison in check mode due to API limitations.
+      When run with C(--check), the module logs the exact payloads that would be pushed with a C([check_mode]) prefix so you can see what configuration would be applied. 
 
 requirements:
   - python >= 3.7
@@ -409,25 +407,11 @@ def main():
             msg=f"Operation '{operation}' requires 'circuit_config_file' parameter"
         )
 
-    # Handle check mode
-    if module.check_mode:
-        # All interface operations make changes
-        # Note: Check mode assumes changes would be made as we cannot determine
-        # current state without making API calls. In practice, these operations
-        # typically result in changes unless the configuration is already applied.
-        result_dict = dict(
-            changed=True,
-            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
-            operation=operation,
-            interface_config_file=interface_config_file
-        )
-        if circuit_config_file:
-            result_dict['circuit_config_file'] = circuit_config_file
-        module.exit_json(**result_dict)
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation

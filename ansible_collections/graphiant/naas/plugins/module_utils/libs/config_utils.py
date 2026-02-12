@@ -105,11 +105,17 @@ class ConfigUtils(PortalUtils):
         LOG.debug("Edge BGP peering: %s %s", action.upper(), kwargs.get('segments'))
 
         try:
-            # Handle route policies global ID resolution
+            # Handle route policies global ID resolution (API expects integer; None renders as string "None")
             global_ids = {}
             if kwargs.get("route_policies"):
                 for policy_name in kwargs.get("route_policies"):
-                    global_ids[policy_name] = self.gsdk.get_global_routing_policy_id(policy_name)
+                    rid = self.gsdk.get_global_routing_policy_id(policy_name)
+                    if rid is None:
+                        raise ConfigurationError(
+                            f"Routing policy '{policy_name}' not found. "
+                            "Configure global BGP filters first (e.g. graphiant_global_config with sample_global_bgp_filters.yaml)."
+                        )
+                    global_ids[policy_name] = rid
                     LOG.debug("Global ID for %s: %s", policy_name, global_ids[policy_name])
 
             result = self.template.render_bgp_peering(action=action, global_ids=global_ids, **kwargs)

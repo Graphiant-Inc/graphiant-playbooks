@@ -49,6 +49,7 @@
         <<: *graphiant_client_params
         config_file: "{{ config_file }}"
         operation: "configure_site_lists"
+        # operation: "configure"
         detailed_logs: true
         state: present
       register: configure_result
@@ -65,6 +66,7 @@
         <<: *graphiant_client_params
         config_file: "{{ config_file }}"
         operation: "deconfigure_site_lists"
+        # operation: "deconfigure"
         detailed_logs: true
         state: absent
       register: deconfigure_result

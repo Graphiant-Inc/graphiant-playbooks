@@ -278,7 +278,7 @@ def main():
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
 
         # Get Graphiant config from connection (same pattern as graphiant_data_exchange module)
         graphiant_config = connection.graphiant_config

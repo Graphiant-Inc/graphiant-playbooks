@@ -37,7 +37,7 @@ class GraphiantConfig:
     """
 
     def __init__(self, base_url: Optional[str] = None, username: Optional[str] = None,
-                 password: Optional[str] = None, **kwargs):
+                 password: Optional[str] = None, check_mode: bool = False, **kwargs):
         """
         Initialize the GraphiantConfig class with connection parameters.
 
@@ -45,6 +45,7 @@ class GraphiantConfig:
             base_url: Base URL for the Graphiant API
             username: Username for authentication
             password: Password for authentication
+            check_mode: If True, API write operations are skipped and payloads are only logged.
             **kwargs: Additional parameters passed to ConfigUtils
         """
         try:
@@ -53,6 +54,7 @@ class GraphiantConfig:
                 base_url=base_url,
                 username=username,
                 password=password,
+                check_mode=check_mode,
                 **kwargs
             )
 

@@ -507,7 +507,7 @@ def main():
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation
