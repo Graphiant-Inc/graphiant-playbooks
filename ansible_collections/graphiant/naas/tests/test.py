@@ -925,6 +925,36 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Delete Site-to-Site VPN result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Delete Site-to-Site VPN idempotency failed"
 
+    def test_configure_static_routes(self):
+        """
+        Configure static routes.
+
+        Second run should be idempotent (changed=False) if desired state already matches.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+
+        result = graphiant_config.static_routes.configure("sample_static_route.yaml")
+        LOG.info("Configure static routes result: %s", result)
+        result2 = graphiant_config.static_routes.configure("sample_static_route.yaml")
+        LOG.info("Configure static routes result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure static routes idempotency failed"
+
+    def test_deconfigure_static_routes(self):
+        """
+        Deconfigure (delete) static routes listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when routes are already absent.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+
+        result = graphiant_config.static_routes.deconfigure("sample_static_route.yaml")
+        LOG.info("Deconfigure static routes result: %s", result)
+        result2 = graphiant_config.static_routes.deconfigure("sample_static_route.yaml")
+        LOG.info("Deconfigure static routes result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure static routes idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -1053,6 +1083,18 @@ if __name__ == '__main__':
     # suite.addTest(TestGraphiantPlaybooks('test_accept_data_exchange_invitation_dry_run'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services'))
+
+    # Static Routes Management Tests
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
+    suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_static_routes'))  # Pre-req: Configure LAN segments, interfaces, circuits, and site-to-site VPNs.
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_static_routes'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
 
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))

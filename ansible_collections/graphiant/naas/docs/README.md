@@ -43,6 +43,7 @@ ansible-doc graphiant.naas.graphiant_site_to_site_vpn
 ansible-doc graphiant.naas.graphiant_global_config
 ansible-doc graphiant.naas.graphiant_sites
 ansible-doc graphiant.naas.graphiant_data_exchange
+ansible-doc graphiant.naas.graphiant_static_routes
 ```
 
 ## Building Documentation Site
