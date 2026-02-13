@@ -23,6 +23,7 @@ description:
   - Configuration files support Jinja2 templating for dynamic generation.
 version_added: "25.13.0"
 notes:
+  - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "Site-to-Site VPN Operations:"
   - "  - Create: Create Site-to-Site VPN connections on edge devices."
   - "  - Delete: Remove Site-to-Site VPN connections from edge devices."
@@ -104,13 +105,15 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode with partial support.
-    support: partial
+    description: >
+      Supports check mode. In check mode, no configuration is pushed to the devices
+      but payloads that would be pushed are logged with C([check_mode]).
+    support: full
     details: >
-      In check mode the module exits without making API calls, so it does not compare
-      intended state to current device state and always returns V(changed=True) for
-      V(create) and V(delete). Check mode may report changes even when the configuration
-      is already applied.
+      When run with C(--check), the module logs the exact payloads that would be pushed
+      with a C([check_mode]) prefix so you can see what configuration would be applied.
+      The module does not perform state comparison, so V(changed) may be V(True) even
+      when the configuration is already applied.
 
 requirements:
   - python >= 3.7
@@ -313,22 +316,11 @@ def main():
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
-    # Handle check mode
-    if module.check_mode:
-        # All Site-to-Site VPN operations make changes
-        # Note: Check mode assumes changes would be made as we cannot determine
-        # current state without making API calls. In practice, these operations
-        # typically result in changes unless the configuration is already applied.
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
-            operation=operation,
-            site_to_site_vpn_config_file=site_to_site_vpn_config_file
-        )
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation

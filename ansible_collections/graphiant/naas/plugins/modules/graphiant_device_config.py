@@ -363,31 +363,11 @@ def main():
         if state == 'present':
             operation = 'configure'
 
-    # Handle check mode
-    if module.check_mode:
-        # show_validated_payload is a read-only validation operation that makes no changes
-        if operation == 'show_validated_payload':
-            changed = False
-            msg = f"Check mode: Would validate payload from {config_file} (no changes made)"
-        else:
-            # configure operation would make changes
-            changed = True
-            msg = f"Check mode: Would execute {operation}"
-
-        result_dict = dict(
-            changed=changed,
-            msg=msg,
-            operation=operation,
-            config_file=config_file
-        )
-        if template_file:
-            result_dict['template_file'] = template_file
-
-        module.exit_json(**result_dict)
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation

@@ -27,7 +27,7 @@ LOG = setup_logger()
 
 class PortalUtils(object):
 
-    def __init__(self, base_url=None, username=None, password=None):
+    def __init__(self, base_url=None, username=None, password=None, **kwargs):
         # Logs: Use current working directory (where playbook is run from)
         self.logs_path = os.path.join(os.getcwd(), "logs") + "/"    # Default logs path
         self.config_path = None
@@ -65,7 +65,10 @@ class PortalUtils(object):
         LOG.info("PortalUtils : config_path : %s", self.config_path)
         LOG.info("PortalUtils : template_path : %s", self.template_path)
         LOG.info("PortalUtils : logs_path : %s", self.logs_path)
-        self.gsdk = GraphiantPortalClient(base_url=base_url, username=username, password=password)
+        check_mode = kwargs.get('check_mode', False)
+        self.gsdk = GraphiantPortalClient(
+            base_url=base_url, username=username, password=password, check_mode=check_mode
+        )
         self.gsdk.set_bearer_token()
 
     def _find_collection_root(self) -> str:

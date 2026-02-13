@@ -54,7 +54,7 @@ LOG = setup_logger()
 
 
 class GraphiantPortalClient():
-    def __init__(self, base_url=None, username=None, password=None):
+    def __init__(self, base_url=None, username=None, password=None, check_mode=False):
         if not HAS_GRAPHIANT_SDK:
             raise ImportError("graphiant-sdk is required for this module. Install it with: pip install graphiant-sdk")
         self.config = graphiant_sdk.Configuration(host=base_url,
@@ -63,6 +63,7 @@ class GraphiantPortalClient():
         self.api = graphiant_sdk.DefaultApi(self.api_client)
         self.bearer_token = None
         self.enterprise_info = None
+        self.check_mode = check_mode
 
     def set_bearer_token(self):
         v1_auth_login_post_request = \
@@ -346,6 +347,10 @@ class GraphiantPortalClient():
         """
         device_config_put_request = \
             graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] put_device_config would push config for device_id=%s: %s",
+                     device_id, json.dumps(device_config_put_request.to_dict(), indent=2))
+            return None
         try:
             # Verify device portal status and connection status.
             self.verify_device_portal_status(device_id=device_id)
@@ -404,6 +409,10 @@ class GraphiantPortalClient():
         if 'configurationMetadata' in payload:
             device_config_put_request.configuration_metadata = payload['configurationMetadata']
 
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] put_device_config_raw would push config for device_id=%s: %s",
+                     device_id, json.dumps(device_config_put_request.to_dict(), indent=2))
+            return None
         try:
             # Verify device portal status and connection status.
             self.verify_device_portal_status(device_id=device_id)
@@ -534,16 +543,20 @@ class GraphiantPortalClient():
             ApiException: If the API call fails.
 
         """
+        patch_global_config_request = graphiant_sdk.V1GlobalConfigPatchRequest(
+            global_prefix_sets=kwargs.get('global_prefix_sets'),
+            ipfix_exporters=kwargs.get('ipfix_exporters'),
+            prefix_sets=kwargs.get('prefix_sets'),
+            routing_policies=kwargs.get('routing_policies'),
+            snmps=kwargs.get('snmps'),
+            syslog_servers=kwargs.get('syslog_servers'),
+            traffic_policies=kwargs.get('traffic_policies'),
+            vpn_profiles=kwargs.get('vpn_profiles'))
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] patch_global_config would push: %s",
+                     json.dumps(patch_global_config_request.to_dict(), indent=2))
+            return None
         try:
-            patch_global_config_request = graphiant_sdk.V1GlobalConfigPatchRequest(
-                global_prefix_sets=kwargs.get('global_prefix_sets'),
-                ipfix_exporters=kwargs.get('ipfix_exporters'),
-                prefix_sets=kwargs.get('prefix_sets'),
-                routing_policies=kwargs.get('routing_policies'),
-                snmps=kwargs.get('snmps'),
-                syslog_servers=kwargs.get('syslog_servers'),
-                traffic_policies=kwargs.get('traffic_policies'),
-                vpn_profiles=kwargs.get('vpn_profiles'))
             LOG.info("patch_global_config : config to be pushed : \n%s",
                      json.dumps(patch_global_config_request.to_dict(), indent=2))
             response = self.api.v1_global_config_patch(
@@ -786,6 +799,9 @@ class GraphiantPortalClient():
         Raises:
             ApiException: If the API call fails.
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] create_site would create: %s", json.dumps(site_data, indent=2))
+            return type('MockSite', (), {'id': 0})()
         try:
             LOG.info("create_site: Creating site with data: %s", json.dumps(site_data, indent=2))
             response = self.api.v1_sites_post(
@@ -814,6 +830,9 @@ class GraphiantPortalClient():
         Returns:
             bool: True if deletion was successful, False otherwise
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] delete_site would delete site with ID: %s", site_id)
+            return True
         try:
             LOG.info("delete_site: Deleting site with ID: %s", site_id)
             self.api.v1_sites_site_id_delete(
@@ -883,6 +902,10 @@ class GraphiantPortalClient():
         Raises:
             ApiException: If the API call fails.
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] post_site_config would push for site_id=%s: %s",
+                     site_id, json.dumps(site_config, indent=2))
+            return None
         try:
             LOG.info("post_site_config : config to be pushed for site %s: \n%s",
                      site_id, json.dumps(site_config, indent=2))
@@ -943,11 +966,15 @@ class GraphiantPortalClient():
         Returns:
             dict: Response containing the created LAN segment ID
         """
+        post_lan_segments_request = graphiant_sdk.V1GlobalLanSegmentsPostRequest(
+            name=name,
+            description=description
+        )
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] post_global_lan_segments would create: name=%s description=%s",
+                     name, description)
+            return type('MockResponse', (), {'id': 0})()
         try:
-            post_lan_segments_request = graphiant_sdk.V1GlobalLanSegmentsPostRequest(
-                name=name,
-                description=description
-            )
             LOG.info("post_global_lan_segments: Creating LAN segment '%s' with description '%s'", name, description)
             response = self.api.v1_global_lan_segments_post(
                 authorization=self.bearer_token,
@@ -975,6 +1002,9 @@ class GraphiantPortalClient():
         Returns:
             bool: True if deletion was successful, False otherwise
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] delete_global_lan_segments would delete LAN segment with ID: %s", lan_segment_id)
+            return True
         try:
             LOG.info("delete_global_lan_segments: Deleting LAN segment with ID: %s", lan_segment_id)
             # Use the correct method name from the SDK
@@ -1050,6 +1080,10 @@ class GraphiantPortalClient():
         """
         Create a global site list.
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] create_global_site_list would create: %s",
+                     json.dumps(site_list_config, indent=2))
+            return None
         try:
             LOG.info("create_global_site_list: Creating site list '%s'", site_list_config.get('name'))
             response = self.api.v1_global_site_lists_post(
@@ -1066,6 +1100,9 @@ class GraphiantPortalClient():
         """
         Delete a global site list.
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] delete_global_site_list would delete site list with ID: %s", site_list_id)
+            return True
         try:
             LOG.info("delete_global_site_list: Deleting site list with ID: %s", site_list_id)
             self.api.v1_global_site_lists_id_delete(
@@ -1174,6 +1211,10 @@ class GraphiantPortalClient():
         Returns:
             dict: Created service response
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] create_data_exchange_services would create: %s",
+                     json.dumps(service_config, indent=2))
+            return type('MockResponse', (), {'id': 0})()
         try:
             LOG.info("create_data_exchange_services: Creating service '%s'", service_config.get('serviceName'))
             response = self.api.v1_extranets_b2b_peering_producer_post(
@@ -1285,6 +1326,10 @@ class GraphiantPortalClient():
         Returns:
             dict: Created customer response
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] create_data_exchange_customers would create: %s",
+                     json.dumps(customer_config, indent=2))
+            return type('MockResponse', (), {'id': 0})()
         try:
             LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_config.get('name'))
             response = self.api.v1_extranets_b2b_peering_customer_post(
@@ -1447,6 +1492,9 @@ class GraphiantPortalClient():
         Returns:
             dict: Delete response
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] delete_data_exchange_customer would delete customer with ID: %s", customer_id)
+            return type('MockResponse', (), {})()
         try:
             LOG.info("delete_data_exchange_customer: Deleting customer with ID: %s", customer_id)
             response = self.api.v1_extranets_b2b_peering_customer_id_delete(
@@ -1510,6 +1558,10 @@ class GraphiantPortalClient():
         Returns:
             dict: Match response with matchId
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] match_service_to_customer would match: %s",
+                     json.dumps(match_config, indent=2))
+            return type('MockResponse', (), {'match_id': 0, 'timestamp': None})()
         try:
             LOG.info("match_service_to_customer: Matching service to customer")
             response = self.api.v1_extranets_b2b_peering_match_service_to_customer_post(
@@ -1540,6 +1592,9 @@ class GraphiantPortalClient():
         Returns:
             dict: Delete response
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] delete_data_exchange_service would delete service with ID: %s", service_id)
+            return type('MockResponse', (), {})()
         try:
             LOG.info("delete_data_exchange_service: Deleting service with ID: %s", service_id)
             response = self.api.v1_extranets_b2b_id_delete(
@@ -1570,6 +1625,10 @@ class GraphiantPortalClient():
         Returns:
             API response object
         """
+        if getattr(self, 'check_mode', False):
+            LOG.info("[check_mode] accept_data_exchange_service would accept match_id=%s: %s",
+                     match_id, json.dumps(acceptance_payload, indent=2))
+            return type('MockResponse', (), {})()
         try:
             LOG.info("accept_data_exchange_service: Accepting match %s", match_id)
             # Use the correct method with match_id as path parameter

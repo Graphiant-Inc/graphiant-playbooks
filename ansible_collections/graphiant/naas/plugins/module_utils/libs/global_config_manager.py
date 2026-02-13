@@ -46,65 +46,88 @@ class GlobalConfigManager(BaseManager):
             config_yaml_file: Path to the YAML file containing global configurations
 
         Returns:
-            dict: Result with 'changed' status and details per object type
+            dict: Result with 'changed' (bool), 'failed' (bool), and 'details' (per-object-type
+                  sub-results, each with at least 'changed' and optionally 'failed').
 
         Raises:
             ConfigurationError: If configuration processing fails
         """
-        result = {'changed': False, 'details': {}}
+        result = {'changed': False, 'failed': False, 'details': {}}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
 
             # Configure prefix sets (no idempotency check - assume changed if present)
             if 'global_prefix_sets' in config_data:
-                self.configure_prefix_sets(config_yaml_file)
-                result['changed'] = True
-                result['details']['prefix_sets'] = {'changed': True}
+                sub = self.configure_prefix_sets(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['prefix_sets'] = sub
 
             # Configure routing policies (BGP filters) (no idempotency check - assume changed)
             if 'routing_policies' in config_data:
-                self.configure_bgp_filters(config_yaml_file)
-                result['changed'] = True
-                result['details']['routing_policies'] = {'changed': True}
+                sub = self.configure_bgp_filters(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['routing_policies'] = sub
 
-            # Configure SNMP global objects (no idempotency check - assume changed)
+            # Configure SNMP global objects (no idempotency check - assume changed if present)
             if 'snmps' in config_data:
-                self.configure_snmp_services(config_yaml_file)
-                result['changed'] = True
-                result['details']['snmps'] = {'changed': True}
+                sub = self.configure_snmp_services(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['snmps'] = sub
 
-            # Configure syslog global objects (no idempotency check - assume changed)
+            # Configure syslog global objects (no idempotency check - assume changed if present)
             if 'syslog_servers' in config_data:
-                self.configure_syslog_services(config_yaml_file)
-                result['changed'] = True
-                result['details']['syslog_servers'] = {'changed': True}
+                sub = self.configure_syslog_services(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['syslog_servers'] = sub
 
-            # Configure IPFIX global objects (no idempotency check - assume changed)
+            # Configure IPFIX global objects (no idempotency check - assume changed if present)
             if 'ipfix_exporters' in config_data:
-                self.configure_ipfix_services(config_yaml_file)
-                result['changed'] = True
-                result['details']['ipfix_exporters'] = {'changed': True}
+                sub = self.configure_ipfix_services(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['ipfix_exporters'] = sub
 
-            # Configure VPN profiles (no idempotency check - assume changed)
+            # Configure VPN profiles (no idempotency check - assume changed if present)
             if 'vpn_profiles' in config_data:
-                self.configure_vpn_profiles(config_yaml_file)
-                result['changed'] = True
-                result['details']['vpn_profiles'] = {'changed': True}
+                sub = self.configure_vpn_profiles(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['vpn_profiles'] = sub
 
             # Configure LAN segments (has idempotency check)
             if 'lan_segments' in config_data:
-                lan_result = self.configure_lan_segments(config_yaml_file)
-                if lan_result.get('changed'):
+                sub = self.configure_lan_segments(config_yaml_file)
+                if sub.get('changed'):
                     result['changed'] = True
-                result['details']['lan_segments'] = lan_result
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['lan_segments'] = sub
 
             # Configure site lists (has idempotency check)
             if 'site_lists' in config_data:
-                site_list_result = self.configure_site_lists(config_yaml_file)
-                if site_list_result.get('changed'):
+                sub = self.configure_site_lists(config_yaml_file)
+                if sub.get('changed'):
                     result['changed'] = True
-                result['details']['site_lists'] = site_list_result
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['site_lists'] = sub
 
             return result
 
@@ -218,19 +241,23 @@ class GlobalConfigManager(BaseManager):
             LOG.error("Error in global deconfiguration: %s", str(e))
             raise ConfigurationError(f"Global deconfiguration failed: {str(e)}")
 
-    def configure_prefix_sets(self, config_yaml_file: str) -> None:
+    def configure_prefix_sets(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global prefix sets.
 
         Args:
             config_yaml_file: Path to the YAML file containing prefix set configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
         """
+        result = {'changed': False, 'failed': False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             prefix_sets = config_data.get('global_prefix_sets', [])
 
             if not prefix_sets:
                 LOG.info("No prefix sets found in configuration file")
-                return
+                return result
 
             config_payload = {"global_prefix_sets": {}}
 
@@ -240,6 +267,8 @@ class GlobalConfigManager(BaseManager):
             LOG.info("Configure prefix sets payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
             LOG.info("Successfully configured %s prefix sets", len(prefix_sets))
+            result['changed'] = True
+            return result
         except Exception as e:
             LOG.error("Failed to configure prefix sets: %s", e)
             raise ConfigurationError(f"Prefix sets configuration failed: {e}")
@@ -288,7 +317,7 @@ class GlobalConfigManager(BaseManager):
                 )
             if not to_delete:
                 LOG.info(
-                    "Prefix sets do not exist or are in use, nothing to deconfigure (idempotent). "
+                    "Prefix sets do not exist, nothing to deconfigure (idempotent). "
                     "skipped=%s, failed_objects=%s",
                     result['skipped'],
                     result['failed_objects'],
@@ -333,19 +362,23 @@ class GlobalConfigManager(BaseManager):
             LOG.error("Failed to deconfigure prefix sets: %s", e)
             raise ConfigurationError(f"Prefix sets deconfiguration failed: {e}")
 
-    def configure_bgp_filters(self, config_yaml_file: str) -> None:
+    def configure_bgp_filters(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global BGP filters.
 
         Args:
             config_yaml_file: Path to the YAML file containing BGP filter configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
         """
+        result = {'changed': False, 'failed': False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             routing_policies = config_data.get('routing_policies', [])
 
             if not routing_policies:
                 LOG.info("No BGP filters found in configuration file")
-                return
+                return result
 
             config_payload = {"routing_policies": {}}
 
@@ -355,6 +388,8 @@ class GlobalConfigManager(BaseManager):
             LOG.info("Configure BGP filters payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
             LOG.info("Successfully configured %s BGP filters", len(routing_policies))
+            result['changed'] = True
+            return result
         except Exception as e:
             LOG.error("Failed to configure BGP filters: %s", e)
             raise ConfigurationError(f"BGP filters configuration failed: {e}")
@@ -403,7 +438,7 @@ class GlobalConfigManager(BaseManager):
                 )
             if not to_delete:
                 LOG.info(
-                    "BGP filters do not exist or are in use, nothing to deconfigure (idempotent). "
+                    "BGP filters do not exist, nothing to deconfigure (idempotent). "
                     "skipped=%s, failed_objects=%s",
                     result['skipped'],
                     result['failed_objects'],
@@ -448,19 +483,23 @@ class GlobalConfigManager(BaseManager):
             LOG.error("Failed to deconfigure BGP filters: %s", e)
             raise ConfigurationError(f"BGP filters deconfiguration failed: {e}")
 
-    def configure_snmp_services(self, config_yaml_file: str) -> None:
+    def configure_snmp_services(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global SNMP services.
 
         Args:
             config_yaml_file: Path to the YAML file containing SNMP service configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
         """
+        result = {'changed': False, 'failed': False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             snmp_services = config_data.get('snmps', [])
 
             if not snmp_services:
                 LOG.info("No SNMP services found in configuration file")
-                return
+                return result
 
             config_payload = {"snmps": {}}
 
@@ -470,6 +509,8 @@ class GlobalConfigManager(BaseManager):
             LOG.debug("Configure SNMP services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
             LOG.info("Successfully configured %s SNMP global objects", len(snmp_services))
+            result['changed'] = True
+            return result
         except Exception as e:
             LOG.error("Failed to configure SNMP services: %s", e)
             raise ConfigurationError(f"SNMP services configuration failed: {e}")
@@ -518,7 +559,7 @@ class GlobalConfigManager(BaseManager):
                 )
             if not to_delete:
                 LOG.info(
-                    "SNMP objects do not exist or are in use, nothing to deconfigure (idempotent). "
+                    "SNMP objects do not exist, nothing to deconfigure (idempotent). "
                     "skipped=%s, failed_objects=%s",
                     result['skipped'],
                     result['failed_objects'],
@@ -561,19 +602,23 @@ class GlobalConfigManager(BaseManager):
             LOG.error("Failed to deconfigure SNMP services: %s", e)
             raise ConfigurationError(f"SNMP services deconfiguration failed: {e}")
 
-    def configure_syslog_services(self, config_yaml_file: str) -> None:
+    def configure_syslog_services(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global syslog services.
 
         Args:
             config_yaml_file: Path to the YAML file containing syslog service configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
         """
+        result = {'changed': False, 'failed': False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             syslog_services = config_data.get('syslog_servers', [])
 
             if not syslog_services:
                 LOG.info("No syslog services found in configuration file")
-                return
+                return result
 
             config_payload = {"syslog_servers": {}}
 
@@ -583,6 +628,8 @@ class GlobalConfigManager(BaseManager):
             LOG.debug("Configure syslog services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
             LOG.info("Successfully configured %s syslog global objects", len(syslog_services))
+            result['changed'] = True
+            return result
         except Exception as e:
             LOG.error("Failed to configure syslog services: %s", e)
             raise ConfigurationError(f"Syslog services configuration failed: {e}")
@@ -631,7 +678,7 @@ class GlobalConfigManager(BaseManager):
                 )
             if not to_delete:
                 LOG.info(
-                    "Syslog objects do not exist or are in use, nothing to deconfigure (idempotent). "
+                    "Syslog objects do not exist, nothing to deconfigure (idempotent). "
                     "skipped=%s, failed_objects=%s",
                     result['skipped'],
                     result['failed_objects'],
@@ -676,19 +723,23 @@ class GlobalConfigManager(BaseManager):
             LOG.error("Failed to deconfigure syslog services: %s", e)
             raise ConfigurationError(f"Syslog services deconfiguration failed: {e}")
 
-    def configure_ipfix_services(self, config_yaml_file: str) -> None:
+    def configure_ipfix_services(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global IPFIX services.
 
         Args:
             config_yaml_file: Path to the YAML file containing IPFIX service configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
         """
+        result = {'changed': False, 'failed': False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             ipfix_services = config_data.get('ipfix_exporters', [])
 
             if not ipfix_services:
                 LOG.info("No IPFIX services found in configuration file")
-                return
+                return result
 
             config_payload = {"ipfix_exporters": {}}
 
@@ -698,6 +749,8 @@ class GlobalConfigManager(BaseManager):
             LOG.debug("Configure IPFIX services payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
             LOG.info("Successfully configured %s IPFIX global objects", len(ipfix_services))
+            result['changed'] = True
+            return result
         except Exception as e:
             LOG.error("Failed to configure IPFIX services: %s", e)
             raise ConfigurationError(f"IPFIX services configuration failed: {e}")
@@ -746,7 +799,7 @@ class GlobalConfigManager(BaseManager):
                 )
             if not to_delete:
                 LOG.info(
-                    "IPFIX objects do not exist or are in use, nothing to deconfigure (idempotent). "
+                    "IPFIX objects do not exist, nothing to deconfigure (idempotent). "
                     "skipped=%s, failed_objects=%s",
                     result['skipped'],
                     result['failed_objects'],
@@ -791,19 +844,23 @@ class GlobalConfigManager(BaseManager):
             LOG.error("Failed to deconfigure IPFIX services: %s", e)
             raise ConfigurationError(f"IPFIX services deconfiguration failed: {e}")
 
-    def configure_vpn_profiles(self, config_yaml_file: str) -> None:
+    def configure_vpn_profiles(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global VPN profiles.
 
         Args:
             config_yaml_file: Path to the YAML file containing VPN profile configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
         """
+        result = {'changed': False, 'failed': False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             vpn_profiles = config_data.get('vpn_profiles', [])
 
             if not vpn_profiles:
                 LOG.info("No VPN profiles found in configuration file")
-                return
+                return result
 
             config_payload = {"vpn_profiles": {}}
 
@@ -813,6 +870,8 @@ class GlobalConfigManager(BaseManager):
             LOG.info("Configure VPN profiles payload: %s", config_payload)
             self.gsdk.patch_global_config(**config_payload)
             LOG.info("Successfully configured %s VPN profiles", len(vpn_profiles))
+            result['changed'] = True
+            return result
         except Exception as e:
             LOG.error("Failed to configure VPN profiles: %s", e)
             raise ConfigurationError(f"VPN profiles configuration failed: {e}")
@@ -863,7 +922,7 @@ class GlobalConfigManager(BaseManager):
                 )
             if not to_delete:
                 LOG.info(
-                    "VPN profiles do not exist or are in use, nothing to deconfigure (idempotent). "
+                    "VPN profiles do not exist, nothing to deconfigure (idempotent). "
                     "skipped=%s, failed_objects=%s",
                     result['skipped'],
                     result['failed_objects'],
@@ -910,7 +969,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result = {'changed': False, 'created': [], 'skipped': []}
+        result = {'changed': False, 'failed': False, 'created': [], 'skipped': []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -1022,7 +1081,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result = {'changed': False, 'created': [], 'skipped': []}
+        result = {'changed': False, 'failed': False, 'created': [], 'skipped': []}
 
         try:
             LOG.info("Configuring global site lists from %s", config_yaml_file)

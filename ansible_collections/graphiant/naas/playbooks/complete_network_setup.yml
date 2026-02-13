@@ -21,6 +21,7 @@
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
         config_file: "sample_global_prefix_lists.yaml"
+        # operation: "configure_prefix_sets"
         operation: "configure"
         detailed_logs: true
         state: present
@@ -32,10 +33,27 @@
         msg: "{{ prefix_sets_result.msg }}"
       tags: ['global_config', 'prefix_sets']
 
+    - name: Deconfigure global prefix sets
+      graphiant.naas.graphiant_global_config:
+        <<: *graphiant_client_params
+        config_file: "sample_global_prefix_lists.yaml"
+        # operation: "deconfigure_prefix_sets"
+        operation: "deconfigure"
+        detailed_logs: true
+        state: present
+      register: deconfigure_prefix_sets_result
+      tags: ['deconfigure_prefix_sets']
+
+    - name: Display deconfigure prefix sets result
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_prefix_sets_result.msg }}"
+      tags: ['deconfigure_prefix_sets']
+
     - name: Configure global BGP filters
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
         config_file: "sample_global_bgp_filters.yaml"
+        # operation: "configure_bgp_filters"
         operation: "configure"
         detailed_logs: true
         state: present
@@ -47,10 +65,11 @@
         msg: "{{ bgp_filters_result.msg }}"
       tags: ['global_config', 'bgp_filters']
 
-    - name: Configure global SNMP services
+    - name: Configure global SNMP system objects
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
         config_file: "sample_global_snmp_services.yaml"
+        # operation: "configure_snmp_services"
         operation: "configure"
         detailed_logs: true
         state: present
@@ -62,10 +81,11 @@
         msg: "{{ snmp_result.msg }}"
       tags: ['global_config', 'snmp']
 
-    - name: Configure global syslog services
+    - name: Configure global syslog servers
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
         config_file: "sample_global_syslog_servers.yaml"
+        # operation: "configure_syslog_services"
         operation: "configure"
         detailed_logs: true
         state: present
@@ -77,10 +97,11 @@
         msg: "{{ syslog_result.msg }}"
       tags: ['global_config', 'syslog']
 
-    - name: Configure global IPFIX services
+    - name: Configure global IPFIX collectors
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
         config_file: "sample_global_ipfix_exporters.yaml"
+        # operation: "configure_ipfix_services"
         operation: "configure"
         detailed_logs: true
         state: present
@@ -96,16 +117,33 @@
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
         config_file: "sample_global_vpn_profiles.yaml"
+        # operation: "configure_vpn_profiles"
         operation: "configure"
         detailed_logs: true
         state: present
       register: vpn_result
-      tags: ['global_config', 'vpn']
+      tags: ['global_config', 'vpn_profiles']
 
-    - name: Display VPN result
+    - name: Display configure VPN profiles result
       ansible.builtin.debug:
         msg: "{{ vpn_result.msg }}"
-      tags: ['global_config', 'vpn']
+      tags: ['global_config', 'vpn_profiles']
+
+    - name: Deconfigure global VPN profiles
+      graphiant.naas.graphiant_global_config:
+        <<: *graphiant_client_params
+        config_file: "sample_global_vpn_profiles.yaml"
+        # operation: "deconfigure_vpn_profiles"
+        # operation: "deconfigure"
+        detailed_logs: true
+        state: absent
+      register: deconfigure_vpn_profiles_result
+      tags: ['deconfigure_vpn_profiles']
+
+    - name: Display deconfigure VPN profiles result
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_vpn_profiles_result.msg }}"
+      tags: ['deconfigure_vpn_profiles']
 
     - name: Configure interfaces and circuits
       graphiant.naas.graphiant_interfaces:

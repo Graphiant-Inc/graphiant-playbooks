@@ -25,6 +25,7 @@ description:
   - All operations are idempotent - safe to run multiple times without causing errors or unintended changes.
 version_added: "25.13.0"
 notes:
+  - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "VRRP Operations:"
   - >
     - configure: Configure VRRP groups on interfaces and subinterfaces.
@@ -102,14 +103,15 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode with partial support.
-    support: partial
+    description: >
+      Supports check mode. In check mode, no configuration is pushed to the devices
+      but payloads that would be pushed are logged with C([check_mode]).
+    support: full
     details: >
-      The module cannot accurately determine whether changes would actually be made without
-      querying the current state via API calls. In check mode, the module assumes that changes
-      would be made and returns V(changed=True) for all operations (V(configure), V(deconfigure), V(enable)).
-      This means that check mode may report changes even when the configuration is already
-      applied. The module does not perform state comparison in check mode due to API limitations.
+      When run with C(--check), the module logs the exact payloads that would be pushed
+      with a C([check_mode]) prefix so you can see what configuration would be applied.
+      The module does not perform state comparison, so V(changed) may be V(True) even
+      when the configuration is already applied.
 
 requirements:
   - python >= 3.7
@@ -309,22 +311,11 @@ def main():
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
-    # Handle check mode
-    if module.check_mode:
-        # All VRRP operations make changes
-        # Note: Check mode assumes changes would be made as we cannot determine
-        # current state without making API calls. In practice, these operations
-        # typically result in changes unless the configuration is already applied.
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: Would execute {operation} (assumes changes would be made)",
-            operation=operation,
-            vrrp_config_file=vrrp_config_file
-        )
+    # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
     try:
         # Get Graphiant connection
-        connection = get_graphiant_connection(params)
+        connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
         # Execute the requested operation
