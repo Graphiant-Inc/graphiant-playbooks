@@ -6,8 +6,9 @@ We actively support the following versions with security updates:
 
 | Version | Supported          | Notes                    |
 | ------- | ------------------ | ------------------------ |
-| 26.1.x | :white_check_mark: | Current stable release   |
-| 25.12.x | :white_check_mark: | Previous release         |
+| 26.2.x | :white_check_mark: | Current stable release   |
+| 26.1.x | :white_check_mark: | Previous release         |
+| 25.12.x | :white_check_mark: | Legacy release           |
 | 25.11.x | :white_check_mark: | Legacy release           |
 | < 25.11 | :x:                | No longer supported     |
 

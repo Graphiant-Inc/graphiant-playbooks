@@ -5,8 +5,25 @@
 
 ancestor: null
 releases:
+  "26.2.1":
+    release_date: "2026-02-12"
+    changes:
+      added:
+        - "TE-4399: Static Routes support - new C(graphiant_static_routes) module and C(static_routes_management.yml) playbook (#44)"
+        - "TE-4333: Site-to-Site VPN support - C(graphiant_site_to_site_vpn) module and playbook (#32)"
+      changed:
+        - "Collection version bumped to 26.2.1"
+        - "TE-4409: check_mode now shows config that would be applied and reports correct C(changed) status (#43)"
+        - "TE-4410: Ability to swap interface LAN segment in a single task (#43)"
+      bugfixes:
+        - "TE-4401: Fix idempotent issues in C(graphiant_global_config) deconfigure workflows (#42)"
+        - "TE-4401: BGP filter template and vault management fixes (#42)"
+      security_fixes:
+        - "Updated security documentation to reflect 26.2.x as current stable release"
+      notes:
+        - "Commits since v26.1.1: #32 (site-to-site VPN), #42 (global_config idempotency), #43 (check_mode / LAN segment swap), #44 (static routes)"
   "26.1.1":
-    release_date: "2026-02-01"
+    release_date: "2026-02-04"
     changes:
       added:
         - "Updated to Graphiant SDK 26.1.1 for latest API support (use C(graphiant-sdk>=26.1.1))"
@@ -14,6 +31,8 @@ releases:
         - "TE-4349: LAG (Link Aggregation) configuration support - new C(graphiant_lag_interfaces) module and playbook support"
         - "TE-4354: BFD (Bidirectional Forwarding Detection) support in BGP peering - configurable BFD parameters"
         - "TE-4331: VRRP (Virtual Router Redundancy Protocol) configuration on interfaces - C(graphiant_vrrp) module and tests"
+        - "TE-4293: New API C(get_matching_customers_for_service) for retrieving match_id from service_id"
+        - "TE-4293: New playbook C(08_dataex_query_service_health.yml) for service health monitoring"
       changed:
         - "Updated Graphiant SDK dependency to >= 26.1.1 across all modules and documentation"
         - "Collection version bumped to 26.1.1; module version_added to 26.1.0 format where applicable"
@@ -21,33 +40,22 @@ releases:
         - "TE-4357: Enforcing Ansible inclusion checklist compliance (#29)"
         - "Config and documentation: camelCase alignment and config changes"
         - "Removed dependency version pinning in favor of minimum version (C(graphiant-sdk>=26.1.1))"
+        - "TE-4293: Updated Data Exchange playbooks to use C(graphiant_data_exchange_info) for query operations"
+        - "TE-4293: Enhanced C(matches_file) behavior - match_id lookup via API when only service_id is provided"
+        - "TE-4293: Self-healing matches_file recovery - re-running match workflow recovers match_ids for existing matches"
       bugfixes:
         - "TE-4366: Idempotent behavior fixes in interface module operations"
         - "Fixes for corner cases in module and playbook behavior"
         - "PEP8: remove trailing whitespace and add newline at EOF where missing"
+        - "TE-4293: Fixed playbooks using incorrect module for query operations (now uses C(graphiant_data_exchange_info))"
       security_fixes:
         - "Updated security documentation to reflect 26.1.x as current stable release"
         - "Workflow permissions: add permissions to GitHub Actions workflows for code scanning (alerts #38, #39, #40)"
       notes:
         - "VRRP configure/deconfigure test coverage added in test suite"
-        - "Refer to commits since 25.12.4 for full detail: TE-4331, TE-4349, TE-4354, TE-4357, TE-4366, workflow permissions"
-  "25.12.4":
-    release_date: "TBD"
-    changes:
-      added:
-        - "New API C(get_matching_customers_for_service) for retrieving match_id from service_id"
-        - "New playbook C(08_dataex_query_service_health.yml) for service health monitoring"
-      changed:
-        - "Updated Data Exchange playbooks to use C(graphiant_data_exchange_info) for query operations"
-        - "Enhanced C(matches_file) behavior - match_id lookup via API when only service_id is provided"
-        - "Self-healing matches_file recovery - re-running match workflow recovers match_ids for existing matches"
-      bugfixes:
-        - "Fixed playbooks using incorrect module for query operations (now uses C(graphiant_data_exchange_info))"
-      notes:
-        - "Consumer tenant can now lookup match_id via API using service_id from matches_file"
-        - "matches_file is now optional for accept_invitation if service is visible to consumer tenant"
+        - "TE-4293: Consumer tenant can lookup match_id via API using service_id; matches_file optional for accept_invitation when service visible to consumer"
   "25.12.3":
-    release_date: "2025-01-23"
+    release_date: "2026-01-09"
     changes:
       added:
         - "New module C(graphiant_data_exchange_info) for querying Data Exchange information (services summary, customers summary, service health)"
@@ -62,6 +70,7 @@ releases:
         - "Converted C(CHANGELOG.md) to C(changelogs/changelog.yaml) format for automated changelog generation"
         - "Updated CI/CD workflows to test against ansible-core 2.17, 2.18, 2.19, and 2.20 with scheduled runs"
       bugfixes:
+        - "TE-4321: Fix C(graphiant_bgp) template to support BGP peers with multiple different local interfaces in same segment (#18)"
         - "Fixed module documentation to include C(check_mode) support information in C(attributes) field"
         - "Fixed all module examples to use FQCNs for builtin modules"
       removed_features:
@@ -93,12 +102,14 @@ releases:
     release_date: "2025-12-18"
     changes:
       added:
+        - "TE-4262: Renamed collection to C(graphiant.naas) (from graphiant.graphiant_playbooks)"
+        - "TE-4261: New C(graphiant_device_config) module - push raw device configurations (Edge, Gateway, Core)"
         - "Updated to Graphiant SDK 25.12.1 for latest API support"
         - "Enhanced compatibility with Graphiant API v25.12.1"
       changed:
         - "Updated Graphiant SDK dependency to 25.12.1"
         - "Collection version bumped to 25.12.1"
-        - "Updated module `version_added` to 25.12.0 format"
+        - "Updated module C(version_added) to 25.12.0 format"
       security_fixes:
         - "Updated security documentation to reflect 25.12.x as current stable release"
   "25.11.3":
@@ -132,7 +143,7 @@ releases:
         - "Improved credential handling with environment variable requirements"
         - "Enhanced security checklist for contributors"
   "25.11.2":
-    release_date: "2025-12-12"
+    release_date: "2025-12-13"
     changes:
       added:
         - "GitHub Actions workflows for linting, testing, building, and releasing"
@@ -175,7 +186,7 @@ releases:
         - "Better configuration validation and template processing"
         - "Improved collection structure validation"
   "25.11.1":
-    release_date: "2025-12-08"
+    release_date: "2025-12-10"
     changes:
       added:
         - "Initial release of Graphiant Playbooks Ansible Collection"
