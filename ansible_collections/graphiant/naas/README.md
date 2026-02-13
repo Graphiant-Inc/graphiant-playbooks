@@ -10,9 +10,10 @@ The Ansible Graphiant NaaS collection includes modules for automating the manage
 
 This collection provides Ansible modules to automate:
 - Interface and circuit configuration
+- Static routes management (per-segment configure/deconfigure)
 - VRRP (Virtual Router Redundancy Protocol) configuration
 - LAG (Link Aggregation Group) interface configuration
-- BGP peering management
+- BGP peering management (including BFD — Bidirectional Forwarding Detection)
 - Site-to-Site VPN configuration (static and BGP routing)
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
 - Site management and object attachments
@@ -21,20 +22,22 @@ This collection provides Ansible modules to automate:
 
 ### Key Features
 
-- **Idempotent Operations**: All modules correctly report `changed: false` when no modifications occur
+- **Idempotent Operations**: All modules correctly report `changed: false` when no modifications occur; interface and related modules include idempotency improvements (TE-4366)
 - **Structured Results**: Manager methods return detailed results with `changed`, `created`, `skipped`, and `deleted` fields
 - **Graceful Error Handling**: Handles "object not found" errors gracefully in deconfigure operations
 - **Jinja2 Template Support**: Configuration files support Jinja2 templating for dynamic generation
 - **Comprehensive Logging**: Optional detailed logging for debugging and troubleshooting
+- **Check Mode**: All modules document check_mode support (full, partial, or none) in the `attributes` field per Ansible standards
+- **Ansible Inclusion Ready**: Collection complies with the [Ansible Collection Inclusion Checklist](https://github.com/ansible-collections/ansible-inclusion/blob/main/collection_checklist.md) (documentation standards, FQCNs, semantic markup, license, changelog)
 
-## Ansible Version Compatibility
+## Support & Compatibility
 
-This collection requires **ansible-core >= 2.17.0**.
-
-## Python Requirements
-
-- Python >= 3.7 (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
-- Graphiant SDK >= 26.1.1
+| Component | Requirement |
+|-----------|-------------|
+| **Collection version** | 26.2.1 (current stable) |
+| **ansible-core** | >= 2.17.0 (tested with 2.17, 2.18, 2.19, 2.20) |
+| **Python** | >= 3.7 |
+| **Graphiant SDK** | >= 26.1.1 |
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](docs/guides/VERSION_MANAGEMENT.md) for details.
 
@@ -45,13 +48,15 @@ This collection requires **ansible-core >= 2.17.0**.
 | Name | Description |
 |------|-------------|
 | `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) |
+| `graphiant_static_routes` | Manage static routes (per-segment configure/deconfigure/validate) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
 | `graphiant_lag_interfaces` | Manage LAG interfaces configuration |
-| `graphiant_bgp` | Manage BGP peering and routing policies |
+| `graphiant_bgp` | Manage BGP peering and routing policies (including BFD) |
 | `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
 | `graphiant_sites` | Manage sites and site attachments |
 | `graphiant_data_exchange` | Manage Data Exchange workflows |
+| `graphiant_data_exchange_info` | Query Data Exchange info (services summary, customers summary, service health) |
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
 
 ## Installation
@@ -251,6 +256,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `hello_test.yml` | E2E integration test playbook (used in CI/CD) |
 | `complete_network_setup.yml` | Full network configuration workflow |
 | `interface_management.yml` | Interface and circuit operations |
+| `static_routes_management.yml` | Static routes configure/deconfigure/validate |
 | `vrrp_interface_management.yml` | VRRP configuration on interfaces and subinterfaces |
 | `lag_interface_management.yml` | LAG interface configuration |
 | `circuit_management.yml` | Circuit configuration and static routes |
@@ -290,8 +296,9 @@ View module documentation with `ansible-doc`:
 
 ```bash
 ansible-doc graphiant.naas.graphiant_interfaces
+ansible-doc graphiant.naas.graphiant_static_routes
 ansible-doc graphiant.naas.graphiant_vrrp
-ansible-doc graphiant.naas.graphiant_interfaces
+ansible-doc graphiant.naas.graphiant_lag_interfaces
 ansible-doc graphiant.naas.graphiant_bgp
 ansible-doc graphiant.naas.graphiant_site_to_site_vpn
 ansible-doc graphiant.naas.graphiant_global_config
@@ -315,7 +322,7 @@ ansible-doc graphiant.naas.graphiant_device_config
 
 - **Module Documentation**: Use `ansible-doc` to view embedded module documentation (see above)
 - **Docusite Setup**: See [docs/DOCSITE_SETUP.md](docs/DOCSITE_SETUP.md) for building HTML documentation
-- **Changelog**: See [CHANGELOG.md](CHANGELOG.md) for version history and release notes
+- **Changelog**: See [changelogs/changelog.yaml](changelogs/changelog.yaml) for version history and release notes
 
 ### Credential Management
 
@@ -350,15 +357,64 @@ All modules support `state` parameter:
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
 
+### Check Mode
+
+Check mode (run with `ansible-playbook ... --check` or set `check_mode: true` on a task) lets you preview what would change without applying it. Support varies by module:
+
+| Support | Modules | Behavior |
+|--------|---------|----------|
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_data_exchange_info` | No API writes; payloads that would be pushed are logged with `[check_mode]` so you can see exactly what would be applied. |
+| **Partial** | `graphiant_bgp`, `graphiant_static_routes`, `graphiant_device_config` | Check mode runs but may report `changed: true` because the module does not compare current state in check mode (API limits). For `graphiant_device_config`, `show_validated_payload` returns `changed: false`; `configure` assumes changes. |
+| **None** | `graphiant_data_exchange` | Not supported; Data Exchange workflows are multi-step and state-changing and cannot be safely simulated. Use `graphiant_data_exchange_info` for read-only queries. |
+
+**Example: run a playbook in check mode (dry run)**
+
+```bash
+# Preview interface and BGP changes without applying
+ansible-playbook playbooks/interface_management.yml --check
+ansible-playbook playbooks/complete_network_setup.yml --check
+```
+
+**Example: single task in check mode**
+
+```yaml
+- name: Preview LAN interface configuration (no changes made)
+  graphiant.naas.graphiant_interfaces:
+    <<: *graphiant_client_params
+    interface_config_file: "sample_interface_config.yaml"
+    operation: "configure_lan_interfaces"
+  check_mode: true
+  register: preview
+
+# With detailed_logs and ANSIBLE_STDOUT_CALLBACK=debug you will see [check_mode] payloads in output
+```
+
+**Example: read-only module (full check mode support)**
+
+```yaml
+- name: Query Data Exchange service health (check mode is a no-op, no API writes)
+  graphiant.naas.graphiant_data_exchange_info:
+    <<: *graphiant_client_params
+    query_type: "service_health"
+    service_id: "{{ service_id }}"
+  check_mode: true
+```
+
+For per-module details, see the `attributes.check_mode` section in `ansible-doc graphiant.naas.<module_name>`.
+
 ### Idempotency
 
-All modules are idempotent and correctly report `changed: false` when no modifications occur:
-- Modules track whether actual changes were made to the system
-- `changed: false` is reported when configurations already match the desired state
-- Manager methods return structured results with `changed`, `created`, `skipped`, and `deleted` fields
-- Graceful error handling for "object not found" errors in deconfigure operations
+Modules are designed to be idempotent where possible and to report `changed` accurately.
 
-**Note:** PUT/PATCH operations (`configure_interfaces`, `configure_bgp`, etc.) always report `changed: true` as state comparison is not currently implemented for these operations.
+**Recent behavior (TE-4366 and related):**
+- **Deconfigure operations**: Idempotent and safe to run multiple times. When a resource is already absent or "object not found", the module reports `changed: false` and does not fail.
+- **Structured results**: Manager methods return results with `changed`, `created`, `skipped`, and `deleted` so playbooks can react to what actually happened.
+- **Interface and circuit modules**: Deconfigure logic (e.g. `deconfigure_lan_interfaces`, `deconfigure_circuits`, `deconfigure_wan_circuits_interfaces`) correctly reports `changed: false` when there is nothing to remove; static route cleanup and circuit removal order are handled so repeated runs stay safe.
+- **Configure operations**: Many configure operations (e.g. full interface or BGP push) do not perform a full state comparison before applying. They push the desired config and may report `changed: true` even if the device is already in that state. This is documented in the relevant modules.
+
+**Summary:**
+- Run deconfigure tasks repeatedly without concern; they are idempotent.
+- For configure tasks, re-running may report `changed: true` depending on the module and operation; see module docs for details.
 
 ### Detailed Logging
 
@@ -428,12 +484,14 @@ python -m unittest tests.test
 Configuration files use YAML format with optional Jinja2 templating. Sample files are in the `configs/` directory:
 
 - `sample_interface_config.yaml` - Interface configurations
+- `sample_static_route.yaml` - Static routes (per-segment) configuration
 - `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
 - `sample_bgp_peering.yaml` - BGP peering configurations
 - `sample_global_*.yaml` - Global configuration objects
 - `sample_device_config_payload.yaml` - Raw device configuration payloads (Edge/Gateway Device types)
 - `sample_device_config_core_device_payload.yaml` - Raw device configuration payloads (Core Device type)
 - `sample_device_config_with_template.yaml` - Device config with user-defined template (`device_config_template.yaml`)
+- `sample_sites.yaml` - Site configurations
 
 ### Config File Path Resolution
 
@@ -450,7 +508,6 @@ Config file paths are resolved in the following order:
 Similarly, template paths use `GRAPHIANT_TEMPLATES_PATH` environment variable.
 
 Check `logs/log_<date>.log` for the actual path used during execution.
-- `sample_sites.yaml` - Site configurations
 
 Data Exchange configurations are in `configs/de_workflows_configs/`.
 
@@ -464,7 +521,7 @@ We welcome contributions! See [CONTRIBUTING.md](../../CONTRIBUTING.md) for:
 
 ## Release Notes
 
-See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+See [changelogs/changelog.yaml](changelogs/changelog.yaml) for version history and release notes.
 
 ## Version Management
 
@@ -483,11 +540,11 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 26.1.1
+python scripts/bump_version.py 26.2.1
 ```
 
 After bumping version, remember to:
-1. Update CHANGELOG.md with actual changes
+1. Update `changelogs/changelog.yaml` with actual changes (or use antsibull-changelog fragments)
 2. Install dependencies: `pip install -r requirements-ee.txt`
 3. Review and commit changes
 

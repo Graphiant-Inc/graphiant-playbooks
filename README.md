@@ -4,7 +4,7 @@
 [![Ansible](https://img.shields.io/badge/ansible--core-2.17+-green.svg)](https://docs.ansible.com/)
 [![Terraform](https://img.shields.io/badge/terraform-1.14+-red.svg)](https://developer.hashicorp.com/terraform/install)
 [![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.graphiant.com/docs/graphiant-sdk-python)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.graphiant.com/docs/graphiant-playbooks)
 
 Automated network infrastructure management for [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com) offerings.
 
@@ -21,7 +21,7 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.1.1) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.2.1) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
 | **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/terraform/README.md) |
 | **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/.github/workflows/README.md) |
 | **Docker Support** | Containerized execution environment | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/Docker.md) |
@@ -139,7 +139,7 @@ terraform apply -var-file="../../configs/gateway_services/gcp_config.tfvars"
 
 ```
 graphiant-playbooks/
-├── ansible_collections/graphiant/naas/                # Ansible collection (v26.1.1)
+├── ansible_collections/graphiant/naas/                # Ansible collection (v26.2.1)
 │   ├── plugins/modules/                              # Ansible modules (9 modules)
 │   ├── plugins/module_utils/                         # Python library code
 │   ├── playbooks/                                    # Example playbooks

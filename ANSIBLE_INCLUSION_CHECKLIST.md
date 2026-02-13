@@ -2,7 +2,7 @@
 ## Collection: graphiant.naas
 
 **Review Date:** 2026-02-01  
-**Collection Version:** 26.1.1  
+**Collection Version:** 26.2.1  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
@@ -14,7 +14,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `26.1.1` (meets requirement: >= 1.0.0)
+  - Collection version: `26.2.1` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -47,7 +47,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `26.1.1` is specified in `galaxy.yml`
+  - Version `26.2.1` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -58,7 +58,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `26.1.1` (follows semantic versioning)
+  - Current version: `26.2.1` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py` line 9
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -264,7 +264,7 @@
 - **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
   - All modules use `version_added` in major.minor format (collection version) ✅
-  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.1.0"`)
+  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.2.0"`)
   - Modules verified:
     - `graphiant_bgp.py`: `version_added: "26.1.0"` ✅
     - `graphiant_data_exchange.py`: `version_added: "26.1.0"` ✅
@@ -534,7 +534,7 @@ These are not blocking requirements but are recommended for better collection qu
 All critical action items have been completed:
 
 - [x] ✅ Code of Conduct - `CODE_OF_CONDUCT.md` exists
-- [x] ✅ version_added - All modules use major.minor format (`"26.1.0"` or `"25.13.0"` for VRRP/LAG)
+- [x] ✅ version_added - All modules use major.minor format (`"26.1.0"`, `"26.2.0"`, or `"25.13.0"` for VRRP/LAG)
 - [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19, 2.20
 - [x] ✅ Scheduled CI runs - Nightly runs at 2 AM UTC
 - [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
@@ -565,7 +565,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 26.1.1  
+**Collection Version:** 26.2.1  
 **Review Date:** 2026-02-01  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7

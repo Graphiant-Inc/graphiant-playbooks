@@ -19,7 +19,7 @@ Usage:
     python bump_version.py 25.12.0
 
     # Update dependency versions
-    python bump_version.py --update-deps graphiant-sdk=26.1.1
+    python bump_version.py --update-deps graphiant-sdk=26.2.1
 """
 
 import re

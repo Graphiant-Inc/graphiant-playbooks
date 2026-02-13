@@ -6,7 +6,7 @@ All version references throughout the repository should use values from this fil
 """
 
 # Collection version (semantic versioning: MAJOR.MINOR.PATCH)
-__version__ = "26.1.1"
+__version__ = "26.2.1"
 COLLECTION_VERSION = __version__
 
 # Dependency versions
@@ -44,4 +44,4 @@ REQUIRES_PYTHON = ">=3.7"
 
 # Module version_added (should match collection version, but use major.minor format)
 # Ansible requires version_added to be major.minor, not patch level
-MODULE_VERSION_ADDED = "26.1.0"  # Derived from COLLECTION_VERSION (MAJOR.MINOR)
+MODULE_VERSION_ADDED = "26.2.0"  # Derived from COLLECTION_VERSION (MAJOR.MINOR)

@@ -117,7 +117,7 @@ jobs:
             echo "✅ Using existing release: $VERSION"
           else
             # Create new release
-            RELEASE_BODY="## Release $VERSION"$'\n\n'"See [CHANGELOG.md](ansible_collections/graphiant/naas/CHANGELOG.md) for detailed release notes and version history."
+            RELEASE_BODY="## Release $VERSION"$'\n\n'"See [changelogs/changelog.yaml](https://github.com/${{ github.repository }}/blob/main/ansible_collections/graphiant/naas/changelogs/changelog.yaml) for detailed release notes and version history."
             
             curl -X POST \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
