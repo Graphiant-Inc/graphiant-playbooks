@@ -1001,6 +1001,70 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.y
     state: absent
 ```
 
+## Static Routes
+
+Static routes are managed under `edge.segments.<segment>.staticRoutes`.
+See `configs/sample_static_route.yaml`.
+
+### Show validated payload (dry-run)
+
+```yaml
+- name: Validate static routes payload (dry-run)
+  graphiant.naas.graphiant_static_routes:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: show_validated_payload
+    static_routes_config_file: "sample_static_route.yaml"
+    validated_operation: configure
+    detailed_logs: true
+  register: validate_static_routes
+
+- name: Display validated payload
+  ansible.builtin.debug:
+    msg: "{{ validate_static_routes.validated_payload }}"
+```
+
+### Configure static routes
+
+```yaml
+- name: Configure static routes
+  graphiant.naas.graphiant_static_routes:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    static_routes_config_file: "sample_static_route.yaml"
+    detailed_logs: true
+  register: static_routes_configure_result
+  no_log: true
+
+- name: Display result message (includes detailed logs)
+  ansible.builtin.debug:
+    msg: "{{ static_routes_configure_result.msg }}"
+```
+
+### Deconfigure static routes
+
+Deconfigure deletes only the prefixes listed in the YAML (per segment).
+
+```yaml
+- name: Deconfigure static routes
+  graphiant.naas.graphiant_static_routes:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: deconfigure
+    static_routes_config_file: "sample_static_route.yaml"
+    detailed_logs: true
+  register: static_routes_deconfigure_result
+  no_log: true
+
+- name: Display result message (includes detailed logs)
+  ansible.builtin.debug:
+    msg: "{{ static_routes_deconfigure_result.msg }}"
+```
+
 ## Data Exchange Workflows
 
 The Data Exchange module supports multi-step workflows. Run playbooks in order:
@@ -1142,6 +1206,7 @@ Sample configuration files are in the `configs/` directory:
 | `sample_global_vpn_profiles.yaml` | VPN profile definitions |
 | `sample_sites.yaml` | Site definitions |
 | `sample_site_attachments.yaml` | Site attachment configurations |
+| `sample_static_route.yaml` | Static routes under edge segments |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
 

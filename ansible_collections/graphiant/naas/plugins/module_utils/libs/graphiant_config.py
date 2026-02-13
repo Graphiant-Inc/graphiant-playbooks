@@ -14,6 +14,7 @@ from .device_config_manager import DeviceConfigManager
 from .vrrp_interface_manager import VRRPInterfaceManager
 from .lag_interface_manager import LagInterfaceManager
 from .site_to_site_vpn_manager import SiteToSiteVpnManager
+from .static_routes_manager import StaticRoutesManager
 from .logger import setup_logger
 from .exceptions import GraphiantPlaybookError
 
@@ -68,6 +69,7 @@ class GraphiantConfig:
             self.vrrp_interfaces = VRRPInterfaceManager(self.config_utils)
             self.lag_interfaces = LagInterfaceManager(self.config_utils)
             self.site_to_site_vpn = SiteToSiteVpnManager(self.config_utils)
+            self.static_routes = StaticRoutesManager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -93,4 +95,5 @@ class GraphiantConfig:
             'config_utils': hasattr(self, 'config_utils') and self.config_utils is not None,
             'lag_interfaces': hasattr(self, 'lag_interfaces') and self.lag_interfaces is not None,
             'site_to_site_vpn': hasattr(self, 'site_to_site_vpn') and self.site_to_site_vpn is not None,
+            'static_routes': hasattr(self, 'static_routes') and self.static_routes is not None,
         }
