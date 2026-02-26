@@ -369,6 +369,17 @@ class SiteManager(BaseManager):
                         for ipfix_config in site_data.get('ipfix_exporters'):
                             self._process_ipfix_config(site_payload, ipfix_config, default_operation)
 
+                    # Process NTP operations
+                    if 'ntps' in site_data:
+                        site_payload['site']['ntpOps'] = {}
+                        for ntp_item in site_data.get('ntps') or []:
+                            if isinstance(ntp_item, dict):
+                                ntp_name = ntp_item.get('name')
+                            else:
+                                ntp_name = ntp_item
+                            if ntp_name:
+                                site_payload['site']['ntpOps'][ntp_name] = default_operation
+
                     # Execute the site configuration
                     self.gsdk.post_site_config(site_id=site_id, site_config=site_payload)
 
