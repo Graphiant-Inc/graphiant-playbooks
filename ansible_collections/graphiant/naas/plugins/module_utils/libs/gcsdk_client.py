@@ -546,6 +546,7 @@ class GraphiantPortalClient():
         patch_global_config_request = graphiant_sdk.V1GlobalConfigPatchRequest(
             global_prefix_sets=kwargs.get('global_prefix_sets'),
             ipfix_exporters=kwargs.get('ipfix_exporters'),
+            ntps=kwargs.get('ntps'),
             prefix_sets=kwargs.get('prefix_sets'),
             routing_policies=kwargs.get('routing_policies'),
             snmps=kwargs.get('snmps'),
@@ -725,6 +726,10 @@ class GraphiantPortalClient():
         """Return list of IPFIX exporter summary dicts from the portal."""
         return self._get_global_summaries(ipfix_exported_type=True)
 
+    def get_global_ntp_summaries(self):
+        """Return list of NTP object summary dicts from the portal."""
+        return self._get_global_summaries(ntp_type=True)
+
     def get_existing_global_routing_policy_names(self):
         """
         Return the set of names of global routing policies (BGP filters) that exist on the portal.
@@ -769,6 +774,15 @@ class GraphiantPortalClient():
             set: Names of existing IPFIX exporters, or empty set if the API call fails.
         """
         return self._get_existing_global_names_from_summary(ipfix_exported_type=True)
+
+    def get_existing_global_ntp_names(self):
+        """
+        Return the set of names of global NTP objects that exist on the portal.
+
+        Returns:
+            set: Names of existing NTP objects, or empty set if the API call fails.
+        """
+        return self._get_existing_global_names_from_summary(ntp_type=True)
 
     def get_global_routing_policy_id(self, policy_name):
         """

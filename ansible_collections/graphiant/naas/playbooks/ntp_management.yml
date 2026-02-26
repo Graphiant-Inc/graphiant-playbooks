@@ -1,5 +1,5 @@
 ---
-- name: Manage Graphiant Static Routes Configuration
+- name: Manage Graphiant Device-level NTP Configuration
   hosts: localhost
   gather_facts: false
   vars:
@@ -13,11 +13,11 @@
       password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
 
   tasks:
-    - name: Configure static routes
-      graphiant.naas.graphiant_static_routes:
+    - name: Configure device-level NTP (edge.ntpGlobalObject)
+      graphiant.naas.graphiant_ntp:
         <<: *graphiant_client_params
         operation: configure
-        static_routes_config_file: "sample_static_route.yaml"
+        ntp_config_file: "sample_device_ntp.yaml"
         detailed_logs: true
         state: present
       register: configure_result
@@ -32,11 +32,11 @@
       when: configure_result is defined and configure_result.msg is defined
       tags: ['configure']
 
-    - name: Deconfigure static routes (deletes only routes listed in YAML)
-      graphiant.naas.graphiant_static_routes:
+    - name: Deconfigure device-level NTP (deletes only objects listed in YAML)
+      graphiant.naas.graphiant_ntp:
         <<: *graphiant_client_params
         operation: deconfigure
-        static_routes_config_file: "sample_static_route.yaml"
+        ntp_config_file: "sample_device_ntp.yaml"
         detailed_logs: true
         state: absent
       register: deconfigure_result

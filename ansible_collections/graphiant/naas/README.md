@@ -19,6 +19,7 @@ This collection provides Ansible modules to automate:
 - Site management and object attachments
 - Data Exchange workflows
 - Raw device configuration deployment (Edge, Gateway, and Core devices)
+- NTP Service Configuration
 
 ### Key Features
 
@@ -58,6 +59,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_data_exchange` | Manage Data Exchange workflows |
 | `graphiant_data_exchange_info` | Query Data Exchange info (services summary, customers summary, service health) |
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
+| `graphiant_ntp` | Manage NTP objects |
 
 ## Installation
 
@@ -297,6 +299,7 @@ View module documentation with `ansible-doc`:
 ```bash
 ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_static_routes
+ansible-doc graphiant.naas.graphiant_ntp
 ansible-doc graphiant.naas.graphiant_vrrp
 ansible-doc graphiant.naas.graphiant_lag_interfaces
 ansible-doc graphiant.naas.graphiant_bgp
@@ -363,8 +366,8 @@ Check mode (run with `ansible-playbook ... --check` or set `check_mode: true` on
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_data_exchange_info` | No API writes; payloads that would be pushed are logged with `[check_mode]` so you can see exactly what would be applied. |
-| **Partial** | `graphiant_bgp`, `graphiant_static_routes`, `graphiant_device_config` | Check mode runs but may report `changed: true` because the module does not compare current state in check mode (API limits). For `graphiant_device_config`, `show_validated_payload` returns `changed: false`; `configure` assumes changes. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_data_exchange_info` | No API writes; payloads that would be pushed are logged with `[check_mode]` so you can see exactly what would be applied. |
+| **Partial** | `graphiant_bgp`, `graphiant_device_config` | Check mode runs but may report `changed: true` because the module does not compare current state in check mode (API limits). For `graphiant_device_config`, `show_validated_payload` returns `changed: false`; `configure` assumes changes. |
 | **None** | `graphiant_data_exchange` | Not supported; Data Exchange workflows are multi-step and state-changing and cannot be safely simulated. Use `graphiant_data_exchange_info` for read-only queries. |
 
 **Example: run a playbook in check mode (dry run)**
@@ -485,6 +488,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 
 - `sample_interface_config.yaml` - Interface configurations
 - `sample_static_route.yaml` - Static routes (per-segment) configuration
+- `sample_device_ntp.yaml` - NTP objects under `edge.ntpGlobalObject`
 - `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
 - `sample_bgp_peering.yaml` - BGP peering configurations
 - `sample_global_*.yaml` - Global configuration objects

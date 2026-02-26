@@ -672,6 +672,30 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
   tags: ['global_config', 'syslog']
 ```
 
+#### Configure / deconfigure NTP objects
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag ntp --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag ntp
+```
+
+```yaml
+- name: Configure global NTP objects
+  graphiant.naas.graphiant_global_config:
+    <<: *graphiant_client_params
+    config_file: "sample_global_ntp.yaml"
+    operation: "configure_ntps"
+    detailed_logs: true
+    state: present
+  register: ntp_result
+  tags: ['global_config', 'ntp']
+
+- name: Display NTP result
+  ansible.builtin.debug:
+    msg: "{{ ntp_result.msg }}"
+  tags: ['global_config', 'ntp']
+```
+
 #### Configure IPFIX collectors
 
 ```bash
@@ -1001,29 +1025,69 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.y
     state: absent
 ```
 
+## NTP (edge.ntpGlobalObject)
+
+NTP objects are managed under `edge.ntpGlobalObject` and are pushed directly to devices
+using the device config API (similar to static routes). This is **different from** global NTP objects
+managed by `graphiant_global_config` (portal-wide objects under `/v1/global/config`).
+
+See `configs/sample_device_ntp.yaml`.
+
+### Playbook
+
+You can also use the bundled playbook:
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure
+```
+
+### Configure NTP objects
+
+```yaml
+- name: Configure device-level NTP objects
+  graphiant.naas.graphiant_ntp:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    ntp_config_file: "sample_device_ntp.yaml"
+    detailed_logs: true
+  register: ntp_configure_result
+  no_log: true
+
+- name: Display result message (includes detailed logs)
+  ansible.builtin.debug:
+    msg: "{{ ntp_configure_result.msg }}"
+```
+
+### Deconfigure NTP objects
+
+Deconfigure deletes only the objects listed in the YAML (per device) by setting `config: null`.
+
+```yaml
+- name: Deconfigure device-level NTP objects
+  graphiant.naas.graphiant_ntp:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: deconfigure
+    ntp_config_file: "sample_device_ntp.yaml"
+    detailed_logs: true
+  register: ntp_deconfigure_result
+  no_log: true
+
+- name: Display result message (includes detailed logs)
+  ansible.builtin.debug:
+    msg: "{{ ntp_deconfigure_result.msg }}"
+```
+
 ## Static Routes
 
 Static routes are managed under `edge.segments.<segment>.staticRoutes`.
 See `configs/sample_static_route.yaml`.
-
-### Show validated payload (dry-run)
-
-```yaml
-- name: Validate static routes payload (dry-run)
-  graphiant.naas.graphiant_static_routes:
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-    operation: show_validated_payload
-    static_routes_config_file: "sample_static_route.yaml"
-    validated_operation: configure
-    detailed_logs: true
-  register: validate_static_routes
-
-- name: Display validated payload
-  ansible.builtin.debug:
-    msg: "{{ validate_static_routes.validated_payload }}"
-```
 
 ### Configure static routes
 
@@ -1203,9 +1267,11 @@ Sample configuration files are in the `configs/` directory:
 | `sample_global_prefix_lists.yaml` | Prefix set definitions |
 | `sample_global_bgp_filters.yaml` | BGP filter definitions |
 | `sample_global_lan_segments.yaml` | LAN segment definitions |
+| `sample_global_ntp.yaml` | NTP object definitions |
 | `sample_global_vpn_profiles.yaml` | VPN profile definitions |
 | `sample_sites.yaml` | Site definitions |
 | `sample_site_attachments.yaml` | Site attachment configurations |
+| `sample_device_ntp.yaml` | NTP objects under `edge.ntpGlobalObject` |
 | `sample_static_route.yaml` | Static routes under edge segments |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
