@@ -12,6 +12,7 @@ This module provides global configuration management capabilities including:
 - BGP filters (routing policies) management
 - SNMP services management
 - Syslog services management
+- NTP services management
 - IPFIX services management
 - VPN profiles management
 - LAN segments management
@@ -25,7 +26,7 @@ description:
   - This module provides comprehensive global configuration object management for Graphiant devices.
   - >
     Supports multiple global object types: prefix sets, BGP filters, SNMP services,
-    syslog services, IPFIX services, VPN profiles, and LAN segments.
+    syslog services, NTP services, IPFIX services, VPN profiles, and LAN segments.
   - Can manage all object types together using general operations or specific object types individually.
   - All operations use Jinja2 templates for consistent configuration deployment.
 version_added: "26.1.0"
@@ -81,6 +82,8 @@ options:
       - "V(deconfigure_snmp_services): Deconfigure global SNMP services only."
       - "V(configure_syslog_services): Configure global syslog services only."
       - "V(deconfigure_syslog_services): Deconfigure global syslog services only."
+      - "V(configure_ntps): Configure global NTP objects only."
+      - "V(deconfigure_ntps): Deconfigure global NTP objects only."
       - "V(configure_ipfix_services): Configure global IPFIX services only."
       - "V(deconfigure_ipfix_services): Deconfigure global IPFIX services only."
       - "V(configure_vpn_profiles): Configure global VPN profiles only."
@@ -101,6 +104,8 @@ options:
       - deconfigure_snmp_services
       - configure_syslog_services
       - deconfigure_syslog_services
+      - configure_ntps
+      - deconfigure_ntps
       - configure_ipfix_services
       - deconfigure_ipfix_services
       - configure_vpn_profiles
@@ -195,6 +200,15 @@ EXAMPLES = r'''
   graphiant.naas.graphiant_global_config:
     operation: configure_vpn_profiles
     config_file: "sample_global_vpn_profiles.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+
+- name: Configure global NTP objects
+  graphiant.naas.graphiant_global_config:
+    operation: configure_ntps
+    config_file: "sample_global_ntp.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -362,6 +376,8 @@ def main():
                 'deconfigure_snmp_services',
                 'configure_syslog_services',
                 'deconfigure_syslog_services',
+                'configure_ntps',
+                'deconfigure_ntps',
                 'configure_ipfix_services',
                 'deconfigure_ipfix_services',
                 'configure_vpn_profiles',
@@ -403,6 +419,7 @@ def main():
             'configure', 'deconfigure', 'configure_prefix_sets', 'deconfigure_prefix_sets',
             'configure_bgp_filters', 'deconfigure_bgp_filters', 'configure_snmp_services',
             'deconfigure_snmp_services', 'configure_syslog_services', 'deconfigure_syslog_services',
+            'configure_ntps', 'deconfigure_ntps',
             'configure_ipfix_services', 'deconfigure_ipfix_services', 'configure_vpn_profiles',
             'deconfigure_vpn_profiles', 'configure_lan_segments', 'deconfigure_lan_segments',
             'configure_site_lists', 'deconfigure_site_lists'
@@ -498,6 +515,20 @@ def main():
             result = execute_with_logging(module, graphiant_config.global_config.deconfigure_syslog_services,
                                           config_file,
                                           success_msg="Successfully deconfigured global syslog services")
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'configure_ntps':
+            result = execute_with_logging(module, graphiant_config.global_config.configure_ntps,
+                                          config_file,
+                                          success_msg="Successfully configured global NTP objects")
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'deconfigure_ntps':
+            result = execute_with_logging(module, graphiant_config.global_config.deconfigure_ntps,
+                                          config_file,
+                                          success_msg="Successfully deconfigured global NTP objects")
             changed = result['changed']
             result_msg = result['result_msg']
 

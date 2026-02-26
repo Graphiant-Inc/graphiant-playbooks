@@ -1,7 +1,7 @@
 """
 Global Configuration Manager for Graphiant Playbooks.
 
-Manages prefix sets, routing policies (BGP filters), SNMP, syslog, IPFIX, VPN profiles,
+Manages prefix sets, routing policies (BGP filters), SNMP, syslog, NTP, IPFIX, VPN profiles,
 LAN segments, and site lists. Deconfigure operations are idempotent.
 
 Result lists are mutually exclusive:
@@ -37,6 +37,7 @@ class GlobalConfigManager(BaseManager):
         - BGP filters (routing_policies)
         - SNMP global objects (snmps)
         - Syslog global objects (syslog_servers)
+        - NTP global objects (ntps)
         - IPFIX global objects (ipfix_exporters)
         - VPN profile global objects (vpn_profiles)
         - LAN segments (lan_segments)
@@ -93,6 +94,15 @@ class GlobalConfigManager(BaseManager):
                     result['failed'] = True
                 result['details']['syslog_servers'] = sub
 
+            # Configure NTP global objects (no idempotency check - assume changed if present)
+            if 'ntps' in config_data:
+                sub = self.configure_ntps(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['ntps'] = sub
+
             # Configure IPFIX global objects (no idempotency check - assume changed if present)
             if 'ipfix_exporters' in config_data:
                 sub = self.configure_ipfix_services(config_yaml_file)
@@ -144,6 +154,7 @@ class GlobalConfigManager(BaseManager):
         - BGP filters (routing_policies)
         - SNMP global objects (snmps)
         - Syslog global objects (syslog_servers)
+        - NTP global objects (ntps)
         - IPFIX global objects (ipfix_exporters)
         - VPN profile global objects (vpn_profiles)
         - LAN segments (lan_segments)
@@ -198,6 +209,15 @@ class GlobalConfigManager(BaseManager):
                 if sub.get('failed'):
                     result['failed'] = True
                 result['details']['syslog_servers'] = sub
+
+            # Deconfigure NTP global objects (idempotent; changed only if something was removed)
+            if 'ntps' in config_data:
+                sub = self.deconfigure_ntps(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['ntps'] = sub
 
             # Deconfigure IPFIX global objects (idempotent; changed only if something was removed)
             if 'ipfix_exporters' in config_data:
@@ -722,6 +742,125 @@ class GlobalConfigManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to deconfigure syslog services: %s", e)
             raise ConfigurationError(f"Syslog services deconfiguration failed: {e}")
+
+    def configure_ntps(self, config_yaml_file: str) -> Dict[str, Any]:
+        """Configure global NTP objects.
+
+        Args:
+            config_yaml_file: Path to the YAML file containing NTP configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
+        """
+        result = {'changed': False, 'failed': False}
+        try:
+            config_data = self.render_config_file(config_yaml_file)
+            ntps = config_data.get('ntps', [])
+
+            if not ntps:
+                LOG.info("No NTP objects found in configuration file")
+                return result
+
+            config_payload = {"ntps": {}}
+
+            for ntp_config in ntps:
+                self.config_utils.global_ntp(config_payload, action="add", **ntp_config)
+
+            LOG.debug("Configure NTP payload: %s", config_payload)
+            self.gsdk.patch_global_config(**config_payload)
+            LOG.info("Successfully configured %s NTP global objects", len(ntps))
+            result['changed'] = True
+            return result
+        except Exception as e:
+            LOG.error("Failed to configure NTP objects: %s", e)
+            raise ConfigurationError(f"NTP configuration failed: {e}")
+
+    def deconfigure_ntps(self, config_yaml_file: str) -> Dict[str, Any]:
+        """Deconfigure global NTP objects (idempotent).
+
+        Fetches summaries from the portal; objects with numAttachedDevices > 0
+        cannot be deleted and are marked as failed. Deletes existing, unattached
+        objects one by one.
+
+        Returns:
+            dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
+        """
+        result = {'changed': False, 'deleted': [], 'skipped': [], 'failed': False, 'failed_objects': []}
+        try:
+            config_data = self.render_config_file(config_yaml_file)
+            ntps = config_data.get('ntps', [])
+
+            if not ntps:
+                LOG.info("No NTP objects found in configuration file")
+                return result
+
+            names = [n.get('name', 'unknown') for n in ntps]
+            LOG.info("Attempting to deconfigure NTP objects: %s", names)
+
+            summaries = self.gsdk.get_global_ntp_summaries()
+            LOG.info("NTP summaries: %s", summaries)
+
+            def object_in_use(s):
+                return self.gsdk.is_global_object_in_use(s, check_num_policies=False)
+
+            to_delete, result['skipped'], result['failed_objects'] = _partition_global_objects_for_deconfigure(
+                ntps, summaries, object_in_use
+            )
+            result['failed'] = bool(result['failed_objects'])
+
+            # When summary API returned empty, assume no objects of this type exist (API fixed); skipped = all requested.
+            if not summaries:
+                LOG.info("Summary API returned empty for NTP objects; assuming no NTP objects exist (nothing to deconfigure).")
+
+            if result['failed']:
+                LOG.warning(
+                    "NTP object(s) in use (num_attached_devices or num_attached_sites > 0), cannot delete: %s",
+                    result['failed_objects'],
+                )
+            if not to_delete:
+                LOG.info(
+                    "NTP objects do not exist, nothing to deconfigure (idempotent). "
+                    "skipped=%s, failed_objects=%s",
+                    result['skipped'],
+                    result['failed_objects'],
+                )
+                return result
+
+            LOG.info(
+                "Partition: to_delete=%s, skipped=%s, failed_objects=%s",
+                [n.get('name', 'unknown') for n in to_delete],
+                result['skipped'],
+                result['failed_objects'],
+            )
+            for ntp_config in to_delete:
+                name = ntp_config.get('name', 'unknown')
+                single_payload = {"ntps": {}}
+                self.config_utils.global_ntp(single_payload, action="delete", **ntp_config)
+                try:
+                    self.gsdk.patch_global_config(**single_payload)
+                    result['deleted'].append(name)
+                    result['changed'] = True
+                except Exception as e:
+                    if _is_in_use_error(e):
+                        result['failed_objects'].append(name)
+                        result['failed'] = True
+                        LOG.warning("NTP object '%s' could not be deleted (in use): %s", name, e)
+                    elif _is_not_found_error(e):
+                        result['skipped'].append(name)
+                    else:
+                        raise ConfigurationError(
+                            f"NTP deconfiguration failed: {e}"
+                        ) from e
+            LOG.info(
+                "NTP deconfigure: deleted=%s; skipped=%s; failed_objects=%s",
+                result['deleted'],
+                result['skipped'],
+                result['failed_objects'],
+            )
+            return result
+        except Exception as e:
+            LOG.error("Failed to deconfigure NTP objects: %s", e)
+            raise ConfigurationError(f"NTP deconfiguration failed: {e}")
 
     def configure_ipfix_services(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global IPFIX services.

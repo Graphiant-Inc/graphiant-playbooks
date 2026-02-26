@@ -382,23 +382,6 @@ class StaticRoutesManager(BaseManager):
 
                 yield device_id, device_name, payload
 
-    def show_validated_payload(self, config_yaml_file: str, operation: str = "configure") -> Dict[str, Any]:
-        """
-        Show the validated payload using SDK models (dry-run).
-
-        Args:
-            config_yaml_file: YAML config path
-            operation: "configure" or "deconfigure" (controls whether routes are built or deleted)
-        """
-        output_config: Dict[int, Dict[str, Any]] = {}
-        for device_id, _device_name, payload in self._iter_device_payloads(config_yaml_file, operation=operation):
-            output_config[device_id] = {"device_id": device_id, "payload": payload}
-
-        if not output_config:
-            return {}
-
-        return self.execute_concurrent_tasks(self.gsdk.show_validated_payload, output_config)
-
     def apply_static_routes(self, config_yaml_file: str, operation: str) -> dict:
         result = {"changed": False, "configured_devices": [], "skipped_devices": []}
 
@@ -427,8 +410,6 @@ class StaticRoutesManager(BaseManager):
             # Everything already matched desired state
             return result
 
-        LOG.info("[static-routes] Showing validated payload for %d device(s)...", len(output_config))
-        self.execute_concurrent_tasks(self.gsdk.show_validated_payload, output_config)
         LOG.info("[static-routes] Pushing payload for %d device(s)...", len(output_config))
         self.execute_concurrent_tasks(self.gsdk.put_device_config_raw, output_config)
 
