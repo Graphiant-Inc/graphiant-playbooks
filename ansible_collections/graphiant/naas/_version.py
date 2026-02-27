@@ -6,7 +6,7 @@ All version references throughout the repository should use values from this fil
 """
 
 # Collection version (semantic versioning: MAJOR.MINOR.PATCH)
-__version__ = "26.2.1"
+__version__ = "26.2.2"
 COLLECTION_VERSION = __version__
 
 # Dependency versions
@@ -17,8 +17,8 @@ DEPENDENCIES = {
     "future": "0.18.3",
     "tabulate": "0.9.0",
 
-    # Graphiant SDK (use version >= 26.1.1)
-    "graphiant-sdk": "26.1.1",
+    # Graphiant SDK (use version >= 26.2.1)
+    "graphiant-sdk": "26.2.1",
 
     # Ansible
     "ansible-core": ">=2.17.0",

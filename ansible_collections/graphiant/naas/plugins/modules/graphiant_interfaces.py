@@ -133,7 +133,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.1.1
+  - graphiant-sdk >= 26.2.1
 
 seealso:
   - module: graphiant.naas.graphiant_global_config
