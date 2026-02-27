@@ -21,7 +21,7 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.2.1) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.2.2) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
 | **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/terraform/README.md) |
 | **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/.github/workflows/README.md) |
 | **Docker Support** | Containerized execution environment | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/Docker.md) |
@@ -139,7 +139,7 @@ terraform apply -var-file="../../configs/gateway_services/gcp_config.tfvars"
 
 ```
 graphiant-playbooks/
-├── ansible_collections/graphiant/naas/                # Ansible collection (v26.2.1)
+├── ansible_collections/graphiant/naas/                # Ansible collection (v26.2.2)
 │   ├── plugins/modules/                              # Ansible modules (9 modules)
 │   ├── plugins/module_utils/                         # Python library code
 │   ├── playbooks/                                    # Example playbooks

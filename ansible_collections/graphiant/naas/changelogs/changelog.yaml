@@ -5,6 +5,12 @@
 
 ancestor: null
 releases:
+  "26.2.2":
+    release_date: "2026-02-20"
+    changes:
+      changed:
+        - "Collection version bumped to 26.2.2"
+        - "Updated to Graphiant SDK 26.2.1 for latest API support (use C(graphiant-sdk>=26.2.1))"
   "26.2.1":
     release_date: "2026-02-12"
     changes:
