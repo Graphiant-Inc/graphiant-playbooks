@@ -955,6 +955,64 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure static routes result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Deconfigure static routes idempotency failed"
 
+    def test_configure_global_ntp(self):
+        """
+        Configure Global NTP objects.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.global_config.configure("sample_global_ntp.yaml")
+        LOG.info("Configure global NTP result: %s", result)
+        result2 = graphiant_config.global_config.configure("sample_global_ntp.yaml")
+        LOG.info("Configure global NTP result (rerun check): %s", result2)
+
+    def test_deconfigure_global_ntp(self):
+        """
+        Deconfigure Global NTP objects.
+
+        Second run should be idempotent (changed=False) when objects are already absent.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+
+        result = graphiant_config.global_config.deconfigure("sample_global_ntp.yaml")
+        LOG.info("Deconfigure global NTP result: %s", result)
+        result2 = graphiant_config.global_config.deconfigure("sample_global_ntp.yaml")
+        LOG.info("Deconfigure global NTP result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure global NTP idempotency failed"
+        assert 'failed' in result2, "Deconfigure Global config result must include top-level 'failed'"
+        assert result2['failed'] is False, f"Deconfigure Global NTP failed: {result2}"
+
+    def test_configure_device_ntp(self):
+        """
+        Configure device-level NTP objects (edge.ntpGlobalObject).
+
+        Second run should be idempotent (changed=False) if desired state already matches.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+
+        result = graphiant_config.ntp.configure("sample_device_ntp.yaml")
+        LOG.info("Configure device-level NTP result: %s", result)
+        result2 = graphiant_config.ntp.configure("sample_device_ntp.yaml")
+        LOG.info("Configure device-level NTP result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure device-level NTP idempotency failed"
+
+    def test_deconfigure_device_ntp(self):
+        """
+        Deconfigure (delete) device-level NTP objects listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when objects are already absent.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+
+        result = graphiant_config.ntp.deconfigure("sample_device_ntp.yaml")
+        LOG.info("Deconfigure device-level NTP result: %s", result)
+        result2 = graphiant_config.ntp.deconfigure("sample_device_ntp.yaml")
+        LOG.info("Deconfigure device-level NTP result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure device-level NTP idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -976,16 +1034,18 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_get_lan_segments'))
 
-    # Global Configuration Management (SNMP, Syslog, IPFIX)
+    # Global Configuration Management (SNMP, Syslog, IPFIX, NTP)
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))  # Pre-req: Create Lan segments.
     suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_ntp'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))
     #   Failure is expected as lan segments are in use by SNMP, Syslog, IPFIX.
     suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_syslog_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_ipfix_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_ntp'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
 
     # Site Management Tests (sample_sites.yaml)
@@ -1008,7 +1068,7 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_detach_objects_and_deconfigure_sites'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))
 
-    # Global Configuration Management (Site Lists)
+    # # Global Configuration Management (Site Lists)
     suite.addTest(TestGraphiantPlaybooks('test_get_global_site_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_sites'))  # Pre-req: Create sites.
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_site_lists'))
@@ -1061,16 +1121,18 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
 
-    # Site Management Tests (sample_site_attachments.yaml) Attach/Detatch Objects (SNMP, Syslog, IPFIX ) to Sites.
+    # Site Management Tests (sample_site_attachments.yaml) Attach/Detatch Objects (SNMP, Syslog, IPFIX , NTP) to Sites.
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_snmp_service'))  # Pre-req: SNMP system object.
     suite.addTest(TestGraphiantPlaybooks('test_configure_syslog_service'))  # Pre-req: Syslog system object.
     suite.addTest(TestGraphiantPlaybooks('test_configure_ipfix_service'))  # Pre-req: IPFIX system object.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_ntp'))  # Pre-req: NTP system object.
     suite.addTest(TestGraphiantPlaybooks('test_attach_global_system_objects_to_site'))
     suite.addTest(TestGraphiantPlaybooks('test_detach_global_system_objects_from_site'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_snmp_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_syslog_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_ipfix_service'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_ntp'))
 
     # Data Exchange Tests
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services'))
@@ -1095,6 +1157,10 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
+
+    # Device-level NTP Management Tests
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_ntp'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_ntp'))
 
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))

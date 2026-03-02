@@ -283,6 +283,42 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process global syslog service %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global syslog service processing failed: {str(e)}")
 
+    def global_ntp(self, config_payload, action="add", **kwargs):
+        """
+        Update the ntps section of configuration payload.
+
+        Args:
+            config_payload (dict): The main configuration payload dict to be updated.
+            action (str, optional): Action to perform, either "add" or "delete". Defaults to "add".
+            **kwargs: NTP config fields (e.g. domains, isGlobalSync).
+
+        Raises:
+            ConfigurationError: If required parameters are missing.
+        """
+        self._validate_required_params(kwargs, ['name'])
+        LOG.debug("Global NTP service: %s %s", action.upper(), kwargs.get('name'))
+
+        try:
+            name = kwargs.get('name')
+            if action == "add":
+                ntp_config = {
+                    "config": {
+                        "name": name,
+                        "domains": list(kwargs.get("domains") or []),
+                    }
+                }
+                # Optional fields supported by SDK model; only include if explicitly provided.
+                if "globalId" in kwargs and kwargs.get("globalId") is not None:
+                    ntp_config["config"]["globalId"] = kwargs.get("globalId")
+                if "isGlobalSync" in kwargs and kwargs.get("isGlobalSync") is not None:
+                    ntp_config["config"]["isGlobalSync"] = bool(kwargs.get("isGlobalSync"))
+                config_payload['ntps'][name] = ntp_config
+            else:  # delete
+                config_payload['ntps'][name] = {}
+        except Exception as e:
+            LOG.error("Failed to process global NTP service %s: %s", kwargs.get('name'), str(e))
+            raise ConfigurationError(f"Global NTP service processing failed: {str(e)}")
+
     def global_ipfix(self, config_payload, action="add", **kwargs):
         """
         Update the ipfixExporters section of configuration payload.

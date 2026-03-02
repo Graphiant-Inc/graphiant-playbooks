@@ -193,3 +193,35 @@
       ansible.builtin.debug:
         msg: "{{ bgp_peering_result.msg }}"
       tags: ['bgp', 'peering']
+
+    - name: Configure global NTP objects
+      graphiant.naas.graphiant_global_config:
+        <<: *graphiant_client_params
+        config_file: "sample_global_ntp.yaml"
+        # operation: "configure_ntps"
+        operation: "configure"
+        detailed_logs: true
+        state: present
+      register: ntp_result
+      tags: ['global_config', 'ntp']
+
+    - name: Display NTP result
+      ansible.builtin.debug:
+        msg: "{{ ntp_result.msg }}"
+      tags: ['global_config', 'ntp']
+
+    - name: Deconfigure global NTP objects
+      graphiant.naas.graphiant_global_config:
+        <<: *graphiant_client_params
+        config_file: "sample_global_ntp.yaml"
+        # operation: "deconfigure_ntps"
+        operation: "deconfigure"
+        detailed_logs: true
+        state: absent
+      register: deconfigure_ntp_result
+      tags: ['global_config', 'ntp']
+
+    - name: Display NTP result
+      ansible.builtin.debug:
+        msg: "{{ ntp_result.msg }}"
+      tags: ['global_config', 'ntp']
