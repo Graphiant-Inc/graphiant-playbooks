@@ -60,12 +60,12 @@ output "expressroute_peering_id" {
 
 output "virtual_hub_id" {
   description = "ID of the Virtual Hub"
-  value       = var.enable_expressroute ? azurerm_virtual_hub.express_hub[0].id : "ExpressRoute not enabled"
+  value       = var.enable_expressroute ? azurerm_virtual_hub.virtual_hub[0].id : "ExpressRoute not enabled"
 }
 
 output "virtual_hub_name" {
   description = "Name of the Virtual Hub"
-  value       = var.enable_expressroute ? azurerm_virtual_hub.express_hub[0].name : "ExpressRoute not enabled"
+  value       = var.enable_expressroute ? azurerm_virtual_hub.virtual_hub[0].name : "ExpressRoute not enabled"
 }
 
 output "secondary_expressroute_circuit_id" {

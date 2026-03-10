@@ -55,7 +55,7 @@ resource "azurerm_virtual_network" "virtual_network" {
   name                = var.vnet_name != null ? var.vnet_name : "${var.project_name}-vnet"
   resource_group_name = local.rg_name
   location            = var.azure_region
-  address_space       = [var.vnet_address_space]
+  address_space       = [var.vnet_address_prefix]
 
   tags = {
     Name        = var.vnet_name != null ? var.vnet_name : "${var.project_name}-vnet"
@@ -64,12 +64,12 @@ resource "azurerm_virtual_network" "virtual_network" {
 }
 
 # Public Subnet
-resource "azurerm_subnet" "express_public_subnet" {
+resource "azurerm_subnet" "vnet_public_subnet" {
   count               = var.use_existing_vnet ? 0 : 1
   name                 = "${var.project_name}-public-subnet"
   resource_group_name  = local.rg_name
   virtual_network_name = local.vnet_name
-  address_prefixes     = [var.public_subnet_prefix]
+  address_prefixes     = [var.vnet_public_address_prefix]
 }
 
 # ExpressRoute Circuit
@@ -134,7 +134,7 @@ resource "azurerm_subnet" "express_route_gateway_subnet" {
   name                 = "GatewaySubnet"
   resource_group_name  = local.rg_name
   virtual_network_name = local.vnet_name
-  address_prefixes     = ["10.0.2.0/24"]
+  address_prefixes     = var.vnet_gateway_address_prefixes
 }
 
 # ExpressRoute Gateway Public IP
@@ -166,17 +166,17 @@ resource "azurerm_virtual_wan" "virtual_wan" {
 }
 
 # Virtual Hub (required for ExpressRoute Gateway)
-resource "azurerm_virtual_hub" "express_hub" {
+resource "azurerm_virtual_hub" "virtual_hub" {
   count               = var.enable_expressroute ? 1 : 0
-  name                = "${var.project_name}-hub"
+  name                = "${var.project_name}-virtual-hub"
   resource_group_name = local.rg_name
   location            = local.rg_location
   virtual_wan_id      = azurerm_virtual_wan.virtual_wan[0].id
-  address_prefix      = "10.1.0.0/16"
+  address_prefix      = var.virtual_hub_address_prefix
   sku                 = "Standard"
 
   tags = {
-    Name        = "${var.project_name}-hub"
+    Name        = "${var.project_name}-virtual-hub"
     Environment = var.environment
   }
 }
@@ -186,7 +186,7 @@ resource "time_sleep" "wait_for_virtual_hub" {
   count = var.enable_expressroute ? 1 : 0
 
   depends_on = [
-    azurerm_virtual_hub.express_hub
+    azurerm_virtual_hub.virtual_hub
   ]
 
   create_duration = "300s"
@@ -199,7 +199,7 @@ resource "azurerm_express_route_gateway" "express_route_gateway" {
   name                = "${var.project_name}-er-gateway"
   resource_group_name = local.rg_name
   location            = local.rg_location
-  virtual_hub_id      = azurerm_virtual_hub.express_hub[0].id
+  virtual_hub_id      = azurerm_virtual_hub.virtual_hub[0].id
 
   scale_units = var.expressroute_gateway_scale_units
 
@@ -224,11 +224,11 @@ resource "azurerm_express_route_connection" "express_route_connection" {
   routing_weight      = 1
 
   routing {
-    associated_route_table_id = "${azurerm_virtual_hub.express_hub[0].id}/hubRouteTables/defaultRouteTable"
+    associated_route_table_id = "${azurerm_virtual_hub.virtual_hub[0].id}/hubRouteTables/defaultRouteTable"
 
     propagated_route_table {
       labels = ["default"]
-      route_table_ids = ["${azurerm_virtual_hub.express_hub[0].id}/hubRouteTables/defaultRouteTable"]
+      route_table_ids = ["${azurerm_virtual_hub.virtual_hub[0].id}/hubRouteTables/defaultRouteTable"]
     }
   }
 }
@@ -237,18 +237,18 @@ resource "azurerm_express_route_connection" "express_route_connection" {
 resource "azurerm_virtual_hub_connection" "vnet_connection" {
   count                     = var.enable_expressroute ? 1 : 0
   name                      = "${var.project_name}-vnet-connection"
-  virtual_hub_id            = azurerm_virtual_hub.express_hub[0].id
+  virtual_hub_id            = azurerm_virtual_hub.virtual_hub[0].id
   remote_virtual_network_id = local.vnet_id
   
   # Disable internet security to allow SSH access
   internet_security_enabled = false
 
   routing {
-    associated_route_table_id = "${azurerm_virtual_hub.express_hub[0].id}/hubRouteTables/defaultRouteTable"
+    associated_route_table_id = "${azurerm_virtual_hub.virtual_hub[0].id}/hubRouteTables/defaultRouteTable"
 
     propagated_route_table {
       labels = ["default"]
-      route_table_ids = ["${azurerm_virtual_hub.express_hub[0].id}/hubRouteTables/defaultRouteTable"]
+      route_table_ids = ["${azurerm_virtual_hub.virtual_hub[0].id}/hubRouteTables/defaultRouteTable"]
     }
   }
 }
@@ -273,7 +273,7 @@ resource "azurerm_route_table" "express_route_route_table" {
 # Associate Route Table with Public Subnet
 resource "azurerm_subnet_route_table_association" "public_subnet_route_table" {
   count          = var.enable_expressroute && !var.use_existing_vnet ? 1 : 0
-  subnet_id      = azurerm_subnet.express_public_subnet[0].id
+  subnet_id      = azurerm_subnet.vnet_public_subnet[0].id
   route_table_id = azurerm_route_table.express_route_route_table[0].id
 }
 
@@ -300,7 +300,7 @@ resource "azurerm_subnet" "vm_subnet" {
   name                 = "${var.project_name}-vm-subnet"
   resource_group_name  = local.rg_name
   virtual_network_name = local.vnet_name
-  address_prefixes     = [var.vm_subnet_prefix]
+  address_prefixes     = [var.vnet_vm_address_prefix]
 }
 
 # Network Security Group for VM
