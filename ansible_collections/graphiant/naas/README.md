@@ -29,6 +29,7 @@ This collection provides Ansible modules to automate:
 - **Jinja2 Template Support**: Configuration files support Jinja2 templating for dynamic generation
 - **Comprehensive Logging**: Optional detailed logging for debugging and troubleshooting
 - **Check Mode**: All modules document check_mode support (full, partial, or none) in the `attributes` field per Ansible standards
+- **Shared Auth Documentation**: All modules use the same Graphiant portal auth options (host, username, password) via doc fragment `graphiant.naas.graphiant_portal_auth` for consistent `ansible-doc` output
 - **Ansible Inclusion Ready**: Collection complies with the [Ansible Collection Inclusion Checklist](https://github.com/ansible-collections/ansible-inclusion/blob/main/collection_checklist.md) (documentation standards, FQCNs, semantic markup, license, changelog)
 
 ## Support & Compatibility
