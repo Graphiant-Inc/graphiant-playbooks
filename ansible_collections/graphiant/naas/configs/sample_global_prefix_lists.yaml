@@ -46,3 +46,27 @@ global_prefix_sets:
         rule: greater_and_equal
         ge: 15
         le: 32
+  - name: prefix_list_edge_1
+    description: For_testing_graphiant_filter
+    mode: ipv4
+    entries:
+      - sequence: 1
+        prefix: 10.1.1.0/24
+        rule: exact
+        le: 32
+  - name: prefix_list_edge_2
+    description: For_testing_graphiant_filter
+    mode: ipv4
+    entries:
+      - sequence: 1
+        prefix: 10.1.2.0/24
+        rule: exact
+        le: 32
+  - name: prefix_list_edge_3
+    description: For_testing_graphiant_filter
+    mode: ipv4
+    entries:
+      - sequence: 1
+        prefix: 10.1.3.0/24
+        rule: exact
+        le: 32

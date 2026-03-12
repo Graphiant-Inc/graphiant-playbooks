@@ -55,7 +55,7 @@
 
     - name: Display match result
       ansible.builtin.debug:
-        msg: "{{ match_result.result_msg }}"
+        msg: "{{ match_result.msg }}"
 
     - name: Get updated customers summary
       graphiant.naas.graphiant_data_exchange_info:

@@ -140,6 +140,41 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             assert bgp_filters.get('failed_objects'), "When failed is True, details.bgp_filters.failed_objects must be non-empty"
         assert result['failed'] is False, f"Deconfigure Global BGP filters failed: {result}"
 
+    def test_configure_global_config_graphiant_filters(self):
+        """
+        Configure Global Graphiant filters (GraphiantIn / GraphiantOut).
+        Used later by Data Exchange services via globalObjectOps.routingPolicyOps (e.g. Policy-DC1-Primary).
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.global_config.configure_graphiant_filters("sample_global_graphiant_filters.yaml")
+        LOG.info("Configure Graphiant filters result: %s", result)
+        result = graphiant_config.global_config.configure_graphiant_filters("sample_global_graphiant_filters.yaml")
+        LOG.info("Configure Graphiant filters result (rerun check): %s", result)
+
+    def test_deconfigure_global_config_graphiant_filters(self):
+        """
+        Deconfigure Global Graphiant filters.
+        Run after Data Exchange services are deleted so policies are not in use.
+        """
+        base_url, username, password = read_config()
+        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        result = graphiant_config.global_config.deconfigure_graphiant_filters(
+            "sample_global_graphiant_filters.yaml"
+        )
+        LOG.info("Deconfigure Graphiant filters result: %s", result)
+        result = graphiant_config.global_config.deconfigure_graphiant_filters(
+            "sample_global_graphiant_filters.yaml"
+        )
+        LOG.info("Deconfigure Graphiant filters result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure Graphiant filters idempotency failed"
+        assert 'failed' in result, "Deconfigure result must include top-level 'failed'"
+        if result['failed']:
+            assert result.get('failed_objects'), (
+                "When failed is True, failed_objects must be non-empty"
+            )
+        assert result['failed'] is False, f"Deconfigure Graphiant filters failed: {result}"
+
     def test_configure_snmp_service(self):
         """
         Configure Global SNMP Objects.
@@ -813,21 +848,23 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         graphiant_config.data_exchange.match_service_to_customers(
             "de_workflows_configs/sample_data_exchange_matches.yaml")
 
-    def test_accept_data_exchange_invitation_dry_run(self):
+    def test_accept_data_exchange_invitation_check_mode(self):
         """
-        Accept Data Exchange Service Invitation (Workflow 4).
+        Accept Data Exchange Service Invitation (Workflow 4) in check mode.
         """
         base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = GraphiantConfig(
+            base_url=base_url, username=username, password=password, check_mode=True
+        )
 
-        # Test accept_invitation with configuration file
+        # Test accept_invitation with configuration file (check mode skips API calls)
         config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
         matches_file = (
             "de_workflows/output/sample_data_exchange_matches_responses_latest.json"
         )
 
-        LOG.info("Testing accept_invitation with config: %s", config_file)
-        result = graphiant_config.data_exchange.accept_invitation(config_file, matches_file, dry_run=True)
+        LOG.info("Testing accept_invitation (check mode) with config: %s", config_file)
+        result = graphiant_config.data_exchange.accept_invitation(config_file, matches_file)
         LOG.info("Accept invitation result: %s", result)
 
     def test_show_validated_payload_for_device_config(self):
@@ -1019,12 +1056,16 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_get_login_token'))
     suite.addTest(TestGraphiantPlaybooks('test_get_enterprise_id'))
 
-    # Global Configuration Management (Prefix Lists and BGP Filters)
+    # Global Configuration Management (Prefix Lists and BGP / Graphiant Filters)
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_bgp_filters'))  # Pre-req: Configure prefix sets.
-    #   Failure is expected as prefix_sets are in use by BGP filters
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_graphiant_filters'))
+    #   Failure is expected as prefix_sets are in use by BGP / Graphiant filters
     suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_global_config_prefix_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_bgp_filters'))
+    #   Failure is expected as prefix_sets are in use by Graphiant filters
+    suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_global_config_prefix_lists'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_graphiant_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
 
     # LAN Segments Management Tests
@@ -1135,6 +1176,8 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_ntp'))
 
     # Data Exchange Tests
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))  # Pre-req: Configure prefix lists.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_graphiant_filters'))  # Pre-req: Configure Graphiant filters.
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_customers'))
@@ -1142,9 +1185,11 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_customers_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
-    # suite.addTest(TestGraphiantPlaybooks('test_accept_data_exchange_invitation_dry_run'))
+    # suite.addTest(TestGraphiantPlaybooks('test_accept_data_exchange_invitation_check_mode'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_graphiant_filters'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
 
     # Static Routes Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))

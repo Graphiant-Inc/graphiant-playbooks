@@ -89,6 +89,31 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process global BGP filter %s: %s", kwargs.get('name'), str(e))
             raise ConfigurationError(f"Global BGP filter processing failed: {str(e)}")
 
+    def global_graphiant_filter(self, config_payload, action="add", **kwargs):
+        """
+        Update the routing_policies section with a Graphiant filter (attachPoint GraphiantIn/GraphiantOut).
+
+        Args:
+            config_payload (dict): The configuration dictionary that holds routing policies.
+            action (str, optional): Action to perform, either "add" or "delete". Defaults to "add".
+            **kwargs: Additional parameters used for rendering the template.
+
+        Raises:
+            ConfigurationError: If required parameters are missing.
+        """
+        self._validate_required_params(kwargs, ['name'])
+        LOG.debug("Global Graphiant filter: %s %s", action.upper(), kwargs.get('name'))
+
+        try:
+            result = self.template.render_global_graphiant_filter(action=action, **kwargs)
+            if action == "add":
+                config_payload['routing_policies'].update(result)
+            else:  # delete
+                config_payload['routing_policies'][kwargs.get('name')] = {}
+        except Exception as e:
+            LOG.error("Failed to process global Graphiant filter %s: %s", kwargs.get('name'), str(e))
+            raise ConfigurationError(f"Global Graphiant filter processing failed: {str(e)}")
+
     def device_bgp_peering(self, config_payload, action="add", **kwargs):
         """
         Update the Device neighbors section of configuration payload.

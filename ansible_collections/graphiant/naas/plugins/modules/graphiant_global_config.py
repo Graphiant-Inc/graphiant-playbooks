@@ -9,7 +9,7 @@ Ansible module for managing Graphiant global configuration objects.
 
 This module provides global configuration management capabilities including:
 - Prefix sets configuration and deconfiguration
-- BGP filters (routing policies) management
+- BGP & Graphiant filters (routing policies) management
 - SNMP services management
 - Syslog services management
 - NTP services management
@@ -25,7 +25,7 @@ short_description: Manage Graphiant global configuration objects
 description:
   - This module provides comprehensive global configuration object management for Graphiant devices.
   - >
-    Supports multiple global object types: prefix sets, BGP filters, SNMP services,
+    Supports multiple global object types: prefix sets, BGP & Graphiant filters, SNMP services,
     syslog services, NTP services, IPFIX services, VPN profiles, and LAN segments.
   - Can manage all object types together using general operations or specific object types individually.
   - All operations use Jinja2 templates for consistent configuration deployment.
@@ -78,6 +78,8 @@ options:
       - "V(deconfigure_prefix_sets): Deconfigure global prefix sets only."
       - "V(configure_bgp_filters): Configure global BGP filters (routing policies) only."
       - "V(deconfigure_bgp_filters): Deconfigure global BGP filters only."
+      - "V(configure_graphiant_filters): Configure global Graphiant filters (GraphiantIn/GraphiantOut) only."
+      - "V(deconfigure_graphiant_filters): Deconfigure global Graphiant filters only."
       - "V(configure_snmp_services): Configure global SNMP services only."
       - "V(deconfigure_snmp_services): Deconfigure global SNMP services only."
       - "V(configure_syslog_services): Configure global syslog services only."
@@ -100,6 +102,8 @@ options:
       - deconfigure_prefix_sets
       - configure_bgp_filters
       - deconfigure_bgp_filters
+      - configure_graphiant_filters
+      - deconfigure_graphiant_filters
       - configure_snmp_services
       - deconfigure_snmp_services
       - configure_syslog_services
@@ -182,6 +186,24 @@ EXAMPLES = r'''
   graphiant.naas.graphiant_global_config:
     operation: configure_bgp_filters
     config_file: "sample_global_bgp_filters.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+
+- name: Configure global Graphiant filters
+  graphiant.naas.graphiant_global_config:
+    operation: configure_graphiant_filters
+    config_file: "sample_global_graphiant_filters.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+
+- name: Deconfigure global Graphiant filters
+  graphiant.naas.graphiant_global_config:
+    operation: deconfigure_graphiant_filters
+    config_file: "sample_global_graphiant_filters.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -372,6 +394,8 @@ def main():
                 'deconfigure_prefix_sets',
                 'configure_bgp_filters',
                 'deconfigure_bgp_filters',
+                'configure_graphiant_filters',
+                'deconfigure_graphiant_filters',
                 'configure_snmp_services',
                 'deconfigure_snmp_services',
                 'configure_syslog_services',
@@ -417,7 +441,8 @@ def main():
     if not operation and not state:
         supported_operations = [
             'configure', 'deconfigure', 'configure_prefix_sets', 'deconfigure_prefix_sets',
-            'configure_bgp_filters', 'deconfigure_bgp_filters', 'configure_snmp_services',
+            'configure_bgp_filters', 'deconfigure_bgp_filters',
+            'configure_graphiant_filters', 'deconfigure_graphiant_filters', 'configure_snmp_services',
             'deconfigure_snmp_services', 'configure_syslog_services', 'deconfigure_syslog_services',
             'configure_ntps', 'deconfigure_ntps',
             'configure_ipfix_services', 'deconfigure_ipfix_services', 'configure_vpn_profiles',
@@ -487,6 +512,20 @@ def main():
             result = execute_with_logging(module, graphiant_config.global_config.deconfigure_bgp_filters,
                                           config_file,
                                           success_msg="Successfully deconfigured global BGP filters")
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'configure_graphiant_filters':
+            result = execute_with_logging(module, graphiant_config.global_config.configure_graphiant_filters,
+                                          config_file,
+                                          success_msg="Successfully configured global Graphiant filters")
+            changed = result['changed']
+            result_msg = result['result_msg']
+
+        elif operation == 'deconfigure_graphiant_filters':
+            result = execute_with_logging(module, graphiant_config.global_config.deconfigure_graphiant_filters,
+                                          config_file,
+                                          success_msg="Successfully deconfigured global Graphiant filters")
             changed = result['changed']
             result_msg = result['result_msg']
 

@@ -147,7 +147,7 @@ read_file
 flake8 ansible_collections/graphiant/naas/plugins/module_utils
 
 # Python linting with pylint (errors only, local development only, not in CI)
-export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils/libs
+export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils
 pylint --errors-only ansible_collections/graphiant/naas/plugins/module_utils
 
 # Ansible playbook linting (runs in CI, requires collection to be installed first)
@@ -282,7 +282,6 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 | `03_dataex_match_services_to_customers.yml` | Match services to customers |
 | `04_dataex_delete_customers.yml` | Delete customers |
 | `05_dataex_delete_services.yml` | Delete services |
-| `06_dataex_accept_invitation_dry_run.yml` | Test invitation acceptance (dry-run) |
 | `07_dataex_accept_invitation.yml` | Accept service invitations |
 | `08_dataex_query_service_health.yml` | Query service health monitoring |
 

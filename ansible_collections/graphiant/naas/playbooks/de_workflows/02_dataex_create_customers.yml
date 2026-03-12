@@ -44,7 +44,7 @@
 
     - name: Display customers creation result
       ansible.builtin.debug:
-        msg: "{{ create_customers_result.result_msg }}"
+        msg: "{{ create_customers_result.msg }}"
 
     - name: Get updated customers summary
       graphiant.naas.graphiant_data_exchange_info:

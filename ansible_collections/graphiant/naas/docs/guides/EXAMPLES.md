@@ -574,6 +574,56 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
   tags: ['global_config', 'bgp_filters']
 ```
 
+#### Configure / deconfigure Graphiant filters
+
+Graphiant filters use attach points GraphiantIn / GraphiantOut. Use `sample_global_graphiant_filters.yaml` with `graphiant_routing_policies` key.
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters
+```
+
+```yaml
+- name: Configure global Graphiant filters
+  graphiant.naas.graphiant_global_config:
+    <<: *graphiant_client_params
+    config_file: "sample_global_graphiant_filters.yaml"
+    operation: "configure_graphiant_filters"
+    detailed_logs: true
+    state: present
+  register: graphiant_filters_result
+  tags: ['global_config', 'graphiant_filters']
+
+- name: Display Graphiant filters result
+  ansible.builtin.debug:
+    msg: "{{ graphiant_filters_result.msg }}"
+  tags: ['global_config', 'graphiant_filters']
+```
+
+Deconfigure:
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_graphiant_filters --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_graphiant_filters
+```
+
+```yaml
+- name: Deconfigure global Graphiant filters
+  graphiant.naas.graphiant_global_config:
+    <<: *graphiant_client_params
+    config_file: "sample_global_graphiant_filters.yaml"
+    operation: "deconfigure_graphiant_filters"
+    detailed_logs: true
+    state: absent
+  register: deconfigure_graphiant_filters_result
+  tags: ['deconfigure_graphiant_filters']
+
+- name: Display deconfigure Graphiant filters result
+  ansible.builtin.debug:
+    msg: "{{ deconfigure_graphiant_filters_result.msg }}"
+  tags: ['deconfigure_graphiant_filters']
+```
+
 #### Configure / deconfigure LAN segments
 
 ```bash
@@ -1131,86 +1181,218 @@ Deconfigure deletes only the prefixes listed in the YAML (per segment).
 
 ## Data Exchange Workflows
 
-The Data Exchange module supports multi-step workflows. Run playbooks in order:
-
 ### Step 1: Prerequisites
 
 ```bash
-# Set up LAN interfaces
-ansible-playbook playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml
+# Create LAN segments
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml
 
-# Set up LAN segments
-ansible-playbook playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml
+# Configure interfaces
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml
 
-# Set up VPN profiles
-ansible-playbook playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml
+# Create Prefix Lists
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag prefix_sets --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag prefix_sets
+
+# Create Graphiant filters to be in Data Exchange Services
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters
+
+# Create VPN profiles in the proxy tenant
+export GRAPHIANT_USERNAME="proxy-tenant-username"
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml
 ```
 
-### Step 2: Create Services
+### Step 2: Create Data Exchange Services
+
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/01_dataex_create_services.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/01_dataex_create_services.yml
+```
+
+To create Data Exchange services
 
 ```yaml
-# playbooks/de_workflows/01_dataex_create_services.yml
-- name: Create Data Exchange services
+- name: Create Data Exchange Services
   graphiant.naas.graphiant_data_exchange:
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
-    operation: "create_services"
+    operation: create_services
     config_file: "de_workflows_configs/sample_data_exchange_services.yaml"
+    # config_file: "de_workflows_configs/sample_data_exchange_services_scale.yaml" # Scale testing
+    # config_file: "de_workflows_configs/sample_data_exchange_services_scale2.yaml" # Scale testing2
     detailed_logs: true
+  register: create_services_result
+
+- name: Display services creation detailed result
+  ansible.builtin.debug:
+    msg: "{{ create_services_result.msg }}"
 ```
 
-### Step 3: Create Customers
+To list Data Exchange services
 
 ```yaml
-# playbooks/de_workflows/02_dataex_create_customers.yml
+- name: Get Data Exchange services summary
+  graphiant.naas.graphiant_data_exchange_info:
+    <<: *graphiant_client_params
+    query: services_summary
+    detailed_logs: true
+  register: services_summary
+
+- name: Display services summary
+  ansible.builtin.debug:
+    msg: "{{ services_summary.msg }}"
+```
+
+### Step 3: Create Data Exchange Customers
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml
+```
+
+To create Data Exchange Customers
+
+```yaml
 - name: Create Data Exchange customers
   graphiant.naas.graphiant_data_exchange:
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-    operation: "create_customers"
+    <<: *graphiant_client_params
+    operation: create_customers
     config_file: "de_workflows_configs/sample_data_exchange_customers.yaml"
+    # config_file: "de_workflows_configs/sample_data_exchange_customers_scale.yaml" # Scale testing
+    # config_file: "de_workflows_configs/sample_data_exchange_customers_scale2.yaml" # Scale testing2
     detailed_logs: true
+  register: create_customers_result
+
+- name: Display customers creation result
+  ansible.builtin.debug:
+    msg: "{{ create_customers_result.msg }}"
+```
+
+To list Data Exchange Customers
+
+```yaml
+- name: Get Data Exchange customers summary
+  graphiant.naas.graphiant_data_exchange_info:
+    <<: *graphiant_client_params
+    query: customers_summary
+    detailed_logs: true
+  register: customers_summary
+
+- name: Display customers summary
+  ansible.builtin.debug:
+    msg: "{{ customers_summary.msg }}"
 ```
 
 ### Step 4: Match Services to Customers
 
+```bash
+export GRAPHIANT_CONFIGS_PATH=$(pwd)/ansible_collections/graphiant/naas/configs/
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml
+```
+
+
 ```yaml
-# playbooks/de_workflows/03_dataex_match_services_to_customers.yml
-- name: Match services to customers
+- name: Match Data Exchange services to customers
   graphiant.naas.graphiant_data_exchange:
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-    operation: "match_service_to_customers"
+    <<: *graphiant_client_params
+    operation: match_service_to_customers
     config_file: "de_workflows_configs/sample_data_exchange_matches.yaml"
+    # config_file: "de_workflows_configs/sample_data_exchange_matches_scale.yaml" # Scale testing
+    # config_file: "de_workflows_configs/sample_data_exchange_matches_scale2.yaml" # Scale testing2
     detailed_logs: true
+  register: match_result
+
+- name: Display match result
+  ansible.builtin.debug:
+    msg: "{{ match_result.msg }}"
 ```
 
-### Step 5: Accept Invitations
-
-```yaml
-# playbooks/de_workflows/07_dataex_accept_invitation.yml
-- name: Accept service invitation
-  graphiant.naas.graphiant_data_exchange:
-    host: "{{ graphiant_host }}"
-    username: "{{ graphiant_username }}"
-    password: "{{ graphiant_password }}"
-    operation: "accept_invitation"
-    config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
-    matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
-    detailed_logs: true
-```
-
-### Cleanup
+### Step 5: Accept Invitations (in the proxy tenant)
 
 ```bash
-# Delete customers first
-ansible-playbook playbooks/de_workflows/04_dataex_delete_customers.yml
+export GRAPHIANT_USERNAME="proxy-tenant-username"
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check
+```
 
-# Then delete services
-ansible-playbook playbooks/de_workflows/05_dataex_delete_services.yml
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml
+```
+
+
+```yaml
+- name: Accept Data Exchange service invitation
+  graphiant.naas.graphiant_data_exchange:
+    <<: *graphiant_client_params
+    operation: accept_invitation
+    config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
+    # matches_file is optional - if provided, uses service_id to lookup match_id via API if missing
+    # If not provided, attempts API lookup (works if service is visible to consumer tenant)
+    matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+    # Scale testing
+    # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale.yaml"
+    # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_scale_responses_latest.json"
+    # Scale testing2
+    # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale2.yaml"
+    # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_scale2_responses_latest.json"
+    detailed_logs: true
+  register: accept_result
+
+- name: Display acceptance result
+  ansible.builtin.debug:
+    msg: "{{ accept_result.result_msg }}"
+```
+
+### Cleanup - Delete Data Exchange Customers
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml
+```
+
+```yaml
+- name: Delete Data Exchange customers
+  graphiant.naas.graphiant_data_exchange:
+    <<: *graphiant_client_params
+    operation: delete_customers
+    config_file: "de_workflows_configs/sample_data_exchange_customers.yaml"
+    # config_file: "de_workflows_configs/sample_data_exchange_customers_scale.yaml" # Scale testing
+    # config_file: "de_workflows_configs/sample_data_exchange_customers_scale2.yaml" # Scale testing2
+    detailed_logs: true
+  register: delete_customers_result
+
+- name: Display delete customers result
+  ansible.builtin.debug:
+    msg: "{{ delete_customers_result.msg }}"
+```
+
+### Cleanup - Delete Data Exchange Services
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/05_dataex_delete_services.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/05_dataex_delete_services.yml
+```
+
+```yaml
+- name: Delete Data Exchange services
+  graphiant.naas.graphiant_data_exchange:
+    <<: *graphiant_client_params
+    operation: delete_services
+    config_file: "de_workflows_configs/sample_data_exchange_services.yaml"
+    # config_file: "de_workflows_configs/sample_data_exchange_services_scale.yaml" # Scale testing
+    # config_file: "de_workflows_configs/sample_data_exchange_services_scale2.yaml" # Scale testing2
+    detailed_logs: true
+  register: delete_services_result
+
+- name: Display delete services result
+  ansible.builtin.debug:
+    msg: "{{ delete_services_result.msg }}"
 ```
 
 ## Complete Network Setup
@@ -1266,6 +1448,7 @@ Sample configuration files are in the `configs/` directory:
 | `sample_bgp_peering.yaml` | BGP peering settings |
 | `sample_global_prefix_lists.yaml` | Prefix set definitions |
 | `sample_global_bgp_filters.yaml` | BGP filter definitions |
+| `sample_global_graphiant_filters.yaml` | Graphiant filter definitions (GraphiantIn / GraphiantOut) |
 | `sample_global_lan_segments.yaml` | LAN segment definitions |
 | `sample_global_ntp.yaml` | NTP object definitions |
 | `sample_global_vpn_profiles.yaml` | VPN profile definitions |

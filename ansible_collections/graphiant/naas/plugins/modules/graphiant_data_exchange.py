@@ -35,9 +35,9 @@ notes:
   - "The module automatically resolves names to IDs for sites, LAN segments, services, customers, and regions."
   - "All operations are idempotent and safe to run multiple times without creating duplicates."
   - "For accept_invitation operation, minimum 2 gateways per region are required for redundancy."
-  - "Check mode (C(--check)) is not supported for this module."
-  - "Data Exchange operations involve complex multi-step workflows with state changes that cannot be safely simulated."
-  - "The V(accept_invitation) operation provides a O(dry_run) parameter for validation without API calls."
+  - "Check mode (C(--check)) is supported. In check mode, the module runs all logic (config load, validation,"
+  - "name-to-ID resolution) but the API client skips write operations and logs payloads with C([check_mode])."
+  - "Use C(--check) to validate accept_invitation without making API calls."
 options:
   operation:
     description:
@@ -45,6 +45,9 @@ options:
       - "V(create_services): Create Data Exchange services from YAML configuration (Workflow 1)."
       - "Configuration file must contain I(data_exchange_services) list with service definitions."
       - "Services define peering services with LAN segments, sites, and service prefixes."
+      - "Optional I(policy.globalObjectOps): keys are device names (resolved to device IDs) or device IDs;"
+      - "values can include I(routingPolicyOps) to attach Graphiant filters per device (e.g. I(Policy-DC1-Primary): I(Attach))."
+      - "Configure Graphiant filters first with M(graphiant.naas.graphiant_global_config) and I(configure_graphiant_filters)."
       - "V(delete_services): Delete Data Exchange services from YAML configuration. Services must be deleted after customers that depend on them."
       - "V(create_customers): Create Data Exchange customers from YAML configuration (Workflow 2)."
       - "Configuration file must contain I(data_exchange_customers) list with customer definitions."
@@ -87,10 +90,12 @@ options:
         V(match_service_to_customers), and V(accept_invitation) operations.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - Configuration files support Jinja2 templating syntax for dynamic generation.
-      - For V(create_services), file must contain I(data_exchange_services) list.
+      - For V(create_services), file must contain I(data_exchange_services) list. Optional I(policy.globalObjectOps)
+      - per service attaches Graphiant routing policies to devices (device names resolved to IDs).
       - For V(create_customers) or V(delete_customers), file must contain I(data_exchange_customers) list.
       - For V(match_service_to_customers), file must contain I(data_exchange_matches) list.
-      - For V(accept_invitation), file must contain I(data_exchange_acceptances) list.
+      - For V(accept_invitation), file must contain I(data_exchange_acceptances) list. Optional I(globalObjectOps)
+      - per acceptance attaches Graphiant routing policies to gateway devices (device names resolved to IDs).
       - Match responses are saved to I(output/) directory near the configuration file.
     type: str
   matches_file:
@@ -106,15 +111,6 @@ options:
       - "  3. If I(matches_file) provided but no entry found - attempts API lookup using service name"
       - "  4. If I(matches_file) not provided - attempts API lookup (works if service is visible to consumer)"
     type: str
-  dry_run:
-    description:
-      - Enable dry-run mode for V(accept_invitation) operation.
-      - When enabled, validates configuration without making actual API calls.
-      - Performs all name-to-ID resolution and configuration validation.
-      - Useful for testing and validation before actual execution.
-      - Only applicable to V(accept_invitation) operation.
-    type: bool
-    default: false
   detailed_logs:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
@@ -143,9 +139,9 @@ options:
 attributes:
   check_mode:
     description: >
-      Check mode is not supported for this module. Data Exchange operations involve complex
-      multi-step workflows with state changes that cannot be safely simulated.
-    support: none
+      Supported. In check mode, no API writes are performed; payloads that would be sent
+      are logged with a C([check_mode]) prefix.
+    support: full
 
 requirements:
   - python >= 3.7
@@ -228,28 +224,27 @@ EXAMPLES = r'''
   ansible.builtin.debug:
     msg: "{{ match_result.msg }}"
 
-- name: Workflow 4 - Accept Data Exchange service invitation (Dry Run)
+- name: Workflow 4 - Accept Data Exchange service invitation (check mode)
   graphiant.naas.graphiant_data_exchange:
     operation: accept_invitation
     config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
     matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
-    dry_run: true
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
     detailed_logs: true
-  register: accept_result_dry_run
+  register: accept_result
+  # Run playbook with: ansible-playbook playbook.yml --check
 
-- name: Display dry run result
+- name: Display acceptance result
   ansible.builtin.debug:
-    msg: "{{ accept_result_dry_run.msg }}"
+    msg: "{{ accept_result.msg }}"
 
-- name: Workflow 4 - Accept Data Exchange service invitation
+- name: Workflow 4 - Accept Data Exchange service invitation (apply)
   graphiant.naas.graphiant_data_exchange:
     operation: accept_invitation
     config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
     matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
-    dry_run: false
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -314,7 +309,6 @@ EXAMPLES = r'''
         operation: accept_invitation
         config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
         matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
-        dry_run: false
         host: "{{ graphiant_host }}"
         username: "{{ graphiant_username }}"
         password: "{{ graphiant_password }}"
@@ -466,14 +460,13 @@ def main():
         ),
         config_file=dict(type='str', required=False),
         matches_file=dict(type='str', required=False),
-        detailed_logs=dict(type='bool', default=False),
-        dry_run=dict(type='bool', default=False)
+        detailed_logs=dict(type='bool', default=False)
     )
 
     # Create module instance
     module = AnsibleModule(
         argument_spec=argument_spec,
-        supports_check_mode=False,
+        supports_check_mode=True,
         mutually_exclusive=[
             ('operation', 'state')
         ],
@@ -551,20 +544,19 @@ def main():
             result_msg = result['result_msg']
 
         elif operation == 'accept_invitation':
-            # accept_invitation operation supports config_file and optional matches_file, dry_run
+            # accept_invitation operation supports config_file and optional matches_file
             if not config_file:
                 module.fail_json(msg="accept_invitation operation requires config_file parameter")
 
             matches_file = params.get('matches_file')
-            dry_run = params.get('dry_run', False)
 
             success_msg = f"Successfully accepted Data Exchange service invitation from {config_file}"
-            if dry_run:
-                success_msg = f"DRY-RUN: Validated Data Exchange service invitation from {config_file} " \
-                              "(API calls skipped)"
+            if module.check_mode:
+                success_msg = (f"Check mode: validated Data Exchange service invitation from {config_file} "
+                               "(API calls skipped)")
 
             result = execute_with_logging(module, graphiant_config.data_exchange.accept_invitation,
-                                          config_file, matches_file, dry_run,
+                                          config_file, matches_file,
                                           success_msg=success_msg)
 
             changed = result['changed']

@@ -44,7 +44,7 @@
 
     - name: Display delete customers result
       ansible.builtin.debug:
-        msg: "{{ delete_customers_result.result_msg }}"
+        msg: "{{ delete_customers_result.msg }}"
 
     - name: Get updated customers summary
       graphiant.naas.graphiant_data_exchange_info:

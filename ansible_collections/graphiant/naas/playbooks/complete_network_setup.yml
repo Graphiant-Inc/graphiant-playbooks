@@ -65,6 +65,36 @@
         msg: "{{ bgp_filters_result.msg }}"
       tags: ['global_config', 'bgp_filters']
 
+    - name: Configure global Graphiant filters
+      graphiant.naas.graphiant_global_config:
+        <<: *graphiant_client_params
+        config_file: "sample_global_graphiant_filters.yaml"
+        operation: "configure_graphiant_filters"
+        detailed_logs: true
+        state: present
+      register: graphiant_filters_result
+      tags: ['global_config', 'graphiant_filters']
+
+    - name: Display Graphiant filters result
+      ansible.builtin.debug:
+        msg: "{{ graphiant_filters_result.msg }}"
+      tags: ['global_config', 'graphiant_filters']
+
+    - name: Deconfigure global Graphiant filters
+      graphiant.naas.graphiant_global_config:
+        <<: *graphiant_client_params
+        config_file: "sample_global_graphiant_filters.yaml"
+        operation: "deconfigure_graphiant_filters"
+        detailed_logs: true
+        state: absent
+      register: deconfigure_graphiant_filters_result
+      tags: ['deconfigure_graphiant_filters']
+
+    - name: Display deconfigure Graphiant filters result
+      ansible.builtin.debug:
+        msg: "{{ deconfigure_graphiant_filters_result.msg }}"
+      tags: ['deconfigure_graphiant_filters']
+
     - name: Configure global SNMP system objects
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params

@@ -44,7 +44,7 @@
 
     - name: Display delete services result
       ansible.builtin.debug:
-        msg: "{{ delete_services_result.result_msg }}"
+        msg: "{{ delete_services_result.msg }}"
 
     - name: Get updated services summary
       graphiant.naas.graphiant_data_exchange_info:
