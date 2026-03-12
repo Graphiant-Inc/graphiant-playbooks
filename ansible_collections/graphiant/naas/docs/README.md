@@ -34,7 +34,7 @@ See [DOCSITE_SETUP.md](DOCSITE_SETUP.md) for building the documentation site.
 
 ## Module Documentation
 
-Module documentation is embedded in the module files themselves. Use `ansible-doc` to view:
+Module documentation is embedded in the module files themselves. Common options (Graphiant portal host, username, password) are defined in the shared doc fragment `graphiant.naas.graphiant_portal_auth` and included by all modules. Use `ansible-doc` to view:
 
 ```bash
 ansible-doc graphiant.naas.graphiant_interfaces

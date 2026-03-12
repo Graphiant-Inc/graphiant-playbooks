@@ -16,6 +16,7 @@ releases:
         - "CI: add C(antsibull-changelog lint-changelog-yaml) to lint workflow (#52)"
         - "TE-4350 TE-4450: Graphiant filters global objects - C(graphiant_global_config) supports graphiant_filters; new C(sample_global_graphiant_filters.yaml) and routing policy template (#51)"
         - "TE-4350 TE-4450: C(graphiant_data_exchange) module and Data Exchange playbooks/samples updated; collection review comments addressed (#51)"
+        - "Common module arguments (Graphiant portal auth) moved to C(module_utils/graphiant_utils.py) and C(doc_fragments/graphiant_portal_auth.py); modules use C(extends_documentation_fragment) for shared docs (#55)"
       removed_features:
         - "Removed C(tests/sanity/requirements.txt) - ansible-test does not use this file (#52)"
   "26.2.2":
