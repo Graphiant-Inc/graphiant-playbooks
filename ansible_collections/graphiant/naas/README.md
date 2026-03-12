@@ -144,6 +144,9 @@ read_file
 
 **Linting tools (run locally):**
 ```bash
+# Install development tools needed for linting
+pip install flake8 pylint djlint ansible-lint pre-commit
+
 # Python linting with flake8 (local development only, not in CI)
 flake8 ansible_collections/graphiant/naas/plugins/module_utils
 

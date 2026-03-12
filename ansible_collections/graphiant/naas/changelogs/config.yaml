@@ -25,11 +25,10 @@ ignore_other_fragment_extensions: true
 prelude_name: release_summary
 prelude_title: Release Summary
 
-# Sections and fragment_categories: use only antsibull-changelog standard categories
-# so the collection changelog appears correctly in the Ansible combined changelog.
-# New modules/plugins/roles are auto-detected from version_added in DOCUMENTATION;
-# do not add custom "new module" sections.
-# https://docs.ansible.com/projects/antsibull-changelog/changelogs/
+# Sections: use only antsibull-changelog standard categories so the collection
+# changelog appears correctly in the Ansible combined changelog. New modules/
+# plugins/roles are auto-detected from version_added in DOCUMENTATION.
+# https://docs.ansible.com/projects/antsibull-changelog/changelog-configuration/
 sections:
   - - major_changes
     - Major Changes
@@ -49,18 +48,6 @@ sections:
     - Known Issues
 
 trivial_section_name: trivial
-
-fragment_categories:
-  - major_changes
-  - minor_changes
-  - breaking_changes
-  - deprecated_features
-  - removed_features
-  - security_fixes
-  - bugfixes
-  - known_issues
-  - trivial
-  - release_summary
 
 # Optional
 mention_ancestor: true
