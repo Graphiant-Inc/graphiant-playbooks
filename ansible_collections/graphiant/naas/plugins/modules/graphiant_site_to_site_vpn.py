@@ -37,24 +37,9 @@ notes:
   - "Use encrypted I(configs/vault_secrets.yml), I(configs/vault-password-file.sh); no plaintext."
   - "Load with M(ansible.builtin.include_vars) (no_log true); pass dicts so secrets stay in memory."
   - "Vault key must match VPN C(name). See I(configs/vault_secrets.yml.example). Run with C(--vault-password-file configs/vault-password-file.sh)."
+extends_documentation_fragment:
+  - graphiant.naas.graphiant_portal_auth
 options:
-  host:
-    description:
-      - Graphiant portal host URL for API connectivity.
-      - 'Example: "https://api.graphiant.com"'
-    type: str
-    required: true
-    aliases: [ base_url ]
-  username:
-    description:
-      - Graphiant portal username for authentication.
-    type: str
-    required: true
-  password:
-    description:
-      - Graphiant portal password for authentication.
-    type: str
-    required: true
   site_to_site_vpn_config_file:
     description:
       - Path to the Site-to-Site VPN configuration YAML file.
@@ -207,6 +192,7 @@ site_to_site_vpn_config_file:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+    graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
@@ -259,9 +245,7 @@ def main():
 
     # Define module arguments
     argument_spec = dict(
-        host=dict(type='str', required=True, aliases=['base_url']),
-        username=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=True),
+        **graphiant_portal_auth_argument_spec(),
         site_to_site_vpn_config_file=dict(type='str', required=True),
         operation=dict(
             type='str',

@@ -23,23 +23,9 @@ notes:
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "Deconfigure payload uses C(config: null) per object; this module preserves nulls in the final payload pushed to the API."
 version_added: "26.2.0"
+extends_documentation_fragment:
+  - graphiant.naas.graphiant_portal_auth
 options:
-  host:
-    description:
-      - Graphiant portal host URL for API connectivity.
-    type: str
-    required: true
-    aliases: [ base_url ]
-  username:
-    description:
-      - Graphiant portal username for authentication.
-    type: str
-    required: true
-  password:
-    description:
-      - Graphiant portal password for authentication.
-    type: str
-    required: true
   ntp_config_file:
     description:
       - Path to the NTP YAML file.
@@ -140,6 +126,7 @@ skipped_devices:
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+    graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
 )
@@ -167,9 +154,7 @@ def execute_with_logging(module, func, *args, **kwargs):
 
 def main():
     argument_spec = dict(
-        host=dict(type='str', required=True, aliases=['base_url']),
-        username=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=True),
+        **graphiant_portal_auth_argument_spec(),
         ntp_config_file=dict(type='str', required=True),
         operation=dict(type='str', required=False, choices=['configure', 'deconfigure']),
         state=dict(type='str', required=False, default='present', choices=['present', 'absent']),

@@ -74,24 +74,9 @@ notes:
   - >
     Member interfaces must exist on the device; interface names in the config
     are resolved to interface IDs via device info.
+extends_documentation_fragment:
+  - graphiant.naas.graphiant_portal_auth
 options:
-  host:
-    description:
-      - Graphiant portal host URL for API connectivity.
-      - 'Example: "https://api.graphiant.com"'
-    type: str
-    required: true
-    aliases: [ base_url ]
-  username:
-    description:
-      - Graphiant portal username for authentication.
-    type: str
-    required: true
-  password:
-    description:
-      - Graphiant portal password for authentication.
-    type: str
-    required: true
   lag_config_file:
     description:
       - Path to the LAG configuration YAML file.
@@ -309,9 +294,7 @@ def main():
 
     # Define module arguments
     argument_spec = dict(
-        host=dict(type='str', required=True, aliases=['base_url']),
-        username=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=True),
+        **graphiant_utils.graphiant_portal_auth_argument_spec(),
         lag_config_file=dict(type='str', required=True),
         operation=dict(
             type='str',

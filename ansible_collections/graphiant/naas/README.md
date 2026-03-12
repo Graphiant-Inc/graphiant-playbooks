@@ -162,10 +162,13 @@ djlint ansible_collections/graphiant/naas/templates -e yaml
 **Antsibull documentation validation (runs in CI):**
 ```bash
 # Install antsibull-docs
-pip install antsibull-docs
+pip install antsibull-docs antsibull-changelog
 
 # Validate module documentation
 antsibull-docs lint-collection-docs ansible_collections/graphiant/naas/
+
+# Vaidate changelog documentation
+antsibull-changelog lint-changelog-yaml ansible_collections/graphiant/naas/changelogs/changelog.yaml
 ```
 
 **Note:** CI/CD pipelines run `ansible-lint`, `djlint`, and `antsibull-docs` linting. `flake8` and `pylint` are available for local development but are not part of the CI pipeline. See `.github/workflows/README.md` for CI/CD configuration.

@@ -9,6 +9,28 @@ import os
 from typing import Dict, Any
 
 
+def graphiant_portal_auth_argument_spec():
+    """
+    Return the common argument_spec for Graphiant portal authentication.
+
+    Use this in modules that connect to the Graphiant portal API so host, username,
+    and password are defined in one place. Merge with module-specific args, for example:
+
+        argument_spec = dict(
+            **graphiant_portal_auth_argument_spec(),
+            config_file=dict(type='str', required=True),
+        )
+
+    Returns:
+        dict: Argument spec for host, username, password (no_log=True on password).
+    """
+    return {
+        'host': dict(type='str', required=True, aliases=['base_url']),
+        'username': dict(type='str', required=True),
+        'password': dict(type='str', required=True, no_log=True),
+    }
+
+
 def _import_graphiant_libs():
     """
     Import Graphiant library modules.
