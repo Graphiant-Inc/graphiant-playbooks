@@ -1,5 +1,8 @@
 name: Build Collection
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -32,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -55,7 +58,7 @@ jobs:
           python ${{ github.workspace }}/scripts/build_collection.py
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: collection-tarball
           path: ${{ github.workspace }}/build/graphiant-naas-*.tar.gz

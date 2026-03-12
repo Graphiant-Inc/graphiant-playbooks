@@ -25,8 +25,11 @@ ignore_other_fragment_extensions: true
 prelude_name: release_summary
 prelude_title: Release Summary
 
-# Sections: valid keys under changes/ in changelog.yaml and their display titles
-# See https://docs.ansible.com/projects/antsibull-changelog/changelog.yaml-format/
+# Sections and fragment_categories: use only antsibull-changelog standard categories
+# so the collection changelog appears correctly in the Ansible combined changelog.
+# New modules/plugins/roles are auto-detected from version_added in DOCUMENTATION;
+# do not add custom "new module" sections.
+# https://docs.ansible.com/projects/antsibull-changelog/changelogs/
 sections:
   - - major_changes
     - Major Changes
@@ -45,11 +48,8 @@ sections:
   - - known_issues
     - Known Issues
 
-# Trivial section (entries not shown in generated changelog)
 trivial_section_name: trivial
 
-# Fragment categories (used by lint-changelog-yaml to validate changelog.yaml section keys)
-# Must include every section name that appears under releases.<version>.changes
 fragment_categories:
   - major_changes
   - minor_changes

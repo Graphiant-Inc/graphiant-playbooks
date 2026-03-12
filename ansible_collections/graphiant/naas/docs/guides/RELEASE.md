@@ -23,7 +23,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 The current collection version is defined in `_version.py`:
 ```python
-__version__ = "26.2.2"
+__version__ = "26.2.3"
 ```
 
 ## Release Process
@@ -72,7 +72,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # For a specific version
-python scripts/bump_version.py 26.2.2
+python scripts/bump_version.py 26.2.3
 ```
 
 The script automatically updates:
@@ -323,7 +323,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 26.2.2
+python scripts/bump_version.py 26.2.3
 
 # Update dependency during bump
 python scripts/bump_version.py patch --update-deps graphiant-sdk=26.2.1

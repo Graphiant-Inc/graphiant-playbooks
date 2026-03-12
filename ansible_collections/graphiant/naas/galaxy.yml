@@ -1,7 +1,7 @@
 ---
 namespace: graphiant
 name: naas
-version: 26.2.2
+version: 26.2.3
 readme: README.md
 authors:
   - Graphiant Team <support@graphiant.com>

@@ -6,7 +6,7 @@ All version references throughout the repository should use values from this fil
 """
 
 # Collection version (semantic versioning: MAJOR.MINOR.PATCH)
-__version__ = "26.2.2"
+__version__ = "26.2.3"
 COLLECTION_VERSION = __version__
 
 # Dependency versions
