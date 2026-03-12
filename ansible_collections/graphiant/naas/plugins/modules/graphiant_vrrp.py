@@ -47,24 +47,9 @@ notes:
     operations, it checks if VRRP is already enabled and skips if so. This ensures
     safe repeated execution without errors.
   - "Interfaces must be configured first before applying VRRP using M(graphiant.naas.graphiant_interfaces) module."
+extends_documentation_fragment:
+  - graphiant.naas.graphiant_portal_auth
 options:
-  host:
-    description:
-      - Graphiant portal host URL for API connectivity.
-      - 'Example: "https://api.graphiant.com"'
-    type: str
-    required: true
-    aliases: [ base_url ]
-  username:
-    description:
-      - Graphiant portal username for authentication.
-    type: str
-    required: true
-  password:
-    description:
-      - Graphiant portal password for authentication.
-    type: str
-    required: true
   vrrp_config_file:
     description:
       - Path to the VRRP configuration YAML file.
@@ -203,6 +188,7 @@ vrrp_config_file:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+    graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
@@ -255,9 +241,7 @@ def main():
 
     # Define module arguments
     argument_spec = dict(
-        host=dict(type='str', required=True, aliases=['base_url']),
-        username=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=True),
+        **graphiant_portal_auth_argument_spec(),
         vrrp_config_file=dict(type='str', required=True),
         operation=dict(
             type='str',

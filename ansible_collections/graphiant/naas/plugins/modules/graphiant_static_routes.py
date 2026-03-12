@@ -28,25 +28,9 @@ notes:
   - "Deconfigure deletes only the prefixes listed in the YAML (per segment)."
   - "Deconfigure payload uses C(route: null) per prefix; this module preserves nulls in the final payload pushed to the API."
 version_added: "26.2.0"
+extends_documentation_fragment:
+  - graphiant.naas.graphiant_portal_auth
 options:
-  host:
-    description:
-      - Graphiant portal host URL for API connectivity.
-      - 'Example: "https://api.graphiant.com"'
-    type: str
-    required: true
-    aliases: [ base_url ]
-  username:
-    description:
-      - Graphiant portal username for authentication.
-    type: str
-    required: true
-  password:
-    description:
-      - Graphiant portal password for authentication.
-      - This parameter is marked C(no_log) in the module to avoid leaking credentials.
-    type: str
-    required: true
   static_routes_config_file:
     description:
       - Path to the static routes YAML file.
@@ -174,6 +158,7 @@ details:
 from ansible.module_utils.basic import AnsibleModule
 
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+    graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
 )
@@ -206,9 +191,7 @@ def execute_with_logging(module, func, *args, **kwargs):
 
 def main():
     argument_spec = dict(
-        host=dict(type='str', required=True, aliases=['base_url']),
-        username=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=True),
+        **graphiant_portal_auth_argument_spec(),
         static_routes_config_file=dict(type='str', required=True, aliases=['static_route_config_file']),
         operation=dict(type='str', required=False, choices=['configure', 'deconfigure']),
         state=dict(type='str', required=False, default='present', choices=['present', 'absent']),

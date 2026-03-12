@@ -23,6 +23,8 @@ description:
   - Provides service health monitoring information for matched customers.
   - All operations return read-only information and never modify the system.
 version_added: "26.1.0"
+extends_documentation_fragment:
+  - graphiant.naas.graphiant_portal_auth
 notes:
   - "This is a read-only module that queries information only."
   - "All operations return tabulated output for easy reading."
@@ -65,23 +67,6 @@ options:
       - Logs are captured and included in the RV(msg) return value for display using M(ansible.builtin.debug) module.
     type: bool
     default: false
-  host:
-    description:
-      - Graphiant portal host URL for API connectivity.
-      - 'Example: "https://api.graphiant.com"'
-    type: str
-    required: true
-    aliases: [ base_url ]
-  username:
-    description:
-      - Graphiant portal username for authentication.
-    type: str
-    required: true
-  password:
-    description:
-      - Graphiant portal password for authentication.
-    type: str
-    required: true
 
 attributes:
   check_mode:
@@ -198,6 +183,7 @@ query:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+    graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
@@ -246,9 +232,7 @@ def main():
 
     # Define module arguments
     argument_spec = dict(
-        host=dict(type='str', required=True, aliases=['base_url']),
-        username=dict(type='str', required=True),
-        password=dict(type='str', required=True, no_log=True),
+        **graphiant_portal_auth_argument_spec(),
         query=dict(
             type='str',
             required=True,
