@@ -35,7 +35,7 @@ This collection provides Ansible modules to automate:
 
 | Component | Requirement |
 |-----------|-------------|
-| **Collection version** | 26.2.2 (current stable) |
+| **Collection version** | 26.2.3 (current stable) |
 | **ansible-core** | >= 2.17.0 (tested with 2.17, 2.18, 2.19, 2.20) |
 | **Python** | >= 3.7 |
 | **Graphiant SDK** | >= 26.2.1 |
@@ -268,6 +268,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `site_lists_management.yml` | Site list operations |
 | `credential_examples.yml` | Credential management examples |
 | `device_config_management.yml` | Push raw device configurations (Edge/Gateway/Core) |
+| `ntp_management.yml` | NTP configuration (global and device) |
 | `test_collection.yml` | Collection validation and testing |
 
 #### Data Exchange Workflows
@@ -543,7 +544,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 26.2.2
+python scripts/bump_version.py 26.2.3
 ```
 
 After bumping version, remember to:

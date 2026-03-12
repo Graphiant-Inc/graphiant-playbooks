@@ -21,10 +21,10 @@ python -c "from _version import __version__; print(__version__)"
 ### Bump Version
 ```bash
 # From repository root
-python scripts/bump_version.py patch    # 26.2.2 -> 26.2.3
-python scripts/bump_version.py minor    # 26.2.2 -> 26.3.0
-python scripts/bump_version.py major    # 26.2.2 -> 27.0.0
-python scripts/bump_version.py 26.2.2   # Set specific version
+python scripts/bump_version.py patch    # 26.2.3 -> 26.2.4
+python scripts/bump_version.py minor    # 26.2.3 -> 26.3.0
+python scripts/bump_version.py major    # 26.2.3 -> 27.0.0
+python scripts/bump_version.py 26.2.3   # Set specific version
 ```
 
 ### Sync Requirements
@@ -148,7 +148,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 26.2.2
+python scripts/bump_version.py 26.2.3
 
 # Update dependency during bump
 python scripts/bump_version.py patch --update-deps graphiant-sdk=26.2.1
