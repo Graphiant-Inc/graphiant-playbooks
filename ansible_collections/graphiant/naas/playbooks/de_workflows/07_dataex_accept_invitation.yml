@@ -49,7 +49,6 @@
         # Scale testing2
         # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale2.yaml"
         # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_scale2_responses_latest.json"
-        dry_run: false
         detailed_logs: true
       register: accept_result
 

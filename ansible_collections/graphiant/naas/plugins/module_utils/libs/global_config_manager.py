@@ -76,6 +76,15 @@ class GlobalConfigManager(BaseManager):
                     result['failed'] = True
                 result['details']['routing_policies'] = sub
 
+            # Configure Graphiant routing policies (GraphiantIn/GraphiantOut filters)
+            if 'graphiant_routing_policies' in config_data:
+                sub = self.configure_graphiant_filters(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['graphiant_routing_policies'] = sub
+
             # Configure SNMP global objects (no idempotency check - assume changed if present)
             if 'snmps' in config_data:
                 sub = self.configure_snmp_services(config_yaml_file)
@@ -191,6 +200,15 @@ class GlobalConfigManager(BaseManager):
                 if sub.get('failed'):
                     result['failed'] = True
                 result['details']['routing_policies'] = sub
+
+            # Deconfigure Graphiant routing policies (idempotent)
+            if 'graphiant_routing_policies' in config_data:
+                sub = self.deconfigure_graphiant_filters(config_yaml_file)
+                if sub.get('changed'):
+                    result['changed'] = True
+                if sub.get('failed'):
+                    result['failed'] = True
+                result['details']['graphiant_routing_policies'] = sub
 
             # Deconfigure SNMP global objects (idempotent; changed only if something was removed)
             if 'snmps' in config_data:
@@ -502,6 +520,127 @@ class GlobalConfigManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to deconfigure BGP filters: %s", e)
             raise ConfigurationError(f"BGP filters deconfiguration failed: {e}")
+
+    def configure_graphiant_filters(self, config_yaml_file: str) -> Dict[str, Any]:
+        """Configure global Graphiant filters (attachPoint GraphiantIn / GraphiantOut).
+
+        Args:
+            config_yaml_file: Path to the YAML file containing Graphiant filter configurations
+
+        Returns:
+            dict: Result with 'changed' and 'failed' (bool).
+        """
+        result = {'changed': False, 'failed': False}
+        try:
+            config_data = self.render_config_file(config_yaml_file)
+            graphiant_policies = config_data.get('graphiant_routing_policies', [])
+
+            if not graphiant_policies:
+                LOG.info("No Graphiant filters found in configuration file")
+                return result
+
+            config_payload = {"routing_policies": {}}
+
+            for policy_config in graphiant_policies:
+                self.config_utils.global_graphiant_filter(config_payload, action="add", **policy_config)
+
+            LOG.info("Configure Graphiant filters payload: %s", config_payload)
+            self.gsdk.patch_global_config(**config_payload)
+            LOG.info("Successfully configured %s Graphiant filters", len(graphiant_policies))
+            result['changed'] = True
+            return result
+        except Exception as e:
+            LOG.error("Failed to configure Graphiant filters: %s", e)
+            raise ConfigurationError(f"Graphiant filters configuration failed: {e}")
+
+    def deconfigure_graphiant_filters(self, config_yaml_file: str) -> Dict[str, Any]:
+        """Deconfigure global Graphiant filters (idempotent).
+
+        Uses same routing policy summary as BGP; deletes existing, unattached policies one by one.
+
+        Returns:
+            dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
+        """
+        result = {'changed': False, 'deleted': [], 'skipped': [], 'failed': False, 'failed_objects': []}
+        try:
+            config_data = self.render_config_file(config_yaml_file)
+            graphiant_policies = config_data.get('graphiant_routing_policies', [])
+
+            if not graphiant_policies:
+                LOG.info("No Graphiant filters found in configuration file")
+                return result
+
+            names = [p.get('name', 'unknown') for p in graphiant_policies]
+            LOG.info("Attempting to deconfigure Graphiant filters: %s", names)
+
+            summaries = self.gsdk.get_global_routing_policy_summaries()
+            LOG.info("Graphiant filter summaries: %s", summaries)
+
+            def object_in_use(s):
+                return self.gsdk.is_global_object_in_use(s, check_num_policies=False)
+
+            to_delete, result['skipped'], result['failed_objects'] = _partition_global_objects_for_deconfigure(
+                graphiant_policies, summaries, object_in_use
+            )
+            result['failed'] = bool(result['failed_objects'])
+
+            if not summaries:
+                LOG.info(
+                    "Summary API returned empty for Graphiant filters; "
+                    "assuming no Graphiant filters exist (nothing to deconfigure)."
+                )
+
+            if result['failed']:
+                LOG.warning(
+                    "Graphiant filter(s) in use (num_attached_devices or num_attached_sites > 0), cannot delete: %s",
+                    result['failed_objects'],
+                )
+            if not to_delete:
+                LOG.info(
+                    "Graphiant filters do not exist, nothing to deconfigure (idempotent). "
+                    "skipped=%s, failed_objects=%s",
+                    result['skipped'],
+                    result['failed_objects'],
+                )
+                return result
+
+            LOG.info(
+                "Partition: to_delete=%s, skipped=%s, failed_objects=%s",
+                [p.get('name', 'unknown') for p in to_delete],
+                result['skipped'],
+                result['failed_objects'],
+            )
+            for policy_config in to_delete:
+                name = policy_config.get('name', 'unknown')
+                single_payload = {"routing_policies": {}}
+                self.config_utils.global_graphiant_filter(
+                    single_payload, action="delete", **policy_config
+                )
+                try:
+                    self.gsdk.patch_global_config(**single_payload)
+                    result['deleted'].append(name)
+                    result['changed'] = True
+                except Exception as e:
+                    if _is_in_use_error(e):
+                        result['failed_objects'].append(name)
+                        result['failed'] = True
+                        LOG.warning("Graphiant filter '%s' could not be deleted (in use): %s", name, e)
+                    elif _is_not_found_error(e):
+                        result['skipped'].append(name)
+                    else:
+                        raise ConfigurationError(
+                            f"Graphiant filters deconfiguration failed: {e}"
+                        ) from e
+            LOG.info(
+                "Graphiant filters deconfigure: deleted=%s; skipped=%s; failed_objects=%s",
+                result['deleted'],
+                result['skipped'],
+                result['failed_objects'],
+            )
+            return result
+        except Exception as e:
+            LOG.error("Failed to deconfigure Graphiant filters: %s", e)
+            raise ConfigurationError(f"Graphiant filters deconfiguration failed: {e}")
 
     def configure_snmp_services(self, config_yaml_file: str) -> Dict[str, Any]:
         """Configure global SNMP services.

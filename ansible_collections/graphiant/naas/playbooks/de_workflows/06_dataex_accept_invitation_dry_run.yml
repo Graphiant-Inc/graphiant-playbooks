@@ -1,3 +1,5 @@
+# Run with: ansible-playbook 06_dataex_accept_invitation_dry_run.yml --check
+# to validate without making API calls (check mode).
 ---
 # Data Exchange Accept Invitation Playbook (Workflow 4)
 # This playbook demonstrates how to use the graphiant_data_exchange and
@@ -34,7 +36,7 @@
       ansible.builtin.debug:
         msg: "{{ services_summary.msg }}"
 
-    - name: Accept Data Exchange service invitation (Dry Run)
+    - name: Accept Data Exchange service invitation (check mode)
       graphiant.naas.graphiant_data_exchange:
         <<: *graphiant_client_params
         operation: accept_invitation
@@ -48,10 +50,10 @@
         # Scale testing2
         # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale2.yaml"
         # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_scale2_responses_latest.json"
-        dry_run: true
         detailed_logs: true
-      register: accept_dry_run_result
+      check_mode: true
+      register: accept_result
 
     - name: Display acceptance result
       ansible.builtin.debug:
-        msg: "{{ accept_dry_run_result.result_msg }}"
+        msg: "{{ accept_result.result_msg | default(accept_result.msg) }}"

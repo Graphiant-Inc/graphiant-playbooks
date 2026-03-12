@@ -132,6 +132,15 @@ class DataExchangeManager(BaseManager):
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
+            # Fetch Graphiant routing policy (filter) names once for validation across all services
+            existing_routing_policy_names = None
+            try:
+                summaries = self.gsdk.get_global_routing_policy_summaries()
+                existing_routing_policy_names = {s.get('name') for s in summaries if s.get('name')}
+                LOG.info("create_services: Loaded %s Graphiant routing policies for validation", len(existing_routing_policy_names))
+            except Exception as e:
+                LOG.warning("create_services: Could not fetch global routing policy summaries: %s", e)
+
             for service_config in services:
                 service_name = service_config.get('serviceName')
                 LOG.info("--------------------------------")
@@ -161,6 +170,13 @@ class DataExchangeManager(BaseManager):
                     # Resolve site or site list IDs if provided by names
                     self._resolve_site_ids(service_config['policy'], service_name)
                     self._resolve_site_list_ids(service_config['policy'], service_name)
+                    # Resolve device names to device IDs in globalObjectOps (for routingPolicyOps / Graphiant filters)
+                    self._resolve_global_object_ops_device_ids(service_config['policy'], service_name)
+                    # Validate that referenced Graphiant routing policy (filter) names exist
+                    self._validate_global_object_ops_routing_policies(
+                        service_config['policy'], service_name,
+                        existing_policy_names=existing_routing_policy_names
+                    )
 
                 # Create service directly
                 LOG.info("Service configuration: %s", service_config)
@@ -226,6 +242,75 @@ class DataExchangeManager(BaseManager):
                         else:
                             resolved_site_list_ids.append(site_list_name)  # Already an ID
                     site_entry['siteLists'] = resolved_site_list_ids
+
+    def _resolve_global_object_ops_device_ids(self, policy_config: dict, service_name: str) -> None:
+        """
+        Resolve device names to device IDs in policy.globalObjectOps.
+
+        globalObjectOps keys are device names (e.g. "edge-1-sdktest"); the API expects
+        device IDs as keys. Each value can contain routingPolicyOps to attach Graphiant
+        filters (e.g. "Policy-DC1-Primary": "Attach") per device.
+
+        Args:
+            policy_config (dict): Policy configuration to update (modified in place).
+            service_name (str): Service name for error reporting.
+        """
+        if 'globalObjectOps' not in policy_config or not isinstance(policy_config['globalObjectOps'], dict):
+            return
+        ops = policy_config['globalObjectOps']
+        resolved = {}
+        for device_name, device_ops in ops.items():
+            # Config file uses device names; resolve to device ID
+            device_id = self.gsdk.get_device_id(str(device_name))
+            if device_id is None:
+                raise ConfigurationError(
+                    f"Device '{device_name}' not found for service '{service_name}' "
+                    "(globalObjectOps keys must be device names)."
+                )
+            resolved[str(device_id)] = device_ops
+        policy_config['globalObjectOps'] = resolved
+
+    def _validate_global_object_ops_routing_policies(
+        self, policy_config: dict, service_name: str, existing_policy_names: set = None
+    ) -> None:
+        """
+        Validate that all Graphiant routing policy (filter) names referenced in
+        policy.globalObjectOps.routingPolicyOps exist in the portal.
+
+        Args:
+            policy_config: Policy config containing globalObjectOps.
+            service_name: Service name for error reporting.
+            existing_policy_names: Optional set of policy names that exist in the portal.
+                When provided, the API is not called (caller should fetch once and reuse).
+        Raises ConfigurationError if any policy name is missing.
+        """
+        if 'globalObjectOps' not in policy_config or not isinstance(policy_config['globalObjectOps'], dict):
+            return
+        policy_names = set()
+        for device_ops in policy_config['globalObjectOps'].values():
+            if not isinstance(device_ops, dict):
+                continue
+            rops = device_ops.get('routingPolicyOps') or {}
+            if isinstance(rops, dict):
+                policy_names.update(rops.keys())
+        if not policy_names:
+            return
+        if existing_policy_names is not None:
+            existing_names = existing_policy_names
+        else:
+            try:
+                summaries = self.gsdk.get_global_routing_policy_summaries()
+                existing_names = {s.get('name') for s in summaries if s.get('name')}
+            except Exception as e:
+                LOG.warning("Could not fetch global routing policy summaries for validation: %s", e)
+                return
+        missing = sorted(policy_names - existing_names)
+        if missing:
+            raise ConfigurationError(
+                f"Graphiant routing policy (filter) not found for service '{service_name}': {', '.join(missing)}. "
+                "Create the filter with graphiant_global_config (configure_graphiant_filters) "
+                "or ensure the policy name exists in the portal."
+            )
 
     def get_services_summary(self) -> Dict[str, Any]:
         """
@@ -803,14 +888,13 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to match Data Exchange services to customers: %s", e)
             raise ConfigurationError(f"Data Exchange service to customer matching failed: {e}")
 
-    def accept_invitation(self, config_yaml_file: str, matches_file: str = None, dry_run: bool = False) -> None:
+    def accept_invitation(self, config_yaml_file: str, matches_file: str = None) -> None:
         """
         Accept Data Exchange service invitation (Workflow 4).
 
         Args:
             config_yaml_file (str): Path to YAML configuration file containing acceptance details
             matches_file (str, optional): Path to matches responses JSON file for match ID lookup
-            dry_run (bool, optional): If True, skip the actual API call (validation only). Defaults to False.
         """
         try:
             LOG.info("accept_invitation: Loading configuration from %s", config_yaml_file)
@@ -829,9 +913,9 @@ class DataExchangeManager(BaseManager):
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
 
-            # Log dry-run mode if enabled
-            if dry_run:
-                LOG.info("accept_invitation: DRY-RUN MODE ENABLED - API calls will be skipped")
+            check_mode = getattr(self.gsdk, 'check_mode', False)
+            if check_mode:
+                LOG.info("accept_invitation: CHECK MODE - API calls will be skipped")
 
             # Validate gateway requirements before processing acceptances
             self._validate_gateway_requirements_for_acceptances(acceptances)
@@ -840,7 +924,7 @@ class DataExchangeManager(BaseManager):
             self._validate_vpn_profiles_for_acceptances(acceptances)
 
             # Process acceptances and log results
-            result = self._process_multiple_acceptances(acceptances, matches_file, dry_run)
+            result = self._process_multiple_acceptances(acceptances, matches_file)
 
             # Log summary like other operations
             total_processed = result.get('total_processed', 0)
@@ -855,10 +939,10 @@ class DataExchangeManager(BaseManager):
 
             # Check if there were any failures
             if total_failed > 0:
-                if dry_run:
-                    LOG.error("[DRY-RUN] accept_invitation: %s out of %s invitation acceptances failed",
+                if check_mode:
+                    LOG.error("[CHECK MODE] accept_invitation: %s out of %s invitation acceptances failed",
                               total_failed, total_processed)
-                    raise ConfigurationError(f"[DRY-RUN] Data Exchange invitation acceptance had {total_failed} "
+                    raise ConfigurationError(f"[CHECK MODE] Data Exchange invitation acceptance had {total_failed} "
                                              f"failures out of {total_processed} total")
                 else:
                     LOG.error("accept_invitation: %s out of %s invitation acceptances failed",
@@ -991,14 +1075,13 @@ class DataExchangeManager(BaseManager):
             LOG.warning("_validate_vpn_profiles_for_acceptances: VPN profile validation failed: %s", e)
             raise
 
-    def _process_multiple_acceptances(self, acceptances_config, matches_file=None, dry_run=False):
+    def _process_multiple_acceptances(self, acceptances_config, matches_file=None):
         """
         Process multiple invitation acceptances from configuration.
 
         Args:
             acceptances_config (list): List of acceptance configurations
             matches_file (str, optional): Path to matches responses JSON file for match ID lookup
-            dry_run (bool, optional): If True, skip the actual API call (validation only). Defaults to False.
 
         Returns:
             dict: Combined results from all acceptances
@@ -1008,6 +1091,7 @@ class DataExchangeManager(BaseManager):
             total_processed = 0
             total_accepted = 0
             total_skipped = 0
+            check_mode = getattr(self.gsdk, 'check_mode', False)
 
             LOG.info("_process_multiple_acceptances: Processing %s invitation acceptances", len(acceptances_config))
 
@@ -1027,7 +1111,12 @@ class DataExchangeManager(BaseManager):
             LOG.info("_process_multiple_acceptances: Pre-fetched %s sites, %s site_lists, %s regions, and %s LAN segments",
                      len(sites_lookup), len(site_lists_lookup), len(regions_lookup), len(lan_segments_lookup))
 
+            # Cache of already-linked match_ids per service_id (from matching-customers-summary API)
+            # Prefetch per service_id on first use so we skip accept when consumer already exists
+            already_linked_match_ids_by_service = {}
+
             for i, acceptance_config in enumerate(acceptances_config):
+                total_processed += 1  # Count every acceptance (including skipped/failed) so total_failed is correct
                 try:
                     LOG.info("--------------------------------")
                     LOG.info("_process_multiple_acceptances: Processing acceptance %s/%s", i + 1, len(acceptances_config))
@@ -1046,6 +1135,35 @@ class DataExchangeManager(BaseManager):
                     service_id = resolved_config['id']  # Service ID is 'id' in API payload
                     match_id = resolved_config['matchId']  # Match ID is 'matchId' in API payload
 
+                    # Prefetch matching-customers-summary for this service once, then check if already linked
+                    if service_id not in already_linked_match_ids_by_service:
+                        info = self.gsdk.get_matching_customers_for_service(service_id)
+                        match_ids = set()
+                        if info:
+                            LOG.info("_process_multiple_acceptances: get_matching_customers_for_service for service %s: %s", service_id, info)
+                            for item in info:
+                                mid = getattr(item, 'match_id', None) or getattr(item, 'matchId', None)
+                                status = getattr(item, 'status', None) or getattr(item, 'Status', None)
+                                # Only treat as already-linked if status is ACTIVE (already accepted)
+                                if mid is not None and status == 'B2B_PEERING_SERVICE_STATUS_ACTIVE':
+                                    match_ids.add(mid)
+                        already_linked_match_ids_by_service[service_id] = match_ids
+                        LOG.info("_process_multiple_acceptances: Service %s has %s already-linked customer(s)",
+                                 service_id, len(match_ids))
+
+                    if match_id in already_linked_match_ids_by_service[service_id]:
+                        LOG.info("_process_multiple_acceptances: Customer '%s' already linked to service '%s' "
+                                 "(match_id=%s) - skipping",
+                                 acceptance_config.get('customerName'), acceptance_config.get('serviceName'), match_id)
+                        results.append({
+                            'customer_name': acceptance_config.get('customerName'),
+                            'service_name': acceptance_config.get('serviceName'),
+                            'result': {'message': 'Consumer already linked to service - skipped (idempotent)'},
+                            'status': 'skipped'
+                        })
+                        total_skipped += 1
+                        continue
+
                     # Validate required fields in resolved configuration
                     required_fields = ['id', 'siteInformation', 'policy', 'siteToSiteVpn', 'nat']
                     for field in required_fields:
@@ -1058,27 +1176,24 @@ class DataExchangeManager(BaseManager):
                     LOG.info("_process_multiple_acceptances: Acceptance payload for '%s' and '%s': %s",
                              acceptance_config.get('customerName'), acceptance_config.get('serviceName'), acceptance_payload)
 
-                    # Check for dry-run mode
-                    if dry_run:
-                        LOG.info("_process_multiple_acceptances: DRY-RUN - Skipping API call for '%s' and '%s' with match_id: %s and service_id: %s",
-                                 acceptance_config.get('customerName'), acceptance_config.get('serviceName'), match_id, service_id)
+                    # Call the acceptance API (gsdk no-ops and logs payload when check_mode is True)
+                    response = self.gsdk.accept_data_exchange_service(match_id, acceptance_payload)
+                    if callable(getattr(response, 'to_dict', None)):
+                        result = response.to_dict()
+                    else:
                         result = {
-                            'dry_run': True,
-                            'message': 'API call skipped in dry-run mode',
+                            'check_mode': True,
+                            'message': 'API call skipped in check mode',
                             'payload_validated': True,
                             'match_id': match_id,
                             'service_id': service_id
                         }
-                    else:
-                        # Call the acceptance API with match_id as path parameter
-                        response = self.gsdk.accept_data_exchange_service(match_id, acceptance_payload)
-                        result = response.to_dict()
 
                     results.append({
                         'customer_name': acceptance_config.get('customerName'),
                         'service_name': acceptance_config.get('serviceName'),
                         'result': result,
-                        'status': 'success' if not dry_run else 'dry-run'
+                        'status': 'success' if not check_mode else 'check_mode'
                     })
                     total_accepted += 1
 
@@ -1105,11 +1220,9 @@ class DataExchangeManager(BaseManager):
                             'status': 'failed'
                         })
 
-                total_processed += 1
-
             total_successful = total_accepted + total_skipped  # Both are considered successful
-            # dry_run never changes anything; otherwise changed only if new acceptances were made
-            changed = False if dry_run else (total_accepted > 0)
+            # Report actual or would-change status: in check mode, changed=True when we would have accepted
+            changed = total_accepted > 0
             LOG.info("_process_multiple_acceptances: Completed %s/%s acceptances successfully "
                      "(%s accepted, %s skipped, changed: %s)",
                      total_successful, total_processed, total_accepted, total_skipped, changed)
@@ -1303,6 +1416,13 @@ class DataExchangeManager(BaseManager):
                 'routingPolicyTable': acceptance_config.get('routingPolicyTable', []),
                 'matchId': match_id
             }
+
+            # Resolve device names to device IDs in globalObjectOps (Graphiant filter attachment)
+            context_name = f"{customer_name}/{service_name}"
+            policy_like = {'globalObjectOps': resolved_config['globalObjectOps']}
+            self._resolve_global_object_ops_device_ids(policy_like, context_name)
+            self._validate_global_object_ops_routing_policies(policy_like, context_name)
+            resolved_config['globalObjectOps'] = policy_like['globalObjectOps']
 
             # Fill in missing tunnel values using Graphiant portal APIs
             resolved_config = self._fill_missing_tunnel_values(resolved_config, region_id, lan_segment_id)

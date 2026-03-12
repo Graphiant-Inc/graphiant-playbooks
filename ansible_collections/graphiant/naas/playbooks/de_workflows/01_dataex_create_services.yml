@@ -44,7 +44,7 @@
 
     - name: Display services creation result
       ansible.builtin.debug:
-        msg: "{{ create_services_result.result_msg }}"
+        msg: "{{ create_services_result.msg }}"
 
     - name: Get updated services summary
       graphiant.naas.graphiant_data_exchange_info:

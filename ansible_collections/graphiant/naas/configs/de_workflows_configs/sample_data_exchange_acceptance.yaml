@@ -91,11 +91,14 @@ data_exchange_acceptances:
       # Email notifications
       emails: ["finance@financeinc.com"]       # Email addresses for notifications
 
-    # Global Object Operations (optional)
-    globalObjectOps: {}
-
-    # Routing Policy Table (optional)
-    routingPolicyTable: []
+    # Optional Graphiant Routing Policy: Attach global object Graphiant filters to Graphiant gateway devices involved in the acceptance
+    globalObjectOps:
+      "gw-2-sdktest":   # Device name will be resolved to device ID
+        routingPolicyOps:
+          "Policy-Clt1-Primary": "Attach"
+      "gw-4-sdktest":   # Device name will be resolved to device ID
+        routingPolicyOps:
+          "Policy-Clt1-Primary": "Attach"
 
 # Multiple acceptance format (alternative):
 # data_exchange_acceptances:
