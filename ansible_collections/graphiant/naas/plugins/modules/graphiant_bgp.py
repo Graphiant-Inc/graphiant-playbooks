@@ -23,7 +23,7 @@ description:
   - Enables attachment and detachment of global BGP routing policies (filters) to BGP peers.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "26.1.0"
+version_added: "25.11.0"
 notes:
   - "BGP Operations:"
   - "  - Configure: Create BGP peering neighbors and attach global BGP routing policies."
@@ -173,13 +173,13 @@ bgp_config_file:
   sample: "sample_bgp_peering.yaml"
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     get_graphiant_connection,
     graphiant_portal_auth_argument_spec,
     handle_graphiant_exception
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs
 )
 

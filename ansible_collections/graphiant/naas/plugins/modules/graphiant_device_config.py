@@ -24,7 +24,7 @@ description:
   - Supports optional user-defined Jinja2 templates for configuration generation.
   - Configuration files support Jinja2 templating syntax for dynamic configuration generation.
   - Provides dry-run validation mode to validate configurations before deployment.
-version_added: "26.1.0"
+version_added: "25.12.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 notes:
@@ -248,13 +248,13 @@ template_file:
   sample: "device_config_template.yaml"
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs
 )
 

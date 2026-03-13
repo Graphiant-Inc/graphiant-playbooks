@@ -22,7 +22,7 @@ description:
   - Returns summary information about Data Exchange services and customers.
   - Provides service health monitoring information for matched customers.
   - All operations return read-only information and never modify the system.
-version_added: "26.1.0"
+version_added: "25.12.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 notes:
@@ -181,12 +181,12 @@ query:
   sample: "services_summary"
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs,
 )
 

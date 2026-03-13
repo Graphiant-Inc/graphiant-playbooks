@@ -13,6 +13,7 @@ Usage:
 import re
 import sys
 import os
+import yaml
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
@@ -438,13 +439,77 @@ def check_collection_structure() -> List[str]:
     return issues
 
 
+# Ansible C() markup must not appear in changelog; use RST double backticks for literals.
+# See https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html#inline-markup
+ANSIBLE_C_MARKUP_IN_CHANGELOG = re.compile(r'\bC\s*\(')
+
+
+def _collect_changelog_entries(data: dict) -> List[Tuple[str, str]]:
+    """Collect (release_version, entry_text) from changelog.yaml releases."""
+    entries = []
+    releases = data.get('releases') or {}
+    for version, release_data in releases.items():
+        if not isinstance(release_data, dict):
+            continue
+        changes = release_data.get('changes') or {}
+        for _category, items in changes.items():
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, str):
+                    entries.append((str(version), item))
+    return entries
+
+
+def _validate_changelog_entry_rst(version: str, entry: str) -> List[str]:
+    """
+    Validate that a changelog entry uses RST inline markup, not Ansible markup.
+    Per Ansible inclusion feedback and Sphinx RST:
+    - Use double backticks for literals: ``module_name``, ``path/to/file``.
+    - Do not use Ansible markup (C(), M(), O(), etc.); it renders verbatim.
+    """
+    issues = []
+    # Check for Ansible C() markup (invalid in changelog; use RST ``literal``)
+    if ANSIBLE_C_MARKUP_IN_CHANGELOG.search(entry):
+        issues.append(
+            f"Release {version}: entry uses Ansible markup C(...); "
+            "changelog must be valid RST — use double backticks for literals (e.g. ``name``). "
+            "See https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html#inline-markup"
+        )
+    return issues
+
+
+def check_changelog_rst(changelog_path: Path) -> List[str]:
+    """
+    Validate changelog.yaml entries use RST format (no Ansible markup).
+    Entry text must be valid reStructuredText; use ``literal`` for modules, files, commands.
+    """
+    issues = []
+    try:
+        content = changelog_path.read_text(encoding='utf-8')
+        data = yaml.safe_load(content)
+    except Exception as e:
+        issues.append(f"Could not load changelog.yaml: {e}")
+        return issues
+    if not data or not isinstance(data, dict):
+        return issues
+    for version, entry in _collect_changelog_entries(data):
+        issues.extend(_validate_changelog_entry_rst(version, entry))
+    return issues
+
+
 def check_changelog() -> List[str]:
-    """Check changelog format."""
+    """Check changelog format and RST compliance of entries."""
     issues = []
     
     changelog_yaml = COLLECTION_ROOT / 'changelogs' / 'changelog.yaml'
     if not changelog_yaml.exists():
         issues.append('changelogs/changelog.yaml not found (recommended format)')
+        return issues
+
+    # Validate that entry text uses RST, not Ansible markup (per Ansible inclusion)
+    rst_issues = check_changelog_rst(changelog_yaml)
+    issues.extend(rst_issues)
     
     return issues
 

@@ -119,7 +119,6 @@ class GraphiantPortalClient():
                 if user_response and hasattr(user_response, 'enterprise_id'):
                     current_enterprise_id = user_response.enterprise_id
             except Exception as e:
-                # TODO: Remove Workaround for enum mismatch once API Spec/SDK is updated. QA-11449
                 # Check if it's a Pydantic validation error (enum mismatch)
                 error_str = str(e)
                 is_validation_error = (

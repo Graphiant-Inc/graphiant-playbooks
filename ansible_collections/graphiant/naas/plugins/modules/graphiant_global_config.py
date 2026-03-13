@@ -29,7 +29,7 @@ description:
     syslog services, NTP services, IPFIX services, VPN profiles, and LAN segments.
   - Can manage all object types together using general operations or specific object types individually.
   - All operations use Jinja2 templates for consistent configuration deployment.
-version_added: "26.1.0"
+version_added: "25.11.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "Global Configuration Operations:"
@@ -276,13 +276,13 @@ config_file:
   sample: "sample_global_prefix_lists.yaml"
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs
 )
 
@@ -298,7 +298,6 @@ def get_deconfigure_summary(result):
     details = result.get('details') or {}
     if not isinstance(details, dict):
         return {'deleted': [], 'skipped': [], 'failed': False, 'failed_objects': []}
-    list_keys = ('deleted', 'skipped', 'failed_objects')
     # failed_objects must be a list; 'failed' key is bool in both top-level and sub-results
     failed_objects = list(details.get('failed_objects') or [])
     out = {

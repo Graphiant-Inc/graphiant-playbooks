@@ -23,14 +23,11 @@ This collection provides Ansible modules to automate:
 
 ### Key Features
 
-- **Idempotent Operations**: All modules correctly report `changed: false` when no modifications occur; interface and related modules include idempotency improvements (TE-4366)
-- **Structured Results**: Manager methods return detailed results with `changed`, `created`, `skipped`, and `deleted` fields
-- **Graceful Error Handling**: Handles "object not found" errors gracefully in deconfigure operations
-- **Jinja2 Template Support**: Configuration files support Jinja2 templating for dynamic generation
-- **Comprehensive Logging**: Optional detailed logging for debugging and troubleshooting
-- **Check Mode**: All modules document check_mode support (full, partial, or none) in the `attributes` field per Ansible standards
-- **Shared Auth Documentation**: All modules use the same Graphiant portal auth options (host, username, password) via doc fragment `graphiant.naas.graphiant_portal_auth` for consistent `ansible-doc` output
-- **Ansible Inclusion Ready**: Collection complies with the [Ansible Collection Inclusion Checklist](https://github.com/ansible-collections/ansible-inclusion/blob/main/collection_checklist.md) (documentation standards, FQCNs, semantic markup, license, changelog)
+- **Idempotent operations** — Deconfigure is safe to re-run and reports `changed: false` when resources are already absent. Configure can be run repeatedly; some generic modules (e.g. BGP, device config) do not compare current state and may report `changed: true` even when configuration is already applied.
+- **Check mode** — Full or partial dry-run support on most modules so you can preview changes before applying
+- **Jinja2 in configs** — YAML configuration files support templating for dynamic values
+- **Optional detailed logging** — `detailed_logs` parameter for debugging and troubleshooting
+- **Ansible standards** — FQCNs, shared auth documentation, and [Ansible Collection Inclusion Checklist](https://github.com/ansible-collections/ansible-inclusion/blob/main/collection_checklist.md) compliance
 
 ## Support & Compatibility
 
@@ -41,7 +38,7 @@ This collection provides Ansible modules to automate:
 | **Python** | >= 3.7 |
 | **Graphiant SDK** | >= 26.2.1 |
 
-> **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](docs/guides/VERSION_MANAGEMENT.md) for details.
+> **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) for details.
 
 ## Included Content
 
@@ -71,13 +68,14 @@ git clone https://github.com/Graphiant-Inc/graphiant-playbooks.git
 cd graphiant-playbooks
 
 # Create virtual environment or activate an existing virtual environment
-python3.7 -m venv venv
+python3.12 -m venv venv
 source venv/bin/activate
 
 # Install collection dependencies
 pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
 
 # Install collection from source
+pip install ansible-core
 ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
 ```
 
@@ -139,20 +137,18 @@ ansible-galaxy collection build ansible_collections/graphiant/naas/
 # Or using build script (from repository root)
 python scripts/build_collection.py
 ```
-<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
-read_file
 
 **Linting tools (run locally):**
 ```bash
 # Install development tools needed for linting
 pip install flake8 pylint djlint ansible-lint pre-commit
 
-# Python linting with flake8 (local development only, not in CI)
-flake8 ansible_collections/graphiant/naas/plugins/module_utils
+# Python linting with flake8 (local development only, not in CI). E501 will be addressed soon.
+flake8 ansible_collections/graphiant/naas/plugins/ --ignore=E501,W503,W504
 
 # Python linting with pylint (errors only, local development only, not in CI)
-export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils
-pylint --errors-only ansible_collections/graphiant/naas/plugins/module_utils
+export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/
+pylint --errors-only ansible_collections/graphiant/naas/plugins/
 
 # Ansible playbook linting (runs in CI, requires collection to be installed first)
 ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
@@ -297,7 +293,7 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 - `graphiant_data_exchange` - Manage services, customers, matches, and invitations
 - `graphiant_data_exchange_info` - Query services summary, customers summary, and service health
 
-See [Examples Guide](docs/guides/EXAMPLES.md) for detailed usage examples.
+See [Examples Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md) for detailed usage examples.
 
 ### Module Documentation
 
@@ -322,16 +318,16 @@ ansible-doc graphiant.naas.graphiant_device_config
 
 ### Quick Links
 
-- **[Examples Guide](docs/guides/EXAMPLES.md)** - Detailed usage examples and playbook samples
-- **[Credential Management Guide](docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md)** - Best practices for managing credentials securely
-- **[Version Management Guide](docs/guides/VERSION_MANAGEMENT.md)** - Version management system and quick reference
-- **[Release Process](docs/guides/RELEASE.md)** - Complete release process documentation
-- **[Documentation Index](docs/README.md)** - Full documentation structure
+- **[Examples Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md)** - Detailed usage examples and playbook samples
+- **[Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md)** - Best practices for managing credentials securely
+- **[Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md)** - Version management system and quick reference
+- **[Release Process](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md)** - Complete release process documentation
+- **[Documentation Index](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/README.md)** - Full documentation structure
 
 ### Additional Documentation
 
 - **Module Documentation**: Use `ansible-doc` to view embedded module documentation (see above)
-- **Docusite Setup**: See [docs/DOCSITE_SETUP.md](docs/DOCSITE_SETUP.md) for building HTML documentation
+- **Docusite Setup**: See [docs/DOCSITE_SETUP.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/DOCSITE_SETUP.md) for building HTML documentation
 - **Changelog**: See [changelogs/changelog.yaml](changelogs/changelog.yaml) for version history and release notes
 
 ### Credential Management
@@ -358,7 +354,7 @@ tasks:
 - Ansible Vault for encrypted credentials
 - Variable files with `vars_files`
 
-See [Credential Management Guide](docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for detailed examples.
+See [Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for detailed examples.
 
 ### State Parameter
 
@@ -536,7 +532,7 @@ See [changelogs/changelog.yaml](changelogs/changelog.yaml) for version history a
 
 ## Version Management
 
-Version information is centralized in `_version.py`. To bump versions or update dependencies, see [Version Management Guide](docs/guides/VERSION_MANAGEMENT.md) and [Release Process](docs/guides/RELEASE.md) for detailed instructions.
+Version information is centralized in `_version.py`. To bump versions or update dependencies, see [Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) and [Release Process](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md) for detailed instructions.
 
 Quick version bump:
 ```bash
