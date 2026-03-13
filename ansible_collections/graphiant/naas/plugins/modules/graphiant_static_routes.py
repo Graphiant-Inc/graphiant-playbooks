@@ -155,14 +155,14 @@ details:
   returned: when supported
 '''
 
-from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs,
 )
 
@@ -213,6 +213,10 @@ def main():
         connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
 
+        # Execute the requested operation
+        changed = False
+        result_msg = ""
+
         if operation == 'configure':
             result = execute_with_logging(
                 module,
@@ -221,6 +225,8 @@ def main():
                 success_msg="Successfully configured static routes",
                 no_change_msg="Static routes already match desired state; no changes needed",
             )
+            changed = result['changed']
+            result_msg = result['result_msg']
         elif operation == 'deconfigure':
             result = execute_with_logging(
                 module,
@@ -229,6 +235,8 @@ def main():
                 success_msg="Successfully deconfigured static routes",
                 no_change_msg="Static routes already absent (or already removed); no changes needed",
             )
+            changed = result['changed']
+            result_msg = result['result_msg']
         else:
             module.fail_json(
                 msg=f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure.",
@@ -236,8 +244,8 @@ def main():
             )
 
         module.exit_json(
-            changed=result['changed'],
-            msg=result['result_msg'],
+            changed=changed,
+            msg=result_msg,
             operation=operation,
             static_routes_config_file=cfg_file,
             configured_devices=result.get('configured_devices', []),

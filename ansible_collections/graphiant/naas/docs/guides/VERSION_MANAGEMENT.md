@@ -68,7 +68,7 @@ After running the bump script, you must:
 6. **Build** - Build collection tarball
 7. **Publish** - Publish to Ansible Galaxy
 
-See [RELEASE.md](RELEASE.md) for complete release process documentation.
+See [RELEASE.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md) for complete release process documentation.
 
 ## Dependency Management
 
@@ -186,13 +186,13 @@ If collection build fails:
 
 ## Related Documentation
 
-- [RELEASE.md](RELEASE.md) - Complete release process documentation
-- [README.md](../README.md) - Collection overview and usage
+- [RELEASE.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md) - Complete release process documentation
+- [README.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) - Collection overview and usage
 - `_version.py` - Source code with all version definitions
 
 ## Support
 
 For questions about version management:
-- See [RELEASE.md](RELEASE.md) for detailed procedures
+- See [RELEASE.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md) for detailed procedures
 - Check `bump_version.py --help` for script usage
 - Review `_version.py` for current version definitions

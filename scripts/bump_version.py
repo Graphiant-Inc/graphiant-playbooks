@@ -87,64 +87,64 @@ def update_version_file(new_version: str) -> None:
 
 
 def update_galaxy_yml(new_version: str) -> None:
-    """Update galaxy.yml with new version"""
+    """Update galaxy.yml with new version. Only the version line is changed to preserve formatting."""
     galaxy_file = COLLECTION_ROOT / "galaxy.yml"
-    with open(galaxy_file, 'r') as f:
-        data = yaml.safe_load(f)
+    with open(galaxy_file, 'r', encoding='utf-8') as f:
+        content = f.read()
 
-    data['version'] = new_version
+    # Replace only the version line to avoid PyYAML reformatting the whole file
+    content = re.sub(
+        r'^version:\s*["\']?[\d.]+["\']?\s*$',
+        f'version: {new_version}',
+        content,
+        count=1,
+        flags=re.MULTILINE
+    )
 
-    with open(galaxy_file, 'w') as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+    with open(galaxy_file, 'w', encoding='utf-8') as f:
+        f.write(content)
     print(f"✅ Updated galaxy.yml: {new_version}")
 
 
 def update_changelog(new_version: str, old_version: str) -> None:
-    """Add new version entry to CHANGELOG.md"""
-    changelog_file = COLLECTION_ROOT / "CHANGELOG.md"
-    with open(changelog_file, 'r') as f:
+    """Add new version entry to changelogs/changelog.yaml (antsibull-changelog format).
+
+    Inserts only the new release block so existing formatting, quoting, and line
+    wrapping are preserved (avoids PyYAML rewriting the entire file).
+    """
+    from datetime import date
+
+    changelog_file = COLLECTION_ROOT / "changelogs" / "changelog.yaml"
+    if not changelog_file.exists():
+        print(f"⚠️  Warning: {changelog_file} not found, skipping changelog update")
+        return
+
+    with open(changelog_file, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Get current date
-    from datetime import date
     today = date.today().isoformat()
 
-    # Create new changelog entry
-    new_entry = f"""## [{new_version}] - {today}
+    # Insert new release block after "releases:\n" so we don't rewrite the rest of the file
+    marker = "releases:\n"
+    pos = content.find(marker)
+    if pos == -1:
+        print(f"⚠️  Warning: Could not find 'releases:' in changelog.yaml, skipping changelog update")
+        return
+    insert_at = pos + len(marker)
 
-### Added
-- TBD
+    # Use same style as existing file: quoted version key, quoted values, one entry per line
+    new_block = f'''  "{new_version}":
+    release_date: "{today}"
+    changes:
+      minor_changes:
+        - "Collection version bumped to {new_version}"
+'''
 
-### Changed
-- TBD
+    content = content[:insert_at] + new_block + content[insert_at:]
 
-### Deprecated
-- N/A
-
-### Removed
-- N/A
-
-### Fixed
-- TBD
-
-### Security
-- N/A
-
-"""
-
-    # Insert after the changelog header
-    header_end = content.find("## [")
-    if header_end == -1:
-        # If no existing entries, insert after the header text
-        header_end = content.find("Semantic Versioning")
-        if header_end != -1:
-            header_end = content.find("\n", header_end) + 1
-
-    content = content[:header_end] + new_entry + content[header_end:]
-
-    with open(changelog_file, 'w') as f:
+    with open(changelog_file, 'w', encoding='utf-8') as f:
         f.write(content)
-    print(f"✅ Updated CHANGELOG.md: Added entry for {new_version}")
+    print(f"✅ Updated changelogs/changelog.yaml: Added release entry for {new_version}")
 
 
 def update_module_version_added(new_version: str) -> None:
@@ -283,7 +283,8 @@ def main():
         update_version_file(new_version)
         update_galaxy_yml(new_version)
         update_changelog(new_version, old_version)
-        update_module_version_added(new_version)
+        # Do NOT auto-update version_added in modules: it must stay as the collection
+        # version when the module was first added. Set it manually when adding new modules.
 
         if dependency_updates:
             update_version_file_dependencies(dependency_updates)
@@ -298,16 +299,18 @@ def main():
         print("1. Review the changes:")
         print("   git diff")
         print()
-        print("2. Update CHANGELOG.md with actual changes")
+        print("2. Update changelogs/changelog.yaml with actual changes (or add fragments, then run antsibull-changelog release)")
         print()
-        print("3. Commit the changes:")
+        print("3. If you added new modules, set their version_added to this release (e.g. X.Y.0) in the DOCUMENTATION block.")
+        print()
+        print("4. Commit the changes:")
         print("   git add -A")
         print(f"   git commit -m 'Bump version to {new_version}'")
         print()
-        print("4. Create a git tag:")
+        print("5. Create a git tag:")
         print(f"   git tag -a v{new_version} -m 'Release version {new_version}'")
         print()
-        print("5. Push changes and tags:")
+        print("6. Push changes and tags:")
         print("   git push origin main")
         print(f"   git push origin v{new_version}")
 

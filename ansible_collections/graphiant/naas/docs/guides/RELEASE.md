@@ -2,7 +2,7 @@
 
 This document describes the process for releasing new versions of the Graphiant Playbooks Ansible Collection.
 
-> **Quick Start:** See [VERSION_MANAGEMENT.md](VERSION_MANAGEMENT.md) for a quick reference guide.
+> **Quick Start:** See [VERSION_MANAGEMENT.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) for a quick reference guide.
 
 ## Version Management
 

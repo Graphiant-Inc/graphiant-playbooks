@@ -25,7 +25,7 @@ description:
   - Supports circuit-only operations for updating static routes without reconfiguring interfaces.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "26.1.0"
+version_added: "25.11.0"
 notes:
   - "Interface Operations:"
   - "  - LAN interfaces: Configure/deconfigure subinterfaces for LAN connectivity."
@@ -114,7 +114,7 @@ attributes:
     description: Supports check mode. In check mode, no configuration is pushed to the devices but payloads that would be pushed are logged with C([check_mode]).
     support: full
     details: >
-      When run with C(--check), the module logs the exact payloads that would be pushed with a C([check_mode]) prefix so you can see what configuration would be applied. 
+      When run with C(--check), the module logs the exact payloads that would be pushed with a C([check_mode]) prefix so you can see what configuration would be applied.
 
 requirements:
   - python >= 3.7
@@ -256,13 +256,13 @@ circuits_only:
   sample: false
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs
 )
 

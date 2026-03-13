@@ -234,7 +234,7 @@ You typically don't need to update versions. Focus on your code changes, and mai
 - [ ] Code follows style guidelines
 - [ ] Tests pass locally
 - [ ] Documentation updated
-- [ ] CHANGELOG.md updated (if applicable)
+- [ ] Changelog updated (if applicable)
 - [ ] Commit messages are clear
 - [ ] Commits are signed with GPG (required)
 - [ ] Branch is rebased (no merge commits allowed)

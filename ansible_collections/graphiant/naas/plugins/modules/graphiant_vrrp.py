@@ -23,7 +23,7 @@ description:
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
   - All operations are idempotent - safe to run multiple times without causing errors or unintended changes.
-version_added: "25.13.0"
+version_added: "26.1.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "VRRP Operations:"
@@ -186,13 +186,13 @@ vrrp_config_file:
   sample: "sample_vrrp_config.yaml"
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs
 )
 

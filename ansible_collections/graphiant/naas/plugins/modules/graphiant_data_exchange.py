@@ -23,7 +23,7 @@ description:
   - Enables creating and deleting Data Exchange services and customers.
   - Provides service-to-customer matching operations with automatic match response file management.
   - Supports invitation acceptance with gateway service deployment and VPN configuration.
-version_added: "26.1.0"
+version_added: "25.11.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 notes:
@@ -371,13 +371,13 @@ config_file:
   sample: "de_workflows_configs/sample_data_exchange_services.yaml"
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (
+from ansible.module_utils.basic import AnsibleModule  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs
 )
 

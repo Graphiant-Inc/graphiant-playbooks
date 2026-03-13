@@ -13,24 +13,24 @@ This directory contains additional documentation for the Graphiant Playbooks Ans
 
 Detailed guides for specific topics:
 
-- **[VERSION_MANAGEMENT.md](guides/VERSION_MANAGEMENT.md)** - Version management system and release process
-- **[RELEASE.md](guides/RELEASE.md)** - Complete release process documentation
-- **[CREDENTIAL_MANAGEMENT_GUIDE.md](guides/CREDENTIAL_MANAGEMENT_GUIDE.md)** - Best practices for managing credentials
-- **[EXAMPLES.md](guides/EXAMPLES.md)** - Detailed usage examples and playbook samples
+- **[VERSION_MANAGEMENT.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md)** - Version management system and release process
+- **[RELEASE.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md)** - Complete release process documentation
+- **[CREDENTIAL_MANAGEMENT_GUIDE.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md)** - Best practices for managing credentials
+- **[EXAMPLES.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md)** - Detailed usage examples and playbook samples
 
 ### Docusite (`docs/docsite/`)
 
 Documentation site configuration for building HTML documentation with Sphinx/antsibull-docs.
 
-See [DOCSITE_SETUP.md](DOCSITE_SETUP.md) for building the documentation site.
+See [DOCSITE_SETUP.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/DOCSITE_SETUP.md) for building the documentation site.
 
 ## Quick Links
 
-- [Main README](../README.md) - Collection overview and quick start
-- [Version Management](guides/VERSION_MANAGEMENT.md) - How to manage versions
-- [Release Process](guides/RELEASE.md) - How to release new versions
-- [Examples](guides/EXAMPLES.md) - Usage examples
-- [Credential Management](guides/CREDENTIAL_MANAGEMENT_GUIDE.md) - Security best practices
+- [Main README](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) - Collection overview and quick start
+- [Version Management](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) - How to manage versions
+- [Release Process](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/RELEASE.md) - How to release new versions
+- [Examples](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md) - Usage examples
+- [Credential Management](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) - Security best practices
 
 ## Module Documentation
 
@@ -63,4 +63,4 @@ cd docs
 ./build.sh
 ```
 
-See [DOCSITE_SETUP.md](DOCSITE_SETUP.md) for detailed instructions.
+See [DOCSITE_SETUP.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/DOCSITE_SETUP.md) for detailed instructions.

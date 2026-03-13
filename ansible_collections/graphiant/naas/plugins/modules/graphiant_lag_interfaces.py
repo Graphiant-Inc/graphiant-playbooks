@@ -31,7 +31,7 @@ description:
   - Configuration files support Jinja2 templating for dynamic generation.
   - All operations are idempotent - safe to run multiple times without
     causing errors or unintended changes.
-version_added: "25.13.0"
+version_added: "26.1.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "LAG Operations:"
