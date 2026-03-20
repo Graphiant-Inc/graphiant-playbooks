@@ -17,16 +17,28 @@ variable "environment" {
   default     = "dev"
 }
 
-variable "vnet_address_space" {
+variable "virtual_hub_address_prefix" {
+  description = "Address space for Virtual Hub"
+  type        = string
+  default     = "10.0.0.0/24"
+}
+
+variable "vnet_address_prefix" {
   description = "Address space for Virtual Network"
   type        = string
   default     = "10.0.0.0/16"
 }
 
-variable "public_subnet_prefix" {
-  description = "Address prefix for public subnet"
+variable "vnet_public_address_prefix" {
+  description = "Virtual Network public subnet"
   type        = string
-  default     = "10.0.1.0/24"
+  default     = "10.0.1.0/28"
+}
+
+variable "vnet_gateway_address_prefixes" {
+  description = "Virtual Network Gateway subnet list"
+  type        = list(string)
+  default     = ["10.0.1.16/28"]
 }
 
 # Resource Group Configuration
@@ -116,12 +128,6 @@ variable "expressroute_secondary_service_provider" {
   default     = "PacketFabric"
 }
 
-variable "expressroute_gateway_sku" {
-  description = "ExpressRoute Gateway SKU (Standard, HighPerformance, UltraPerformance)"
-  type        = string
-  default     = "Standard"
-}
-
 variable "expressroute_gateway_scale_units" {
   description = "Number of scale units for ExpressRoute Gateway"
   type        = number
@@ -158,12 +164,6 @@ variable "expressroute_vlan_id" {
   description = "VLAN ID for ExpressRoute circuit peering"
   type        = number
   default     = 100
-}
-
-variable "expressroute_advertised_public_prefixes" {
-  description = "Advertised public prefixes for ExpressRoute peering"
-  type        = list(string)
-  default     = ["168.62.0.0/16"]
 }
 
 variable "create_expressroute_connection" {
@@ -209,8 +209,8 @@ variable "vm_ssh_public_key" {
   default     = ""
 }
 
-variable "vm_subnet_prefix" {
-  description = "Address prefix for VM subnet"
+variable "vnet_vm_address_prefix" {
+  description = "Virtual Network VM subnet"
   type        = string
-  default     = "10.0.3.0/24"
+  default     = "10.0.1.32/28"
 }

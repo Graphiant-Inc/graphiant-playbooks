@@ -256,93 +256,50 @@ az account show  # Verify
 
 > **📚 Documentation:** For a step-by-step guide on creating the Graphiant Gateway Service for Azure, see the [Graphiant Documentation](https://docs.graphiant.com/docs/creating-the-graphiant-gateway-service-for-azure-graphiant-support). This guide provides step-by-step instructions to accomplish the same setup.
 
-> **⚠️ Important:** Before running Terraform commands, you must request the Gateway Service in Graphiant Portal first, then update `terraform/configs/gateway_services/azure_config.tfvars` with your specific values. See the [Azure Configuration](#azure-configuration) section below.
-
 > **💡 Tip:** This module supports using existing Resource Group and Virtual Network. If you have existing resources, set `use_existing_rg = true` and/or `use_existing_vnet = true` and provide the resource names.
 
-**Step 1: Request Gateway Service in Graphiant Portal (Manual Step - Required)**
 
-Before running Terraform, you need to request the Gateway Service in the Graphiant Portal. This will provision the ExpressRoute circuit.
+## Azure Configuration
 
-1. Log into the **Graphiant Portal**
-2. Navigate to **Gateway Services**:
-   - From Home screen: Click **"Setup Gateway Service"** under Quickstart
-   - Or: Click **"Services"** → **"Gateway"**
-3. Click **"Create New"**
-4. Select the Graphiant region corresponding to your Azure region
-5. Choose **"Azure"** as the cloud provider
-6. Configure Gateway details:
-   - **Speed**: Desired speed for the connection
-   - **Microsoft Peering VLAN ID**: Enter a VLAN ID between 101-200 (Note: This VLAN ID may change during provisioning based on availability)
-   - **Routing Policy**: Provide the subnets of the ExpressRoute BGP neighbor (in the form of "169.254.___.___" /30 Link-Local Only CIDR) and any BGP policies you wish to apply
-7. Click **"Next"** to review, then **"Confirm"** to submit the request
+> **⚠️ Required:** You must update `terraform/configs/gateway_services/azure_config.tfvars` with your specific values before running Terraform commands.
 
-> **📚 Documentation:** For detailed step-by-step instructions, see the [Graphiant Documentation](https://docs.graphiant.com/docs/creating-the-graphiant-gateway-service-for-azure-graphiant-support) section on "Gateway Service for Azure Connectivity in the Graphiant Portal".
+### Step 1: Deploy Azure resources (without ExpressRoute connection)
 
-**Note:** After submitting the request, Graphiant Customer Support will contact you to discuss the details and assist with provisioning the Gateway Service. The ExpressRoute circuit will be provisioned.
-
-**Step 2: Verify Existing Resources (if using existing Resource Group/VNet)**
-
-If you're using existing Resource Group and/or Virtual Network, verify they exist:
+1. Update `terraform/configs/gateway_services/azure_config.tfvars` and set:
+   - `create_expressroute_connection = false`
+2. Optional reference commands:
+   - Azure regions: [Azure regions list](https://learn.microsoft.com/en-us/azure/reliability/regions-list)
+   - PacketFabric ExpressRoute peering locations:
 
 ```bash
-# List Resource Groups
-az group list --query "[].{Name:name, Location:location}" --output table
-
-# List Virtual Networks
-az network vnet list --query "[].{Name:name, ResourceGroup:resourceGroup, AddressSpace:addressSpace.addressPrefixes}" --output table
-
-# Get specific VNet details
-az network vnet show --resource-group <resource-group-name> --name <vnet-name> --query "{Name:name, AddressSpace:addressSpace.addressPrefixes, Subnets:subnets[*].{Name:name, AddressPrefix:addressPrefix}}" --output json
+az network express-route list-service-providers --query "[?name=='PacketFabric'].{name:name, peeringLocations:peeringLocations}" -o json
 ```
 
-**Step 3: Update Configuration**
-
-After Graphiant provisions the ExpressRoute circuit, update `terraform/configs/gateway_services/azure_config.tfvars` with your Azure-specific values:
-- **Project name, Azure region**
-- **Existing Resource Group name** (if `use_existing_rg = true`)
-- **Existing Virtual Network name** (if `use_existing_vnet = true`)
-- **ExpressRoute peering location, service provider, bandwidth**
-- **BGP settings** (shared key, peer ASN)
-- **VNet and subnet configuration** (if creating new VNet)
-
-**Step 4: Deploy with Terraform**
+3. Run Terraform:
 
 ```bash
-cd terraform/gateway_services/azure
-
-# Initialize Terraform
+cd graphiant-playbooks/terraform/gateway_services/azure
 terraform init
-
-# Review plan
 terraform plan -var-file="../../configs/gateway_services/azure_config.tfvars" -out=tfplan
-
-# Apply configuration
 terraform apply tfplan
 ```
 
-**Step 5: Provide Information to Graphiant Support (Manual Step - Required)**
+### Step 2: Create Gateway Service request in Graphiant Portal
 
-After Terraform successfully creates the ExpressRoute Circuit and Gateway, you need to provide information to Graphiant Customer Support to complete the BGP peering configuration.
+For detailed steps, see the [Graphiant Documentation](https://docs.graphiant.com/docs/creating-the-graphiant-gateway-service-for-azure-graphiant-support) section on "Gateway Service for Azure Connectivity in the Graphiant Portal".
 
-1. Get the **ExpressRoute Circuit Service Key** from Azure:
-   - Go to Azure Portal → **ExpressRoute circuits**
-   - Select the circuit created by Terraform
-   - Copy the **Service Key** from the Overview page
+### Step 3: Graphiant Support provisioning
 
-2. Provide the following information to Graphiant Customer Support:
-   - **ExpressRoute Circuit Service Key** (from Azure Portal)
-   - **BGP peering configuration details** (if needed)
-   - Any additional information requested by Graphiant Support
+Graphiant Customer Support configures the sub-interface, fabric, and BGP peering.
 
-> **📚 Documentation:** For detailed information on what needs to be provided to Graphiant Support, see the [Graphiant Documentation](https://docs.graphiant.com/docs/creating-the-graphiant-gateway-service-for-azure-graphiant-support).
+### Step 4: Create the ExpressRoute connection
 
-**Step 6: Graphiant Completes Provisioning**
+After Graphiant confirms circuit provisioning, set `create_expressroute_connection = true` in `terraform/configs/gateway_services/azure_config.tfvars`, then rerun:
 
-After providing the information, Graphiant Customer Support will:
-- Configure the ExpressRoute BGP private peering
-- Establish the peering between Azure and the Graphiant Gateway
-- Complete the provisioning of your Gateway Service
+```bash
+terraform plan -var-file="../../configs/gateway_services/azure_config.tfvars" -out=tfplan
+terraform apply tfplan
+```
 
 **Verification:**
 - The **Gateway Status** in the Graphiant Portal will change to **"Live"**
@@ -350,129 +307,20 @@ After providing the information, Graphiant Customer Support will:
 
 > **Note:** The status of "Live" indicates that the Gateway has been provisioned. It does not reflect the current status of the connection.
 
-**Important:** All manual steps (Steps 1 and 4) are required to complete the Gateway Service setup. The Terraform module creates the Azure infrastructure, but the Gateway Service request in Graphiant Portal and BGP peering configuration must be completed manually with Graphiant Support.
+**Important:** All manual steps (Steps 2 and 3) are required to complete the Gateway Service setup. The Terraform module creates the Azure infrastructure, but the Gateway Service request in Graphiant Portal and BGP peering configuration must be completed manually with Graphiant Support.
 
-## What Azure Terraform Creates
-
-**By default, this module can create new Resource Group and Virtual Network, or use your existing resources.** It will create:
-
-- ExpressRoute Circuit (primary and optionally secondary for redundancy)
-- ExpressRoute Gateway (Virtual Network Gateway)
-- Virtual Hub (optional)
-- ExpressRoute Connection
-- Route Table with BGP propagation
-
-**Optional resources** (if `use_existing_* = false`):
-- Resource Group (if `use_existing_rg = false`)
-- Virtual Network with subnets (if `use_existing_vnet = false`)
-  - **Note:** If using existing VNet, ensure it has a GatewaySubnet (required for ExpressRoute Gateway)
-
-**What Terraform does NOT create (requires manual steps):**
-- Gateway Service request in Graphiant Portal (must be done first - Step 1)
-- ExpressRoute Circuit provisioning (done by Graphiant after Gateway Service request)
-- BGP peering configuration (completed by Graphiant Support after you provide the Service Key)
-
-## Azure Configuration
-
-> **⚠️ Required:** You must update `terraform/configs/gateway_services/azure_config.tfvars` with your specific values before running Terraform commands.
-
-**Note:** The Azure module always creates a new Virtual Network. It does not support using existing VNets like the AWS and GCP modules.
-
-**Required Configuration:**
-
-```hcl
-# Project Configuration
-project_name = "your-project"
-azure_region = "East US"
-environment  = "dev"
-
-# Network Configuration
-vnet_address_space    = "10.0.0.0/16"
-public_subnet_prefix  = "10.0.1.0/24"
-
-# ExpressRoute Configuration
-expressroute_peering_location = "Washington DC"  # Use: az network express-route list-service-providers
-expressroute_service_provider = "PacketFabric"
-expressroute_bandwidth = 50  # Valid: 50, 100, 200, 500, 1000, 2000, 5000, 10000
-expressroute_sku = "Standard"  # Valid: Standard, Premium
-
-# ExpressRoute Gateway
-expressroute_gateway_sku = "Standard"  # Valid: Standard, HighPerformance, UltraPerformance
-expressroute_gateway_scale_units = 1
-
-# BGP Peering Configuration
-expressroute_peer_asn = 30656  # Graphiant's ASN
-expressroute_shared_key = "your-bgp-key"
-expressroute_primary_peer_address_prefix = "169.254.50.0/30"  # Link-local /30 CIDR
-expressroute_secondary_peer_address_prefix = "169.254.60.0/30"  # Link-local /30 CIDR
-expressroute_vlan_id = 11
-```
-
-See the full configuration file (`terraform/configs/gateway_services/azure_config.tfvars`) for all available options.
 
 ## Azure Troubleshooting
 
-**Authentication Errors:**
-- Run `az login` and verify subscription
-- Check subscription: `az account show`
-
 **Common Issues:**
-
-**ExpressRoute Circuit Not Provisioned:**
-- Ensure you've requested the Gateway Service in Graphiant Portal first (Step 1)
-- Contact Graphiant Support if the circuit is not appearing in Azure
 - Verify the peering location matches your Azure region
-
-**Gateway Subnet Issues:**
-- If using existing VNet, ensure it has a GatewaySubnet (required for ExpressRoute Gateway)
-- Ensure the Gateway Subnet is /27 or larger
-- Verify the subnet name is exactly "GatewaySubnet"
-- Check that there's sufficient address space in your VNet
-- If GatewaySubnet doesn't exist in your existing VNet, you'll need to create it manually or use a new VNet
+- Contact Graphiant Support for the express route Peering vlan(expressroute_vlan_id) to be used
 
 **BGP Peering Issues:**
 - Ensure you've provided the ExpressRoute Circuit Service Key to Graphiant Support
 - Verify BGP peering is configured correctly (coordinate with Graphiant Support)
 - Check that the Gateway Status in Graphiant Portal shows "Live"
 
-**Resource Creation Failures:**
-- Verify Azure account permissions
-- Check resource quotas/limits
-- Verify network CIDR ranges don't conflict
-- Ensure subscription has ExpressRoute provider registered
-
-**Useful Commands:**
-```bash
-# Verify Azure subscription
-az account show
-
-# List Resource Groups
-az group list --query "[].{Name:name, Location:location}" --output table
-
-# List Virtual Networks
-az network vnet list --query "[].{Name:name, ResourceGroup:resourceGroup, AddressSpace:addressSpace.addressPrefixes}" --output table
-
-# Get VNet details including subnets
-az network vnet show --resource-group <resource-group> --name <vnet-name> --query "{Name:name, AddressSpace:addressSpace.addressPrefixes, Subnets:subnets[*].{Name:name, AddressPrefix:addressPrefix}}" --output json
-
-# Check if GatewaySubnet exists
-az network vnet subnet show --resource-group <resource-group> --vnet-name <vnet-name> --name GatewaySubnet
-
-# List available ExpressRoute service providers and peering locations
-az network express-route list-service-providers
-
-# Get ExpressRoute circuit details
-az network express-route show --resource-group <resource-group> --name <circuit-name>
-
-# Get ExpressRoute circuit service key
-az network express-route show --resource-group <resource-group> --name <circuit-name> --query serviceKey -o tsv
-
-# List ExpressRoute circuits
-az network express-route list --resource-group <resource-group>
-
-# Check Virtual Network Gateway status
-az network vnet-gateway show --resource-group <resource-group> --name <gateway-name>
-```
 
 ## Azure Cleanup
 
@@ -483,7 +331,7 @@ cd terraform/gateway_services/azure
 terraform destroy -var-file="../../configs/gateway_services/azure_config.tfvars"
 ```
 
-**⚠️ Warning:** This command will permanently delete all created resources!
+**⚠️ Warning:** This command will permanently delete all created Azure resources!
 
 ---
 
