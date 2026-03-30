@@ -1,3 +1,11 @@
+# CI matrix and ansible-core install patterns align with the Ansible collection template:
+# https://github.com/ansible-collections/collection_template/blob/main/.github/workflows/ansible-test.yml
+# Subscribe to https://github.com/ansible-collections/news-for-maintainers for ansible-core / ansible-test changes.
+# Optional composite action docs: https://github.com/marketplace/actions/ansible-test
+#
+# Testing against `devel` may fail when upstream adds new sanity tests; consider `milestone` as a slower-moving
+# alternative (see comments in the collection_template workflow).
+
 name: Test Collection
 
 env:
@@ -24,17 +32,18 @@ permissions:
 
 jobs:
   test:
-    name: Run Tests (ansible-core ${{ matrix.ansible_core }})
+    name: Run Tests (ansible-core ${{ matrix.ansible }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        ansible_core:
-          - '2.17'
-          - '2.18'
-          - '2.19'
-          - '2.20'
+        ansible:
+          - stable-2.17
+          - stable-2.18
+          - stable-2.19
+          - stable-2.20
+          - devel
     defaults:
       run:
         working-directory: ansible_collections/graphiant/naas
@@ -51,7 +60,13 @@ jobs:
       - name: Install ansible-core
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core~=${{ matrix.ansible_core }}
+          AC="${{ matrix.ansible }}"
+          if [ "$AC" = "devel" ]; then
+            pip install "https://github.com/ansible/ansible/archive/devel.tar.gz"
+          else
+            VER="${AC#stable-}"
+            pip install "ansible-core~=${VER}"
+          fi
 
       - name: Install dependencies
         run: |

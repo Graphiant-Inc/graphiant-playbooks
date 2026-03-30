@@ -2,18 +2,23 @@
 
 This directory contains GitHub Actions workflows for the Graphiant Playbooks collection.
 
+Workflows follow the same **ansible-core** matrix conventions as the upstream [collection_template](https://github.com/ansible-collections/collection_template/blob/main/.github/workflows/ansible-test.yml) (`stable-2.X` and `devel` Git revisions, not only PyPI pins). Subscribe to [news-for-maintainers](https://github.com/ansible-collections/news-for-maintainers) for Ansible release announcements.
+
+- **Sanity** uses [ansible-community/ansible-test-gh-action](https://github.com/marketplace/actions/ansible-test) (`testing-type: sanity`, `collection-root` for this repo’s nested collection path).
+- **Ansible lint** and **`test`** install `ansible-core` via pip (`ansible-core~=X.Y` for each `stable-X.Y`, tarball for `devel`).
+
 ## Workflows
 
 ### `lint.yml` - Comprehensive Linting
 Detailed linting workflow that runs multiple linting checks in parallel:
 - Jinja2 template linting (djlint)
-- Ansible lint
+- Ansible lint (matrix: `stable-2.17` … `stable-2.20`, `devel`)
 - Documentation lint (antsibull-docs)
-- ansible-test sanity (tests against ansible-core 2.17, 2.18, 2.19, 2.20)
+- ansible-test sanity (same matrix; Docker-based via ansible-test-gh-action)
 
 ### `test.yml` - Testing
 Runs all tests for the collection:
-- **`test` job** - Matrix job testing against ansible-core 2.17, 2.18, 2.19, 2.20:
+- **`test` job** - Matrix job testing against `stable-2.17` … `stable-2.20` and `devel`:
   - Python unit tests
   - Full collection validation
 - **`e2e-integration-test` job** - Separate job (not in matrix):
