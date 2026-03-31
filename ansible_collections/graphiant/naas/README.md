@@ -40,6 +40,8 @@ This collection provides Ansible modules to automate:
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) for details.
 
+> **Authentication:** Configure `GRAPHIANT_HOST`, **`graphiant login`** + `GRAPHIANT_ACCESS_TOKEN`, or username/password — follow **[Graphiant API Authentication](https://github.com/Graphiant-Inc/graphiant-playbooks/tree/main?tab=readme-ov-file#graphiant-api-authentication)** in the graphiant-playbooks repository README, then use this collection’s [Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for module-specific options.
+
 ## Included Content
 
 ### [Modules](https://github.com/Graphiant-Inc/graphiant-playbooks/tree/main/ansible_collections/graphiant/naas#modules)
@@ -322,6 +324,7 @@ ansible-doc graphiant.naas.graphiant_device_config
 
 ### Quick Links
 
+- **[Graphiant API Authentication](https://github.com/Graphiant-Inc/graphiant-playbooks/tree/main?tab=readme-ov-file#graphiant-api-authentication)** — graphiant CLI login, `GRAPHIANT_HOST`, `GRAPHIANT_ACCESS_TOKEN`, and portal credentials (graphiant-playbooks repo README)
 - **[Examples Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md)** - Detailed usage examples and playbook samples
 - **[Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md)** - Best practices for managing credentials securely
 - **[Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md)** - Version management system and quick reference
@@ -358,7 +361,7 @@ tasks:
 - Ansible Vault for encrypted credentials
 - Variable files with `vars_files`
 
-See [Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for detailed examples.
+See [Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for detailed examples. For environment setup (CLI login, token export), see [Graphiant API Authentication](https://github.com/Graphiant-Inc/graphiant-playbooks/tree/main?tab=readme-ov-file#graphiant-api-authentication) in the graphiant-playbooks README.
 
 ### State Parameter
 
