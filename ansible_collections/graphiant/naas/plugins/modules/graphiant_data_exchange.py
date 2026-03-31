@@ -130,7 +130,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.2.1
+  - graphiant-sdk >= 26.3.0
   - tabulate
 
 seealso:

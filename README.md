@@ -10,6 +10,39 @@ Automated network infrastructure management for [Graphiant Network-as-a-Service 
 
 Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com) offerings.
 
+## Graphiant portal authentication
+
+Automation in this repository talks to the Graphiant API using a **portal access token** or **username/password**. The recommended local setup matches [Test Infrastructure](https://gitlab.com/graphiant/oss/test-infrastructure/-/blob/main/README.md) **Quick Start → Set Graphiant Environment Variables**: use the **graphiant** CLI to obtain a token, or export tester credentials.
+
+### Option 1: Graphiant CLI (`graphiant login`)
+
+```bash
+# Fetch a Graphiant portal API access token using the graphiant CLI
+graphiant login --portal-url https://portal.test.graphiant.io
+source ~/.graphiant/env.sh
+
+# Optional: reload shell configuration so the token is available in new terminals
+source ~/.zshrc
+
+# Verify the environment variable
+env | grep GRAPHIANT_ACCESS_TOKEN
+```
+
+The Ansible collection accepts `access_token` on modules and honors **`GRAPHIANT_ACCESS_TOKEN`** when set (bearer auth is used before username/password when the token is valid). See [Credential Management Guide](ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md).
+
+### Option 2: Portal username and password
+
+```bash
+# Add to your shell profile (~/.zshrc, ~/.bashrc, etc.) or export for the session
+export TESTER_USER_EMAIL='your-email@graphiant.com'
+export TESTER_USER_PASSWORD='your-password'
+
+# Verify
+env | grep TESTER
+```
+
+Pass `username` / `password` (or your vault equivalents) into playbooks and roles as required by each module.
+
 ## 📚 Documentation
 
 - **Official Documentation**: [Graphiant Playbooks Guide](https://docs.graphiant.com/docs/graphiant-playbooks) <-> [Graphiant Automation Docs](https://docs.graphiant.com/docs/automation)
@@ -21,7 +54,7 @@ Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphian
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.2.3) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.3.0) | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) |
 | **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/terraform/README.md) |
 | **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/.github/workflows/README.md) |
 | **Docker Support** | Containerized execution environment | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/Docker.md) |
@@ -139,7 +172,7 @@ terraform apply -var-file="../../configs/gateway_services/gcp_config.tfvars"
 
 ```
 graphiant-playbooks/
-├── ansible_collections/graphiant/naas/                # Ansible collection (v26.2.3)
+├── ansible_collections/graphiant/naas/               # Ansible collection 
 │   ├── plugins/modules/                              # Ansible modules (9 modules)
 │   ├── plugins/module_utils/                         # Python library code
 │   ├── playbooks/                                    # Example playbooks
