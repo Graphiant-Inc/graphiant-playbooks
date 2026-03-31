@@ -5,6 +5,11 @@
 
 ancestor: null
 releases:
+  "26.3.0":
+    release_date: "2026-03-30"
+    changes:
+      minor_changes:
+        - "Portal authentication: optional ``access_token`` module option and ``GRAPHIANT_ACCESS_TOKEN`` environment variable (e.g. after ``graphiant login``); invalid or missing token falls back to username/password when provided"
   "26.2.4":
     release_date: "2026-03-12"
     changes:

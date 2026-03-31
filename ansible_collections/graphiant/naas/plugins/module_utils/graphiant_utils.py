@@ -21,14 +21,40 @@ def graphiant_portal_auth_argument_spec():
             config_file=dict(type='str', required=True),
         )
 
+    Authentication: provide O(access_token), or set the GRAPHIANT_ACCESS_TOKEN environment
+    variable (e.g. after C(graphiant login) and C(source ~/.graphiant/env.sh)), or provide
+    both O(username) and O(password).
+
     Returns:
-        dict: Argument spec for host, username, password (no_log=True on password).
+        dict: Argument spec for host, username, password, access_token.
     """
     return {
         'host': dict(type='str', required=True, aliases=['base_url']),
-        'username': dict(type='str', required=True),
-        'password': dict(type='str', required=True, no_log=True),
+        'username': dict(type='str', required=False),
+        'password': dict(type='str', required=False, no_log=True, default=None),
+        'access_token': dict(type='str', required=False, no_log=True, default=None),
     }
+
+
+def _resolved_access_token(module_params: Dict[str, Any]):
+    """Prefer module access_token, then GRAPHIANT_ACCESS_TOKEN from the environment."""
+    explicit = module_params.get('access_token')
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()
+    env_t = os.environ.get('GRAPHIANT_ACCESS_TOKEN')
+    if env_t is not None and str(env_t).strip():
+        return str(env_t).strip()
+    return None
+
+
+def _password_auth_usable(username, password) -> bool:
+    if username is None or password is None:
+        return False
+    if not str(username).strip():
+        return False
+    if str(password) == '':
+        return False
+    return True
 
 
 def _import_graphiant_libs():
@@ -115,19 +141,28 @@ class GraphiantConnection:
     Manages connection to Graphiant API and provides common functionality.
     """
 
-    def __init__(self, host: str, username: str, password: str, check_mode: bool = False):
+    def __init__(
+        self,
+        host: str,
+        username: str = None,
+        password: str = None,
+        access_token: str = None,
+        check_mode: bool = False,
+    ):
         """
         Initialize Graphiant connection.
 
         Args:
             host: Graphiant API host URL
-            username: Username for authentication
-            password: Password for authentication
+            username: Username for authentication (optional if access_token is used)
+            password: Password for authentication (optional if access_token is used)
+            access_token: Bearer token from CLI/SSO (optional if username/password are used)
             check_mode: If True, API write operations are skipped and payloads are only logged.
         """
         self.host = host
         self.username = username
         self.password = password
+        self.access_token = access_token
         self.check_mode = check_mode
         self._graphiant_config = None
 
@@ -156,7 +191,8 @@ class GraphiantConnection:
                     base_url=self.host,
                     username=self.username,
                     password=self.password,
-                    check_mode=self.check_mode
+                    check_mode=self.check_mode,
+                    access_token=self.access_token,
                 )
             except Exception as e:
                 raise GraphiantPlaybookError(f"Failed to initialize Graphiant connection: {str(e)}")
@@ -190,16 +226,25 @@ def get_graphiant_connection(module_params: Dict[str, Any], check_mode: bool = F
     Returns:
         GraphiantConnection: Initialized connection object
     """
-    required_params = ['host', 'username', 'password']
-    for param in required_params:
-        if param not in module_params:
-            raise ValueError(f"Missing required parameter: {param}")
+    if 'host' not in module_params or not module_params.get('host'):
+        raise ValueError("Missing required parameter: host")
+
+    token = _resolved_access_token(module_params)
+    username = module_params.get('username')
+    password = module_params.get('password')
+
+    if token is None and not _password_auth_usable(username, password):
+        raise ValueError(
+            "Authentication requires GRAPHIANT_ACCESS_TOKEN (or module option access_token), "
+            "or both username and password."
+        )
 
     return GraphiantConnection(
         host=module_params['host'],
-        username=module_params['username'],
-        password=module_params['password'],
-        check_mode=check_mode
+        username=username,
+        password=password,
+        access_token=token,
+        check_mode=check_mode,
     )
 
 

@@ -100,10 +100,14 @@ ansible-galaxy collection list graphiant.naas
 Test the installed collection by running the `hello_test.yml` playbook. This test is also run automatically in CI/CD as the E2E integration test when GRAPHIANT credentials are configured:
 
 ```bash
-# Set environment variables
+# Set environment variables (password login)
 export GRAPHIANT_HOST="https://api.graphiant.com"
 export GRAPHIANT_USERNAME="your_username"
 export GRAPHIANT_PASSWORD="your_password"
+
+# Alternatively, sign in with the Graphiant CLI (SSO) and load credentials into the shell:
+#   graphiant login && source ~/.graphiant/env.sh
+# That exports GRAPHIANT_ACCESS_TOKEN; the collection prefers the bearer token over username/password when set.
 
 # Optional: Enable pretty output for detailed_logs
 export ANSIBLE_STDOUT_CALLBACK=debug
@@ -466,13 +470,13 @@ See `tests/test.py` for comprehensive Python library usage examples.
 
 ### Running Tests
 
-The test suite (`tests/test.py`) requires environment variables for Graphiant credentials:
+The test suite (`tests/test.py`) requires `GRAPHIANT_HOST` and either `GRAPHIANT_ACCESS_TOKEN` or `GRAPHIANT_USERNAME` and `GRAPHIANT_PASSWORD`:
 
 ```bash
-# Set required environment variables
 export GRAPHIANT_HOST="https://api.graphiant.com"
 export GRAPHIANT_USERNAME="your_username"
 export GRAPHIANT_PASSWORD="your_password"
+# Or: export GRAPHIANT_ACCESS_TOKEN="..."  # e.g. after graphiant login
 
 # From repo root (recommended): set PYTHONPATH then run
 export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils

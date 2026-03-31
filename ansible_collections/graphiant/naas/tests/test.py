@@ -1,8 +1,11 @@
 """
 Integration tests for the Graphiant NaaS collection.
 
-Runs against a live Graphiant portal. Requires GRAPHIANT_HOST, GRAPHIANT_USERNAME,
-and GRAPHIANT_PASSWORD environment variables.
+Runs against a live Graphiant portal. Requires GRAPHIANT_HOST. Authentication:
+GRAPHIANT_ACCESS_TOKEN and/or GRAPHIANT_USERNAME+GRAPHIANT_PASSWORD (when both are set,
+a bad token falls back to password login, matching Ansible). Tests that need a successful
+password login require a real ``GRAPHIANT_PASSWORD`` (unset any placeholder you used for
+manual negative tests).
 
 Run from repo root with PYTHONPATH including the collection module_utils:
   export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils
@@ -14,6 +17,7 @@ import subprocess
 import unittest
 import yaml
 from libs.graphiant_config import GraphiantConfig
+from libs.exceptions import GraphiantPlaybookError
 from libs.logger import setup_logger
 
 LOG = setup_logger()
@@ -23,29 +27,57 @@ def read_config():
     """
     Read configuration from environment variables.
 
-    Required environment variables:
+    Required:
         - GRAPHIANT_HOST: Graphiant API endpoint (e.g., https://api.graphiant.com)
-        - GRAPHIANT_USERNAME: Graphiant API username
-        - GRAPHIANT_PASSWORD: Graphiant API password
+
+    Authentication:
+        - GRAPHIANT_HOST is always required.
+        - If GRAPHIANT_ACCESS_TOKEN is set, it is used first. GRAPHIANT_USERNAME and
+          GRAPHIANT_PASSWORD are still read when present so invalid/expired tokens can fall
+          back to password login (same behavior as Ansible module params + env).
+        - If GRAPHIANT_ACCESS_TOKEN is unset, GRAPHIANT_USERNAME and GRAPHIANT_PASSWORD are required.
 
     Returns:
-        tuple: (host, username, password)
+        tuple: (host, username, password, access_token)
+            access_token may be None for password-only login; username/password may be None
+            for token-only login.
 
     Raises:
-        ValueError: If any required environment variable is not set
+        ValueError: If required variables are not set
     """
     host = os.getenv('GRAPHIANT_HOST')
     username = os.getenv('GRAPHIANT_USERNAME')
     password = os.getenv('GRAPHIANT_PASSWORD')
+    access_token = os.getenv('GRAPHIANT_ACCESS_TOKEN')
+    if access_token is not None:
+        access_token = access_token.strip() or None
 
     if not host:
         raise ValueError("GRAPHIANT_HOST environment variable is required")
+    if access_token:
+        return host, username, password, access_token
     if not username:
-        raise ValueError("GRAPHIANT_USERNAME environment variable is required")
+        raise ValueError(
+            "GRAPHIANT_USERNAME is required when GRAPHIANT_ACCESS_TOKEN is not set"
+        )
     if not password:
-        raise ValueError("GRAPHIANT_PASSWORD environment variable is required")
+        raise ValueError(
+            "GRAPHIANT_PASSWORD is required when GRAPHIANT_ACCESS_TOKEN is not set"
+        )
 
-    return host, username, password
+    return host, username, password, None
+
+
+def graphiant_config_from_read_config(**kwargs):
+    """Build GraphiantConfig from read_config() with optional extra constructor kwargs."""
+    base_url, username, password, access_token = read_config()
+    return GraphiantConfig(
+        base_url=base_url,
+        username=username,
+        password=password,
+        access_token=access_token,
+        **kwargs,
+    )
 
 
 class TestGraphiantPlaybooks(unittest.TestCase):
@@ -54,24 +86,82 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test login and fetch token.
         """
-        base_url, username, password = read_config()
-        GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config_from_read_config()
 
     def test_get_enterprise_id(self):
         """
         Test login and fetch enterprise id.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         enterprise_id = graphiant_config.config_utils.gsdk.get_enterprise_id()
         LOG.info("Enterprise ID: %s", enterprise_id)
+
+    def test_auth_double_failure_access_token_then_password(self):
+        """
+        Invalid access token, then invalid password: expect combined GraphiantPlaybookError.
+
+        Uses live API (same as other tests). Requires GRAPHIANT_HOST and GRAPHIANT_USERNAME.
+        Does not use read_config(): when only GRAPHIANT_ACCESS_TOKEN is set, read_config omits
+        username/password; Ansible playbooks pass both explicitly.
+        """
+        host = os.getenv('GRAPHIANT_HOST')
+        username = os.getenv('GRAPHIANT_USERNAME')
+        if not host or not username:
+            self.skipTest('GRAPHIANT_HOST and GRAPHIANT_USERNAME are required for this test')
+        bad_token = '__invalid_access_token_for_double_failure_test__'
+        bad_password = '__invalid_password_for_double_failure_test__'
+        with self.assertRaises(GraphiantPlaybookError) as ctx:
+            GraphiantConfig(
+                base_url=host,
+                username=username,
+                password=bad_password,
+                access_token=bad_token,
+            )
+        msg = str(ctx.exception)
+        self.assertIn('was not accepted by the API', msg)
+        self.assertIn('username/password login also failed', msg)
+        self.assertIn('Login error:', msg)
+        self.assertIn('UnauthorizedException', msg)
+
+    def test_auth_invalid_token_fallback_to_valid_password(self):
+        """
+        Invalid access token, then valid username/password: session succeeds (live API).
+
+        Mirrors Ansible when GRAPHIANT_ACCESS_TOKEN is wrong but playbook/env supplies valid
+        GRAPHIANT_USERNAME and GRAPHIANT_PASSWORD.
+
+        Requires GRAPHIANT_HOST, GRAPHIANT_USERNAME, and a real GRAPHIANT_PASSWORD (not a
+        placeholder used for negative testing).
+
+        A valid GRAPHIANT_ACCESS_TOKEN in the environment does not affect this test (the
+        constructor passes a fixed invalid access_token).
+        """
+        host = os.getenv('GRAPHIANT_HOST')
+        username = os.getenv('GRAPHIANT_USERNAME')
+        password = os.getenv('GRAPHIANT_PASSWORD')
+        if not host or not username or not password:
+            self.skipTest(
+                'GRAPHIANT_HOST, GRAPHIANT_USERNAME, and GRAPHIANT_PASSWORD are required'
+            )
+        bad_token = '__invalid_access_token_for_fallback_success_test__'
+        graphiant_config = GraphiantConfig(
+            base_url=host,
+            username=username,
+            password=password,
+            access_token=bad_token,
+        )
+        enterprise_id = graphiant_config.config_utils.gsdk.get_enterprise_id()
+        self.assertIsNotNone(enterprise_id)
+        LOG.info(
+            "After invalid token + password fallback, enterprise_id=%s",
+            enterprise_id,
+        )
 
     def test_configure_global_config_prefix_lists(self):
         """
         Configure Global Config Prefix Lists.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_prefix_sets("sample_global_prefix_lists.yaml")
         result = graphiant_config.global_config.configure("sample_global_prefix_lists.yaml")
         LOG.info("Configure prefix lists result: %s", result)
@@ -82,8 +172,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global Config Prefix Lists.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_prefix_sets("sample_global_prefix_lists.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_prefix_lists.yaml")
         LOG.info("Deconfigure prefix lists result: %s", result)
@@ -97,8 +186,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test failure to deconfigure Global Config Prefix Lists if objects are in use.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_prefix_sets("sample_global_prefix_lists.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_prefix_lists.yaml")
         LOG.info("Deconfigure prefix lists result: %s", result)
@@ -113,8 +201,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global BGP Filters.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_bgp_filters("sample_global_bgp_filters.yaml")
         result = graphiant_config.global_config.configure("sample_global_bgp_filters.yaml")
         LOG.info("Configure BGP filters result: %s", result)
@@ -125,8 +212,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global Config BGP Filters.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_bgp_filters("sample_global_bgp_filters.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_bgp_filters.yaml")
         LOG.info("Deconfigure BGP filters result: %s", result)
@@ -145,8 +231,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         Configure Global Graphiant filters (GraphiantIn / GraphiantOut).
         Used later by Data Exchange services via globalObjectOps.routingPolicyOps (e.g. Policy-DC1-Primary).
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.global_config.configure_graphiant_filters("sample_global_graphiant_filters.yaml")
         LOG.info("Configure Graphiant filters result: %s", result)
         result = graphiant_config.global_config.configure_graphiant_filters("sample_global_graphiant_filters.yaml")
@@ -157,8 +242,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         Deconfigure Global Graphiant filters.
         Run after Data Exchange services are deleted so policies are not in use.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.global_config.deconfigure_graphiant_filters(
             "sample_global_graphiant_filters.yaml"
         )
@@ -179,8 +263,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global SNMP Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_snmp_services("sample_global_snmp_services.yaml")
         result = graphiant_config.global_config.configure("sample_global_snmp_services.yaml")
         LOG.info("Configure SNMP service result: %s", result)
@@ -191,8 +274,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global SNMP Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_snmp_services("sample_global_snmp_services.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_snmp_services.yaml")
         LOG.info("Deconfigure SNMP service result: %s", result)
@@ -210,8 +292,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test failure to deconfigure Global SNMP Objects if objects are in use.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_snmp_services("sample_global_snmp_services.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_snmp_services.yaml")
         LOG.info("Deconfigure SNMP service result: %s", result)
@@ -226,8 +307,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global Syslog Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_syslog_services("sample_global_syslog_servers.yaml")
         result = graphiant_config.global_config.configure("sample_global_syslog_servers.yaml")
         LOG.info("Configure syslog service result: %s", result)
@@ -238,8 +318,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global Syslog Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_syslog_services(("sample_global_syslog_servers.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_syslog_servers.yaml")
         LOG.info("Deconfigure syslog service result: %s", result)
@@ -257,8 +336,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global IPFIX Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_ipfix_services("sample_global_ipfix_exporters.yaml")
         result = graphiant_config.global_config.configure("sample_global_ipfix_exporters.yaml")
         LOG.info("Configure IPFIX service result: %s", result)
@@ -269,8 +347,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global IPFIX Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_ipfix_services("sample_global_ipfix_exporters.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_ipfix_exporters.yaml")
         LOG.info("Deconfigure IPFIX service result: %s", result)
@@ -288,8 +365,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global VPN Profile Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_vpn_profiles("sample_global_vpn_profiles.yaml")
         result = graphiant_config.global_config.configure("sample_global_vpn_profiles.yaml")
         LOG.info("Configure VPN profiles result: %s", result)
@@ -300,8 +376,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global VPN Profile Objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_vpn_profiles("sample_global_vpn_profiles.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_vpn_profiles.yaml")
         LOG.info("Deconfigure VPN profiles result: %s", result)
@@ -319,8 +394,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test failure to deconfigure Global VPN Profiles if objects are in use.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_vpn_profiles("sample_global_vpn_profiles.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_vpn_profiles.yaml")
         LOG.info("Deconfigure VPN profiles result: %s", result)
@@ -335,8 +409,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global LAN Segments.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.configure_lan_segments("sample_global_lan_segments.yaml")
         result = graphiant_config.global_config.configure("sample_global_lan_segments.yaml")
         LOG.info("Configure Global LAN segments result: %s", result)
@@ -347,8 +420,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global LAN Segments.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_lan_segments("sample_global_lan_segments.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_lan_segments.yaml")
         LOG.info("Deconfigure Global LAN segments result: %s", result)
@@ -366,8 +438,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test login and fetch Lan segments.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         lan_segments = graphiant_config.config_utils.gsdk.get_lan_segments_dict()
         LOG.info("Lan Segments: %s", lan_segments)
 
@@ -375,8 +446,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test failure to deconfigure Global LAN Segments if objects are in use.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         # graphiant_config.global_config.deconfigure_lan_segments("sample_global_lan_segments.yaml")
         result = graphiant_config.global_config.deconfigure("sample_global_lan_segments.yaml")
         LOG.info("Deconfigure Global LAN segments result: %s", result)
@@ -391,8 +461,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global Site Lists.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.global_config.configure_site_lists("sample_global_site_lists.yaml")
         LOG.info("Configure Global Site Lists result: %s", result)
         result = graphiant_config.global_config.configure_site_lists("sample_global_site_lists.yaml")
@@ -403,8 +472,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Global Site Lists.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.global_config.deconfigure_site_lists("sample_global_site_lists.yaml")
         LOG.info("Deconfigure Global Site Lists result: %s", result)
         result = graphiant_config.global_config.deconfigure_site_lists("sample_global_site_lists.yaml")
@@ -421,8 +489,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test getting global site lists.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         site_lists = graphiant_config.config_utils.gsdk.get_global_site_lists()
         LOG.info("Global Site Lists: %s found", len(site_lists))
         for site_list in site_lists:
@@ -432,8 +499,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Create Sites (if site doesn't exist).
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.configure_sites("sample_sites.yaml")
         LOG.info("Configure Sites result: %s", result)
         result = graphiant_config.sites.configure_sites("sample_sites.yaml")
@@ -444,8 +510,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Delete Sites (if site exists).
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.deconfigure_sites("sample_sites.yaml")
         LOG.info("Deconfigure Sites result: %s", result)
         result = graphiant_config.sites.deconfigure_sites("sample_sites.yaml")
@@ -456,8 +521,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Sites: Create sites and attach global objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.configure("sample_sites.yaml")
         LOG.info("Configure Sites and attach objects result: %s", result)
         result = graphiant_config.sites.configure("sample_sites.yaml")
@@ -468,8 +532,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Test getting detailed site information using v1/sites/details API.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         sites_details = graphiant_config.config_utils.gsdk.get_sites_details()
         LOG.info("Sites Details: %s sites found", len(sites_details))
         for site in sites_details:
@@ -485,8 +548,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Sites: Detach global objects and delete sites.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.deconfigure("sample_sites.yaml")
         LOG.info("Detach objects and deconfigure sites result: %s", result)
         result = graphiant_config.sites.deconfigure("sample_sites.yaml")
@@ -497,8 +559,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Attach Objects: Attach global system objects to existing sites.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.attach_objects("sample_sites.yaml")
         LOG.info("Attach objects to sites result: %s", result)
         result = graphiant_config.sites.attach_objects("sample_sites.yaml")
@@ -509,8 +570,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Detach Objects: Detach global system objects from sites.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.detach_objects("sample_sites.yaml")
         LOG.info("Detach objects from sites result: %s", result)
         result = graphiant_config.sites.detach_objects("sample_sites.yaml")
@@ -521,8 +581,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Attach Global System Objects (SNMP, Syslog, IPFIX etc) to Sites.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.attach_objects("sample_site_attachments.yaml")
         LOG.info("Attach global system objects to site result: %s", result)
         result = graphiant_config.sites.attach_objects("sample_site_attachments.yaml")
@@ -533,8 +592,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Detach Global System Objects (SNMP, Syslog, IPFIX etc) from Sites.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.sites.detach_objects("sample_site_attachments.yaml")
         LOG.info("Detach global system objects from site result: %s", result)
         result = graphiant_config.sites.detach_objects("sample_site_attachments.yaml")
@@ -545,8 +603,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure WAN circuits and wan interfaces for multiple devices in a single operation.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.configure_wan_circuits_interfaces(
             circuit_config_file="sample_circuit_config.yaml",
             interface_config_file="sample_interface_config.yaml"
@@ -562,8 +619,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Circuits for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.configure_circuits(
             circuit_config_file="sample_circuit_config.yaml",
             interface_config_file="sample_interface_config.yaml")
@@ -577,8 +633,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Circuits staticRoutes for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.deconfigure_circuits(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
@@ -593,8 +648,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure WAN circuits and interfaces for multiple devices in a single operation.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.deconfigure_wan_circuits_interfaces(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml"
@@ -611,8 +665,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure LAN interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.configure_lan_interfaces("sample_interface_config.yaml")
         LOG.info("Configure LAN interfaces result: %s", result)
         result = graphiant_config.interfaces.configure_lan_interfaces("sample_interface_config.yaml")
@@ -622,8 +675,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure LAN interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.deconfigure_lan_interfaces("sample_interface_config.yaml")
         LOG.info("Deconfigure LAN interfaces result: %s", result)
         result = graphiant_config.interfaces.deconfigure_lan_interfaces("sample_interface_config.yaml")
@@ -634,8 +686,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Interfaces of all types.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.configure_interfaces(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
@@ -649,8 +700,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure Interfaces (i.e Reset parent interface to default lan and delete subinterfaces)
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.interfaces.deconfigure_interfaces(
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
@@ -665,8 +715,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure VRRP (Virtual Router Redundancy Protocol) on interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
         LOG.info("Configure VRRP interfaces result: %s", result)
         result = graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
@@ -676,8 +725,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure VRRP (Virtual Router Redundancy Protocol) from interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
         LOG.info("Deconfigure VRRP interfaces result: %s", result)
         result = graphiant_config.vrrp_interfaces.deconfigure("sample_vrrp_config.yaml")
@@ -688,8 +736,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Enable existing VRRP (Virtual Router Redundancy Protocol) configurations on interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.vrrp_interfaces.enable_vrrp_interfaces("sample_vrrp_config.yaml")
         LOG.info("Enable VRRP interfaces result: %s", result)
         result = graphiant_config.vrrp_interfaces.enable_vrrp_interfaces("sample_vrrp_config.yaml")
@@ -700,8 +747,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure LAG (Link Aggregation Group) on interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.lag_interfaces.configure("sample_lag_interface_config.yaml")
         LOG.info("Configure LAG interfaces result: %s", result)
         result = graphiant_config.lag_interfaces.configure("sample_lag_interface_config.yaml")
@@ -711,8 +757,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Update LACP configurations for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.lag_interfaces.update_lacp_configs("sample_lag_interface_config.yaml")
         LOG.info("Update LACP configurations result: %s", result)
         result = graphiant_config.lag_interfaces.update_lacp_configs("sample_lag_interface_config.yaml")
@@ -723,8 +768,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Add LAG members to interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.lag_interfaces.add_lag_members("sample_lag_interface_config.yaml")
         LOG.info("Add LAG members result: %s", result)
         result = graphiant_config.lag_interfaces.add_lag_members("sample_lag_interface_config.yaml")
@@ -735,8 +779,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Remove LAG members from interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.lag_interfaces.remove_lag_members("sample_lag_interface_config.yaml")
         LOG.info("Remove LAG members result: %s", result)
         result = graphiant_config.lag_interfaces.remove_lag_members("sample_lag_interface_config.yaml")
@@ -747,8 +790,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Delete LAG subinterfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.lag_interfaces.delete_lag_subinterfaces("sample_lag_interface_config.yaml")
         LOG.info("Delete LAG subinterfaces result: %s", result)
         result = graphiant_config.lag_interfaces.delete_lag_subinterfaces("sample_lag_interface_config.yaml")
@@ -759,8 +801,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Deconfigure LAG (Link Aggregation Group) from interfaces for multiple devices.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.lag_interfaces.deconfigure("sample_lag_interface_config.yaml")
         LOG.info("Deconfigure LAG interfaces result: %s", result)
         result = graphiant_config.lag_interfaces.deconfigure("sample_lag_interface_config.yaml")
@@ -771,80 +812,70 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure BGP Peering.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.bgp.configure("sample_bgp_peering.yaml")
 
     def test_deconfigure_bgp_peering(self):
         """
         Deconfigure BGP Peering.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.bgp.deconfigure("sample_bgp_peering.yaml")
 
     def test_detach_policies_from_bgp_peers(self):
         """
         Detach policies from BGP peers.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.bgp.detach_policies("sample_bgp_peering.yaml")
 
     def test_create_data_exchange_services(self):
         """
         Create Data Exchange Services.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.create_services("de_workflows_configs/sample_data_exchange_services.yaml")
 
     def test_get_data_exchange_services_summary(self):
         """
         Get Data Exchange Services Summary.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.get_services_summary()
 
     def test_delete_data_exchange_services(self):
         """
         Delete Data Exchange Services.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.delete_services("de_workflows_configs/sample_data_exchange_services.yaml")
 
     def test_create_data_exchange_customers(self):
         """
         Create Data Exchange Customers.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.create_customers("de_workflows_configs/sample_data_exchange_customers.yaml")
 
     def test_get_data_exchange_customers_summary(self):
         """
         Get Data Exchange Customers Summary.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.get_customers_summary()
 
     def test_delete_data_exchange_customers(self):
         """
         Delete Data Exchange Customers.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.delete_customers("de_workflows_configs/sample_data_exchange_customers.yaml")
 
     def test_match_data_exchange_service_to_customers(self):
         """
         Match Data Exchange Service to Customer.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         graphiant_config.data_exchange.match_service_to_customers(
             "de_workflows_configs/sample_data_exchange_matches.yaml")
 
@@ -852,10 +883,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Accept Data Exchange Service Invitation (Workflow 4) in check mode.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(
-            base_url=base_url, username=username, password=password, check_mode=True
-        )
+        graphiant_config = graphiant_config_from_read_config(check_mode=True)
 
         # Test accept_invitation with configuration file (check mode skips API calls)
         config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
@@ -871,8 +899,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Show validated payload for device configuration.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.device_config.show_validated_payload(
             config_yaml_file="sample_device_config_payload.yaml"
         )
@@ -882,8 +909,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure device configuration.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.device_config.configure(
             config_yaml_file="sample_device_config_with_template.yaml",
             template_file="device_config_template.yaml")
@@ -894,8 +920,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         Create Site-to-Site VPN. Copies vault_secrets.yml.example to vault_secrets.yml,
         encrypts with vault-password-file.sh (uses ANSIBLE_VAULT_PASSPHRASE or 'test-vault-pass' if unset), then creates VPN.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         config_path = graphiant_config.config_utils.config_path
 
         # Copy example to vault_secrets.yml and encrypt (use ANSIBLE_VAULT_PASSPHRASE or default for tests)
@@ -954,8 +979,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         Delete Site-to-Site VPN. Second run is idempotent: no VPNs to delete (already absent),
         so changed=False and no API push.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.site_to_site_vpn.delete_site_to_site_vpn("sample_site_to_site_vpn.yaml")
         LOG.info("Delete Site-to-Site VPN result: %s", result)
         result2 = graphiant_config.site_to_site_vpn.delete_site_to_site_vpn("sample_site_to_site_vpn.yaml")
@@ -968,8 +992,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
         Second run should be idempotent (changed=False) if desired state already matches.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
 
         result = graphiant_config.static_routes.configure("sample_static_route.yaml")
         LOG.info("Configure static routes result: %s", result)
@@ -983,8 +1006,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
         Second run should be idempotent (changed=False) when routes are already absent.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
 
         result = graphiant_config.static_routes.deconfigure("sample_static_route.yaml")
         LOG.info("Deconfigure static routes result: %s", result)
@@ -996,8 +1018,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure Global NTP objects.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
         result = graphiant_config.global_config.configure("sample_global_ntp.yaml")
         LOG.info("Configure global NTP result: %s", result)
         result2 = graphiant_config.global_config.configure("sample_global_ntp.yaml")
@@ -1009,8 +1030,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
         Second run should be idempotent (changed=False) when objects are already absent.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
 
         result = graphiant_config.global_config.deconfigure("sample_global_ntp.yaml")
         LOG.info("Deconfigure global NTP result: %s", result)
@@ -1026,8 +1046,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
         Second run should be idempotent (changed=False) if desired state already matches.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
 
         result = graphiant_config.ntp.configure("sample_device_ntp.yaml")
         LOG.info("Configure device-level NTP result: %s", result)
@@ -1041,8 +1060,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
         Second run should be idempotent (changed=False) when objects are already absent.
         """
-        base_url, username, password = read_config()
-        graphiant_config = GraphiantConfig(base_url=base_url, username=username, password=password)
+        graphiant_config = graphiant_config_from_read_config()
 
         result = graphiant_config.ntp.deconfigure("sample_device_ntp.yaml")
         LOG.info("Deconfigure device-level NTP result: %s", result)
@@ -1053,8 +1071,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
+    # Authentication Tests
     suite.addTest(TestGraphiantPlaybooks('test_get_login_token'))
     suite.addTest(TestGraphiantPlaybooks('test_get_enterprise_id'))
+    suite.addTest(TestGraphiantPlaybooks('test_auth_double_failure_access_token_then_password'))
+    suite.addTest(TestGraphiantPlaybooks('test_auth_invalid_token_fallback_to_valid_password'))
 
     # Global Configuration Management (Prefix Lists and BGP / Graphiant Filters)
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))

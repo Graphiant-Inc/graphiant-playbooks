@@ -53,8 +53,20 @@ LOG = setup_logger()
 # Don't raise at module level to allow import test to pass
 
 
+def _normalize_raw_access_token(value):
+    """Return the token string without a ``Bearer `` prefix, or None if unset/empty."""
+    if value is None:
+        return None
+    t = str(value).strip()
+    if not t:
+        return None
+    if t.lower().startswith('bearer '):
+        t = t[7:].strip()
+    return t or None
+
+
 class GraphiantPortalClient():
-    def __init__(self, base_url=None, username=None, password=None, check_mode=False):
+    def __init__(self, base_url=None, username=None, password=None, access_token=None, check_mode=False):
         if not HAS_GRAPHIANT_SDK:
             raise ImportError("graphiant-sdk is required for this module. Install it with: pip install graphiant-sdk")
         self.config = graphiant_sdk.Configuration(host=base_url,
@@ -64,8 +76,65 @@ class GraphiantPortalClient():
         self.bearer_token = None
         self.enterprise_info = None
         self.check_mode = check_mode
+        self._access_token = access_token
+
+    def _has_password_credentials(self):
+        u = self.config.username
+        p = self.config.password
+        return bool(u is not None and str(u).strip()) and p is not None and str(p) != ''
+
+    @staticmethod
+    def _enterprise_session_ok(info):
+        return bool(info and info.get('enterprise_id') is not None)
 
     def set_bearer_token(self):
+        """
+        Prefer a pre-provisioned access token (SSO / ``graphiant login``), then fall back
+        to username/password login when the token is missing, invalid, or expired.
+        """
+        preprovisioned_token_rejected = False
+        raw = _normalize_raw_access_token(self._access_token)
+        if raw:
+            self.bearer_token = f'Bearer {raw}'
+            self.enterprise_info = self.get_enterprise_info()
+            if self._enterprise_session_ok(self.enterprise_info):
+                LOG.debug("GraphiantPortalClient session established with pre-provisioned access token")
+                LOG.info(
+                    "Graphiant portal session established using access token "
+                    "(e.g. graphiant login / GRAPHIANT_ACCESS_TOKEN)"
+                )
+                LOG.info("GraphiantPortalClient Enterprise info: %s", self.enterprise_info)
+                return
+            preprovisioned_token_rejected = True
+            LOG.warning(
+                "Access token did not establish a valid portal session; "
+                "falling back to username/password if provided"
+            )
+            self.bearer_token = None
+            self.enterprise_info = None
+            if not self._has_password_credentials():
+                raise APIError(
+                    "Access token was invalid or expired, and username/password were not "
+                    "provided for fallback login."
+                )
+
+        if not self._has_password_credentials():
+            raise APIError(
+                "Authentication requires GRAPHIANT_ACCESS_TOKEN (e.g. run graphiant login and "
+                "source ~/.graphiant/env.sh), module option access_token, or username and password."
+            )
+        try:
+            self._login_with_password()
+        except APIError as err:
+            if preprovisioned_token_rejected:
+                raise APIError(
+                    "Access token (GRAPHIANT_ACCESS_TOKEN / access_token) was not accepted by the "
+                    "API, then username/password login also failed. "
+                    f"Login error: {err}"
+                ) from err
+            raise
+
+    def _login_with_password(self):
         v1_auth_login_post_request = \
             graphiant_sdk.V1AuthLoginPostRequest(username=self.config.username,
                                                  password=self.config.password)
@@ -92,7 +161,7 @@ class GraphiantPortalClient():
                 exception=e
             )
             raise APIError(f"v1_auth_login_post: Got {type(e).__name__}. "
-                           f"Please verify crendentials are correct. {e.body}")
+                           f"Please verify credentials are correct. {e.body}")
 
         if not v1_auth_login_post_response.token:
             raise APIError('bearer_token is not retrieved')
