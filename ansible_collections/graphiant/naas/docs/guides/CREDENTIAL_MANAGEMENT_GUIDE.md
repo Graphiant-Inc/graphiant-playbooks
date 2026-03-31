@@ -39,17 +39,22 @@ Use YAML anchors to define credentials once and reuse them:
 
 ### Environment Variables
 
+Password login:
+
 ```bash
 export GRAPHIANT_HOST="https://api.graphiant.com"
 export GRAPHIANT_USERNAME="myuser"
 export GRAPHIANT_PASSWORD="mypass"
 ```
 
+**Bearer token (SSO, Graphiant CLI):** Run `graphiant login`, then `source ~/.graphiant/env.sh` to export `GRAPHIANT_ACCESS_TOKEN`. The bearer token takes precedence when present; if the token is missing, invalid, or expired, the collection falls back to username and password when both are supplied.
+
 ```yaml
 vars:
   graphiant_host: "{{ ansible_env.GRAPHIANT_HOST }}"
   graphiant_username: "{{ ansible_env.GRAPHIANT_USERNAME }}"
   graphiant_password: "{{ ansible_env.GRAPHIANT_PASSWORD }}"
+  graphiant_access_token: "{{ ansible_env.GRAPHIANT_ACCESS_TOKEN }}"
 ```
 
 ### Variable Files

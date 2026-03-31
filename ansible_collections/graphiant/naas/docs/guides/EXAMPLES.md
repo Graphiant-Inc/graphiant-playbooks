@@ -13,6 +13,8 @@ export GRAPHIANT_HOST="https://api.graphiant.com"
 export GRAPHIANT_USERNAME="your_username"
 export GRAPHIANT_PASSWORD="your_password"
 
+# Alternative (SSO): graphiant login, then source ~/.graphiant/env.sh for GRAPHIANT_ACCESS_TOKEN
+
 # Optional: Enable debug callback for readable detailed_logs output (removes `\n` characters)
 export ANSIBLE_STDOUT_CALLBACK=debug
 ```

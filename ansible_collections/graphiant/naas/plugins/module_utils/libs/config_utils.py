@@ -19,9 +19,15 @@ class ConfigUtils(PortalUtils):
     configuration payloads with proper error handling and logging.
     """
 
-    def __init__(self, base_url=None, username=None, password=None, **kwargs):
+    def __init__(self, base_url=None, username=None, password=None, access_token=None, **kwargs):
         """Initialize ConfigUtils with portal connection and template renderer."""
-        super().__init__(base_url=base_url, username=username, password=password, **kwargs)
+        super().__init__(
+            base_url=base_url,
+            username=username,
+            password=password,
+            access_token=access_token,
+            **kwargs
+        )
         self.template = ConfigTemplates(self.template_path)
 
     def _validate_required_params(self, kwargs, required_params):
