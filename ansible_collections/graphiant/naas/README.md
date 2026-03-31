@@ -476,7 +476,10 @@ The test suite (`tests/test.py`) requires `GRAPHIANT_HOST` and either `GRAPHIANT
 export GRAPHIANT_HOST="https://api.graphiant.com"
 export GRAPHIANT_USERNAME="your_username"
 export GRAPHIANT_PASSWORD="your_password"
-# Or: export GRAPHIANT_ACCESS_TOKEN="..."  # e.g. after graphiant login
+
+# Alternatively, sign in with the Graphiant CLI (SSO) and load credentials into the shell:
+#   graphiant login && source ~/.graphiant/env.sh
+# That exports GRAPHIANT_ACCESS_TOKEN; the collection prefers the bearer token over username/password when set.
 
 # From repo root (recommended): set PYTHONPATH then run
 export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils

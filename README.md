@@ -10,15 +10,20 @@ Automated network infrastructure management for [Graphiant Network-as-a-Service 
 
 Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com) offerings.
 
-## Graphiant portal authentication
+## Graphiant API Authentication
 
-Automation in this repository talks to the Graphiant API using a **portal access token** or **username/password**. The recommended local setup matches [Test Infrastructure](https://gitlab.com/graphiant/oss/test-infrastructure/-/blob/main/README.md) **Quick Start → Set Graphiant Environment Variables**: use the **graphiant** CLI to obtain a token, or export tester credentials.
-
-### Option 1: Graphiant CLI (`graphiant login`)
+Automation in this repository talks to the Graphiant API using a **access token** or **username/password**.
 
 ```bash
-# Fetch a Graphiant portal API access token using the graphiant CLI
-graphiant login --portal-url https://portal.test.graphiant.io
+# Set Graphiant API Endpoint URL
+export GRAPHIANT_HOST="https://api.graphiant.com"
+```
+
+### Option 1: Set Graphiant API ACCESS TOKEN
+
+```bash
+# Fetch a Graphiant API access token using the graphiant CLI
+graphiant login
 source ~/.graphiant/env.sh
 
 # Optional: reload shell configuration so the token is available in new terminals
@@ -30,15 +35,16 @@ env | grep GRAPHIANT_ACCESS_TOKEN
 
 The Ansible collection accepts `access_token` on modules and honors **`GRAPHIANT_ACCESS_TOKEN`** when set (bearer auth is used before username/password when the token is valid). See [Credential Management Guide](ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md).
 
-### Option 2: Portal username and password
+### Option 2: Set Graphiant Portal User Login Credentials
 
 ```bash
 # Add to your shell profile (~/.zshrc, ~/.bashrc, etc.) or export for the session
-export TESTER_USER_EMAIL='your-email@graphiant.com'
-export TESTER_USER_PASSWORD='your-password'
+export GRAPHIANT_USERNAME="your_username"
+export GRAPHIANT_PASSWORD="your_password"
 
-# Verify
-env | grep TESTER
+# Verify the environment variables
+env | grep GRAPHIANT_USERNAME
+env | grep GRAPHIANT_PASSWORD
 ```
 
 Pass `username` / `password` (or your vault equivalents) into playbooks and roles as required by each module.
