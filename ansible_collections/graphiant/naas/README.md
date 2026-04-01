@@ -40,7 +40,7 @@ This collection provides Ansible modules to automate:
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) for details.
 
-> **Authentication:** Configure `GRAPHIANT_HOST`, **`graphiant login`** + `GRAPHIANT_ACCESS_TOKEN`, or username/password — follow **[Graphiant API Authentication](https://github.com/Graphiant-Inc/graphiant-playbooks/tree/main?tab=readme-ov-file#graphiant-api-authentication)** in the graphiant-playbooks repository README, then use this collection’s [Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for module-specific options.
+> **Authentication:** Configure `GRAPHIANT_HOST`, **`graphiant login`** + `GRAPHIANT_ACCESS_TOKEN`, or username/password — follow **[Graphiant API Authentication](https://github.com/Graphiant-Inc/graphiant-playbooks/tree/main?tab=readme-ov-file#graphiant-api-authentication)** in the graphiant-playbooks repository README, then use this collection's [Credential Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md) for module-specific options.
 
 ## Included Content
 
