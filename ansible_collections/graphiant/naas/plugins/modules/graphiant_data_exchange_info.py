@@ -13,7 +13,7 @@ This module provides query capabilities for Data Exchange:
 - Service health monitoring
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_data_exchange_info
 short_description: Query Graphiant Data Exchange services, customers, and health information
@@ -85,9 +85,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Get Data Exchange services summary
   graphiant.naas.graphiant_data_exchange_info:
     query: services_summary
@@ -141,9 +141,9 @@ EXAMPLES = r'''
 - name: Display service health (provider view)
   ansible.builtin.debug:
     msg: "{{ service_health_provider.msg }}"
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the query operation, including detailed logs when O(detailed_logs) is enabled.
@@ -179,7 +179,7 @@ query:
   type: str
   returned: always
   sample: "services_summary"
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
@@ -206,23 +206,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'result_msg' and 'result_data' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Query completed successfully')
+    success_msg = kwargs.pop("success_msg", "Query completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'result_msg' and 'result_data' keys, use them
-        if isinstance(result, dict) and 'result_msg' in result:
-            return {
-                'result_msg': result.get('result_msg', success_msg),
-                'result_data': result.get('result_data', {})
-            }
+        if isinstance(result, dict) and "result_msg" in result:
+            return {"result_msg": result.get("result_msg", success_msg), "result_data": result.get("result_data", {})}
 
         # Fallback for functions that return data directly
-        return {
-            'result_msg': success_msg,
-            'result_data': result if isinstance(result, dict) else {}
-        }
+        return {"result_msg": success_msg, "result_data": result if isinstance(result, dict) else {}}
     except Exception as e:
         raise e
 
@@ -233,32 +227,22 @@ def main():
     # Define module arguments
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        query=dict(
-            type='str',
-            required=True,
-            choices=[
-                'services_summary',
-                'customers_summary',
-                'service_health'
-            ]
-        ),
-        service_name=dict(type='str', required=False),
-        is_provider=dict(type='bool', default=False),
-        detailed_logs=dict(type='bool', default=False)
+        query=dict(type="str", required=True, choices=["services_summary", "customers_summary", "service_health"]),
+        service_name=dict(type="str", required=False),
+        is_provider=dict(type="bool", default=False),
+        detailed_logs=dict(type="bool", default=False),
     )
 
     # Create module instance
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        required_if=[
-            ('query', 'service_health', ['service_name'])
-        ]
+        required_if=[("query", "service_health", ["service_name"])],
     )
 
     # Get parameters
     params = module.params
-    query = params.get('query')
+    query = params.get("query")
 
     try:
         # Get Graphiant connection
@@ -271,48 +255,53 @@ def main():
         result_msg = ""
         result_data = {}
 
-        if query == 'services_summary':
-            result = execute_with_logging(module, graphiant_config.data_exchange.get_services_summary,
-                                          success_msg="Successfully retrieved Data Exchange services summary")
-            result_msg = result['result_msg']
-            result_data = result.get('result_data', {})
+        if query == "services_summary":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.get_services_summary,
+                success_msg="Successfully retrieved Data Exchange services summary",
+            )
+            result_msg = result["result_msg"]
+            result_data = result.get("result_data", {})
 
-        elif query == 'customers_summary':
-            result = execute_with_logging(module, graphiant_config.data_exchange.get_customers_summary,
-                                          success_msg="Successfully retrieved Data Exchange customers summary")
-            result_msg = result['result_msg']
-            result_data = result.get('result_data', {})
+        elif query == "customers_summary":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.get_customers_summary,
+                success_msg="Successfully retrieved Data Exchange customers summary",
+            )
+            result_msg = result["result_msg"]
+            result_data = result.get("result_data", {})
 
-        elif query == 'service_health':
-            service_name = params.get('service_name')
-            is_provider = params.get('is_provider', False)
+        elif query == "service_health":
+            service_name = params.get("service_name")
+            is_provider = params.get("is_provider", False)
 
             if not service_name:
                 module.fail_json(msg="service_health query requires service_name parameter")
 
             result = execute_with_logging(
-                module, graphiant_config.data_exchange.get_service_health, service_name, is_provider,
-                success_msg=f"Successfully retrieved service health for service {service_name}")
-            result_msg = result['result_msg']
-            result_data = result.get('result_data', {})
+                module,
+                graphiant_config.data_exchange.get_service_health,
+                service_name,
+                is_provider,
+                success_msg=f"Successfully retrieved service health for service {service_name}",
+            )
+            result_msg = result["result_msg"]
+            result_data = result.get("result_data", {})
 
         else:
             module.fail_json(
                 msg=f"Unsupported query: {query}. "
-                    f"Supported queries are: services_summary, customers_summary, service_health"
+                f"Supported queries are: services_summary, customers_summary, service_health"
             )
 
         # Return success (always changed=False for info modules)
-        module.exit_json(
-            changed=False,
-            msg=result_msg,
-            query=query,
-            result_data=result_data
-        )
+        module.exit_json(changed=False, msg=result_msg, query=query, result_data=result_data)
 
     except Exception as e:
         module.fail_json(msg=f"Error executing query: {str(e)}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

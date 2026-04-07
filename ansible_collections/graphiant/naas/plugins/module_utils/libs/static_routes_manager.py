@@ -36,7 +36,7 @@ class StaticRoutesManager(BaseManager):
         This checks only the segments/prefixes present in the desired payload.
         """
         desired_edge = (desired_payload or {}).get("edge") or {}
-        desired_segments = (desired_edge.get("segments") or {})
+        desired_segments = desired_edge.get("segments") or {}
         if not desired_segments:
             return False
 
@@ -61,7 +61,9 @@ class StaticRoutesManager(BaseManager):
 
             for prefix, desired_entry in desired_static_routes.items():
                 desired_route = (desired_entry or {}).get("route")
-                existing_entry = existing_static_routes.get(prefix) if isinstance(existing_static_routes, dict) else None
+                existing_entry = (
+                    existing_static_routes.get(prefix) if isinstance(existing_static_routes, dict) else None
+                )
                 existing_route = (existing_entry or {}).get("route") if isinstance(existing_entry, dict) else None
 
                 # Deconfigure semantics: route=null should be a no-op if missing/already-null
@@ -326,9 +328,7 @@ class StaticRoutesManager(BaseManager):
 
         return static_routes_payload
 
-    def _iter_device_payloads(
-        self, config_yaml_file: str, operation: str
-    ) -> Iterator[Tuple[int, str, Dict[str, Any]]]:
+    def _iter_device_payloads(self, config_yaml_file: str, operation: str) -> Iterator[Tuple[int, str, Dict[str, Any]]]:
         """
         Iterate through the YAML and yield per-device payloads.
 
@@ -398,8 +398,7 @@ class StaticRoutesManager(BaseManager):
             except Exception:
                 device_info_dict = gcs_device_info
             if not self._payload_differs_from_existing(payload, device_info_dict):
-                LOG.info("[static-routes] ✓ No changes needed for %s (ID: %s), skipping",
-                         device_name, device_id)
+                LOG.info("[static-routes] ✓ No changes needed for %s (ID: %s), skipping", device_name, device_id)
                 result["skipped_devices"].append(device_name)
                 continue
 

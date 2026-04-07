@@ -29,8 +29,8 @@ source ~/.graphiant/env.sh
 # Optional: reload shell configuration so the token is available in new terminals
 source ~/.zshrc
 
-# Verify the environment variable
-env | grep GRAPHIANT_ACCESS_TOKEN
+# Verify the variable is set without printing its value
+[ -n "$GRAPHIANT_ACCESS_TOKEN" ] && echo "GRAPHIANT_ACCESS_TOKEN is set"
 ```
 
 The Ansible collection accepts `access_token` on modules and honors **`GRAPHIANT_ACCESS_TOKEN`** when set (bearer auth is used before username/password when the token is valid). See [Credential Management Guide](ansible_collections/graphiant/naas/docs/guides/CREDENTIAL_MANAGEMENT_GUIDE.md).
@@ -42,9 +42,9 @@ The Ansible collection accepts `access_token` on modules and honors **`GRAPHIANT
 export GRAPHIANT_USERNAME="your_username"
 export GRAPHIANT_PASSWORD="your_password"
 
-# Verify the environment variables
-env | grep GRAPHIANT_USERNAME
-env | grep GRAPHIANT_PASSWORD
+# Verify the variables are set without printing their values. Avoid echoing them or piping env through grep—that exposes secrets.
+[ -n "$GRAPHIANT_USERNAME" ] && echo "GRAPHIANT_USERNAME is set"
+[ -n "$GRAPHIANT_PASSWORD" ] && echo "GRAPHIANT_PASSWORD is set"
 ```
 
 Pass `username` / `password` (or your vault equivalents) into playbooks and roles as required by each module.

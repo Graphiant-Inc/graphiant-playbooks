@@ -36,31 +36,30 @@ class BGPManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {'changed': False, 'configured_devices': []}
+        result = {"changed": False, "configured_devices": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
             final_config_payload = {}
 
-            if 'bgp_peering' not in config_data:
+            if "bgp_peering" not in config_data:
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return result
 
-            for device_config in config_data.get('bgp_peering'):
+            for device_config in config_data.get("bgp_peering"):
                 for device_name, config in device_config.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
                         if device_id is None:
-                            raise DeviceNotFoundError(f"Device '{device_name}' not found in the current enterprise: "
-                                                      f"{self.gsdk.enterprise_info['company_name']}. "
-                                                      f"Please check device name and enterprise credentials.")
+                            raise DeviceNotFoundError(
+                                f"Device '{device_name}' not found in the current enterprise: "
+                                f"{self.gsdk.enterprise_info['company_name']}. "
+                                f"Please check device name and enterprise credentials."
+                            )
                         config_payload = {}
                         self.config_utils.device_bgp_peering(config_payload, **config)
 
-                        final_config_payload[device_id] = {
-                            "device_id": device_id,
-                            "edge": config_payload
-                        }
+                        final_config_payload[device_id] = {"device_id": device_id, "edge": config_payload}
 
                         LOG.info("Configured BGP peering for device: %s (ID: %s)", device_name, device_id)
 
@@ -73,8 +72,8 @@ class BGPManager(BaseManager):
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
-                result['changed'] = True
-                result['configured_devices'] = list(final_config_payload.keys())
+                result["changed"] = True
+                result["configured_devices"] = list(final_config_payload.keys())
                 LOG.info("Successfully configured BGP peering for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
@@ -101,31 +100,30 @@ class BGPManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {'changed': False, 'deconfigured_devices': []}
+        result = {"changed": False, "deconfigured_devices": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
             final_config_payload = {}
 
-            if 'bgp_peering' not in config_data:
+            if "bgp_peering" not in config_data:
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return result
 
-            for device_config in config_data.get('bgp_peering'):
+            for device_config in config_data.get("bgp_peering"):
                 for device_name, config in device_config.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
                         if device_id is None:
-                            raise DeviceNotFoundError(f"Device '{device_name}' not found in the current enterprise: "
-                                                      f"{self.gsdk.enterprise_info['company_name']}. "
-                                                      f"Please check device name and enterprise credentials.")
+                            raise DeviceNotFoundError(
+                                f"Device '{device_name}' not found in the current enterprise: "
+                                f"{self.gsdk.enterprise_info['company_name']}. "
+                                f"Please check device name and enterprise credentials."
+                            )
                         config_payload = {}
                         self.config_utils.device_bgp_peering(config_payload, action="delete", **config)
 
-                        final_config_payload[device_id] = {
-                            "device_id": device_id,
-                            "edge": config_payload
-                        }
+                        final_config_payload[device_id] = {"device_id": device_id, "edge": config_payload}
 
                         LOG.info("Deconfigured BGP peering for device: %s (ID: %s)", device_name, device_id)
 
@@ -138,8 +136,8 @@ class BGPManager(BaseManager):
 
             if final_config_payload:
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, final_config_payload)
-                result['changed'] = True
-                result['deconfigured_devices'] = list(final_config_payload.keys())
+                result["changed"] = True
+                result["deconfigured_devices"] = list(final_config_payload.keys())
                 LOG.info("Successfully deconfigured BGP peering for %s devices", len(final_config_payload))
             else:
                 LOG.warning("No valid BGP configurations found")
@@ -165,25 +163,24 @@ class BGPManager(BaseManager):
             config_data = self.render_config_file(config_yaml_file)
             final_config_payload = {}
 
-            if 'bgp_peering' not in config_data:
+            if "bgp_peering" not in config_data:
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return
 
-            for device_config in config_data.get('bgp_peering'):
+            for device_config in config_data.get("bgp_peering"):
                 for device_name, config in device_config.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
                         if device_id is None:
-                            raise DeviceNotFoundError(f"Device '{device_name}' not found in the current enterprise: "
-                                                      f"{self.gsdk.enterprise_info['company_name']}. "
-                                                      f"Please check device name and enterprise credentials.")
+                            raise DeviceNotFoundError(
+                                f"Device '{device_name}' not found in the current enterprise: "
+                                f"{self.gsdk.enterprise_info['company_name']}. "
+                                f"Please check device name and enterprise credentials."
+                            )
                         config_payload = {}
                         self.config_utils.device_bgp_peering(config_payload, action="unlink", **config)
 
-                        final_config_payload[device_id] = {
-                            "device_id": device_id,
-                            "edge": config_payload
-                        }
+                        final_config_payload[device_id] = {"device_id": device_id, "edge": config_payload}
 
                         LOG.info("Detached policies from BGP peers for device: %s (ID: %s)", device_name, device_id)
 

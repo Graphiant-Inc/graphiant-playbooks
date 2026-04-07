@@ -147,12 +147,20 @@ python scripts/build_collection.py
 **Linting tools (run locally):**
 ```bash
 # Install development tools needed for linting
-pip install flake8 pylint djlint ansible-lint pre-commit
+source venv/bin/activate
+pip install black flake8 pylint djlint ansible-lint pre-commit
 
-# Python linting with flake8 (local development only, not in CI). E501 will be addressed soon.
-flake8 ansible_collections/graphiant/naas/plugins/ --ignore=E501,W503,W504
+# Python code formatting check with black (runs in CI)
+black ansible_collections/graphiant/naas/plugins/ -l 120 --check
 
-# Python linting with pylint (errors only, local development only, not in CI)
+# Python code formatting with black if required
+black ansible_collections/graphiant/naas/plugins/ -l 120 --check --diff
+black ansible_collections/graphiant/naas/plugins/ -l 120
+
+# Python linting with flake8 (runs in CI)
+flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
+
+# Python linting with pylint (runs in CI)
 export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/
 pylint --errors-only ansible_collections/graphiant/naas/plugins/
 
@@ -177,7 +185,7 @@ antsibull-docs lint-collection-docs ansible_collections/graphiant/naas/
 antsibull-changelog lint-changelog-yaml ansible_collections/graphiant/naas/changelogs/changelog.yaml
 ```
 
-**Note:** CI/CD pipelines run `ansible-lint`, `djlint`, and `antsibull-docs` linting. `flake8` and `pylint` are available for local development but are not part of the CI pipeline. See `.github/workflows/README.md` for CI/CD configuration.
+**Note:** CI/CD runs the **`python-lint`** job (`black --check` at line length 120, `flake8` with `--max-line-length=120`, and `pylint --errors-only`) on `ansible_collections/graphiant/naas/plugins/`, plus `ansible-lint`, `djlint`, `antsibull-docs` / changelog lint, `ansible-test` sanity, and the Ansible inclusion checklist. For local development, optional **pre-commit** hooks at the repository root (see `.pre-commit-config.yaml`) run `flake8` and `pylint` on the same plugin tree when configured. See `.github/workflows/README.md` for workflow details.
 
 ## Using This Collection
 

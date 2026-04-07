@@ -11,6 +11,7 @@ try:
         NotFoundException,
         ServiceException,
     )
+
     HAS_GRAPHIANT_SDK = True
 except ImportError:
     HAS_GRAPHIANT_SDK = False
@@ -33,6 +34,7 @@ except ImportError:
 
     class ServiceException(Exception):
         pass
+
 
 try:
     from pydantic import ValidationError
@@ -60,17 +62,16 @@ def _normalize_raw_access_token(value):
     t = str(value).strip()
     if not t:
         return None
-    if t.lower().startswith('bearer '):
+    if t.lower().startswith("bearer "):
         t = t[7:].strip()
     return t or None
 
 
-class GraphiantPortalClient():
+class GraphiantPortalClient:
     def __init__(self, base_url=None, username=None, password=None, access_token=None, check_mode=False):
         if not HAS_GRAPHIANT_SDK:
             raise ImportError("graphiant-sdk is required for this module. Install it with: pip install graphiant-sdk")
-        self.config = graphiant_sdk.Configuration(host=base_url,
-                                                  username=username, password=password)
+        self.config = graphiant_sdk.Configuration(host=base_url, username=username, password=password)
         self.api_client = graphiant_sdk.ApiClient(self.config)
         self.api = graphiant_sdk.DefaultApi(self.api_client)
         self.bearer_token = None
@@ -81,11 +82,11 @@ class GraphiantPortalClient():
     def _has_password_credentials(self):
         u = self.config.username
         p = self.config.password
-        return bool(u is not None and str(u).strip()) and p is not None and str(p) != ''
+        return bool(u is not None and str(u).strip()) and p is not None and str(p) != ""
 
     @staticmethod
     def _enterprise_session_ok(info):
-        return bool(info and info.get('enterprise_id') is not None)
+        return bool(info and info.get("enterprise_id") is not None)
 
     def set_bearer_token(self):
         """
@@ -95,7 +96,7 @@ class GraphiantPortalClient():
         preprovisioned_token_rejected = False
         raw = _normalize_raw_access_token(self._access_token)
         if raw:
-            self.bearer_token = f'Bearer {raw}'
+            self.bearer_token = f"Bearer {raw}"
             self.enterprise_info = self.get_enterprise_info()
             if self._enterprise_session_ok(self.enterprise_info):
                 LOG.debug("GraphiantPortalClient session established with pre-provisioned access token")
@@ -135,40 +136,39 @@ class GraphiantPortalClient():
             raise
 
     def _login_with_password(self):
-        v1_auth_login_post_request = \
-            graphiant_sdk.V1AuthLoginPostRequest(username=self.config.username,
-                                                 password=self.config.password)
+        v1_auth_login_post_request = graphiant_sdk.V1AuthLoginPostRequest(
+            username=self.config.username, password=self.config.password
+        )
         v1_auth_login_post_response = None
         try:
             v1_auth_login_post_response = self.api.v1_auth_login_post(
-                v1_auth_login_post_request=v1_auth_login_post_request)
+                v1_auth_login_post_request=v1_auth_login_post_request
+            )
         except BadRequestException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/auth/login"
             self._log_api_error(
                 method_name="v1_auth_login_post",
                 api_url=api_url,
                 # request_body=v1_auth_login_post_request.to_dict(),
-                exception=e
+                exception=e,
             )
-            raise APIError(f"v1_auth_login_post: Got BadRequestException. "
-                           f"Please verify payload is correct. {e.body}")
+            raise APIError(
+                f"v1_auth_login_post: Got BadRequestException. " f"Please verify payload is correct. {e.body}"
+            )
 
         except (UnauthorizedException, ServiceException) as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/auth/login"
-            self._log_api_error(
-                method_name="v1_auth_login_post",
-                api_url=api_url,
-                exception=e
+            self._log_api_error(method_name="v1_auth_login_post", api_url=api_url, exception=e)
+            raise APIError(
+                f"v1_auth_login_post: Got {type(e).__name__}. " f"Please verify credentials are correct. {e.body}"
             )
-            raise APIError(f"v1_auth_login_post: Got {type(e).__name__}. "
-                           f"Please verify credentials are correct. {e.body}")
 
         if not v1_auth_login_post_response.token:
-            raise APIError('bearer_token is not retrieved')
+            raise APIError("bearer_token is not retrieved")
         # Security: Do not log the actual bearer token to prevent credential exposure
         LOG.debug("GraphiantPortalClient Bearer token retrieved successfully")
         LOG.info("Graphiant Portal Bearer token retrieved successfully !!! ")
-        self.bearer_token = f'Bearer {v1_auth_login_post_response.token}'
+        self.bearer_token = f"Bearer {v1_auth_login_post_response.token}"
         # Get and log enterprise information
         self.enterprise_info = self.get_enterprise_info()
         LOG.info("GraphiantPortalClient Enterprise info: %s", self.enterprise_info)
@@ -185,15 +185,15 @@ class GraphiantPortalClient():
             current_enterprise_id = None
             try:
                 user_response = self.api.v1_auth_user_get(authorization=self.bearer_token)
-                if user_response and hasattr(user_response, 'enterprise_id'):
+                if user_response and hasattr(user_response, "enterprise_id"):
                     current_enterprise_id = user_response.enterprise_id
             except Exception as e:
                 # Check if it's a Pydantic validation error (enum mismatch)
                 error_str = str(e)
                 is_validation_error = (
-                    (ValidationError and isinstance(e, ValidationError)) or
-                    'validation error' in error_str.lower() or
-                    'must be one of enum values' in error_str
+                    (ValidationError and isinstance(e, ValidationError))
+                    or "validation error" in error_str.lower()
+                    or "must be one of enum values" in error_str
                 )
                 if is_validation_error:
                     # Try to get raw response data to bypass validation
@@ -203,11 +203,13 @@ class GraphiantPortalClient():
                             authorization=self.bearer_token
                         )
                         # Parse JSON manually to extract enterprise_id
-                        response_data = json.loads(raw_response.data.decode('utf-8'))
-                        current_enterprise_id = response_data.get('enterpriseId')
+                        response_data = json.loads(raw_response.data.decode("utf-8"))
+                        current_enterprise_id = response_data.get("enterpriseId")
                         if current_enterprise_id:
-                            LOG.info("get_enterprise_info: Successfully extracted enterprise_id from raw response: %s",
-                                     current_enterprise_id)
+                            LOG.info(
+                                "get_enterprise_info: Successfully extracted enterprise_id from raw response: %s",
+                                current_enterprise_id,
+                            )
                         else:
                             LOG.warning("get_enterprise_info: Could not extract enterprise_id from raw response")
                             return None
@@ -224,38 +226,37 @@ class GraphiantPortalClient():
 
             # Now get all enterprises to find the one matching the current user's enterprise ID
             enterprises_response = self.api.v1_enterprises_get(authorization=self.bearer_token)
-            if enterprises_response and hasattr(enterprises_response, 'enterprises') \
-                    and enterprises_response.enterprises:
+            if (
+                enterprises_response
+                and hasattr(enterprises_response, "enterprises")
+                and enterprises_response.enterprises
+            ):
                 for enterprise in enterprises_response.enterprises:
-                    if getattr(enterprise, 'enterprise_id', None) == current_enterprise_id:
-                        enterprise_name = getattr(enterprise, 'company_name', None)
+                    if getattr(enterprise, "enterprise_id", None) == current_enterprise_id:
+                        enterprise_name = getattr(enterprise, "company_name", None)
                         LOG.info("Connected to enterprise: '%s' (ID: %s)", enterprise_name, current_enterprise_id)
-                        return {
-                            'enterprise_id': current_enterprise_id,
-                            'company_name': enterprise_name
-                        }
+                        return {"enterprise_id": current_enterprise_id, "company_name": enterprise_name}
 
             # If we couldn't find the enterprise details, return just the ID
-            return {
-                'enterprise_id': current_enterprise_id,
-                'company_name': None
-            }
+            return {"enterprise_id": current_enterprise_id, "company_name": None}
 
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/auth/user"
-            self._log_api_error(
-                method_name="get_enterprise_info",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_enterprise_info", api_url=api_url, exception=e)
             return None
         except Exception as e:
             LOG.error("get_enterprise_info: Unexpected error: %s", e)
             return None
 
-    def _log_api_error(self, method_name: str, api_url: str,
-                       path_params: dict = None, query_params: dict = None,
-                       request_body: dict = None, exception: Exception = None):
+    def _log_api_error(
+        self,
+        method_name: str,
+        api_url: str,
+        path_params: dict = None,
+        query_params: dict = None,
+        request_body: dict = None,
+        exception: Exception = None,
+    ):
         """
         Helper method to log API errors with comprehensive parameter information.
 
@@ -347,29 +348,39 @@ class GraphiantPortalClient():
             LOG.debug("get_enterprise_id : %s", device_info.enterprise_id)
             return device_info.enterprise_id
 
-    def get_edges_summary_filter(self, role='gateway', region='us-central-1 (Chicago)', status='active'):
+    def get_edges_summary_filter(self, role="gateway", region="us-central-1 (Chicago)", status="active"):
         """
         Get edges summary filtered by role, region, and status.
         """
         response = self.api.v1_edges_summary_get(authorization=self.bearer_token)
         edges_summary = []
-        LOG.info("get_edges_summary_filter: Getting edges summary for role: %s, region: %s, status: %s",
-                 role, region, status)
+        LOG.info(
+            "get_edges_summary_filter: Getting edges summary for role: %s, region: %s, status: %s", role, region, status
+        )
         for edge_info in response.edges_summary:
             if edge_info.role == role and edge_info.status == status:
-                if hasattr(edge_info, 'override_region') and edge_info.override_region == region:
+                if hasattr(edge_info, "override_region") and edge_info.override_region == region:
                     edges_summary.append(edge_info)
                 elif edge_info.region == region:
                     edges_summary.append(edge_info)
                 else:
                     continue
         if len(edges_summary) > 0:
-            LOG.info("get_edges_summary_filter: Found %s edges summary for role: %s, region: %s, status: %s",
-                     len(edges_summary), role, region, status)
+            LOG.info(
+                "get_edges_summary_filter: Found %s edges summary for role: %s, region: %s, status: %s",
+                len(edges_summary),
+                role,
+                region,
+                status,
+            )
             return edges_summary
         else:
-            LOG.warning("get_edges_summary_filter: No edges summary found for role: %s, region: %s, status: %s",
-                        role, region, status)
+            LOG.warning(
+                "get_edges_summary_filter: No edges summary found for role: %s, region: %s, status: %s",
+                role,
+                region,
+                status,
+            )
             return None
 
     @poller(timeout=120, wait=10)
@@ -383,17 +394,28 @@ class GraphiantPortalClient():
             if edge_summary.tt_conn_count and edge_summary.tt_conn_count == 2:
                 return
             else:
-                LOG.info("verify_device_portal_status: %s tunnel terminitor conn count: %s Expected: tt_conn_count=2. Retrying..",
-                         device_id, edge_summary.tt_conn_count)
-                raise APIError(f"verify_device_portal_status: "
-                               f"{device_id} tunnel terminitor conn count: "
-                               f"{edge_summary.tt_conn_count} Expected: tt_conn_count=2. Retry")
+                LOG.info(
+                    "verify_device_portal_status: %s tunnel terminitor conn count: %s "
+                    "Expected: tt_conn_count=2. Retrying..",
+                    device_id,
+                    edge_summary.tt_conn_count,
+                )
+                raise APIError(
+                    f"verify_device_portal_status: "
+                    f"{device_id} tunnel terminitor conn count: "
+                    f"{edge_summary.tt_conn_count} Expected: tt_conn_count=2. Retry"
+                )
 
         else:
-            LOG.info("verify_device_portal_status: %s Portal Status: %s Expected: Ready. Retrying..",
-                     device_id, edge_summary.portal_status)
-            raise APIError(f"verify_device_portal_status: {device_id} Portal Status: "
-                           f"{edge_summary.portal_status} Expected: Ready. Retrying..")
+            LOG.info(
+                "verify_device_portal_status: %s Portal Status: %s Expected: Ready. Retrying..",
+                device_id,
+                edge_summary.portal_status,
+            )
+            raise APIError(
+                f"verify_device_portal_status: {device_id} Portal Status: "
+                f"{edge_summary.portal_status} Expected: Ready. Retrying.."
+            )
 
     def put_device_config(self, device_id: int, core=None, edge=None):
         """
@@ -413,34 +435,44 @@ class GraphiantPortalClient():
             ApiException/AssertionError: If there is an API exception during the
             config push after retries
         """
-        device_config_put_request = \
-            graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] put_device_config would push config for device_id=%s: %s",
-                     device_id, json.dumps(device_config_put_request.to_dict(), indent=2))
+        device_config_put_request = graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] put_device_config would push config for device_id=%s: %s",
+                device_id,
+                json.dumps(device_config_put_request.to_dict(), indent=2),
+            )
             return None
         try:
             # Verify device portal status and connection status.
             self.verify_device_portal_status(device_id=device_id)
-            LOG.info("put_device_config : config to be pushed for %s: \n%s",
-                     device_id, json.dumps(device_config_put_request.to_dict(), indent=2))
+            LOG.info(
+                "put_device_config : config to be pushed for %s: \n%s",
+                device_id,
+                json.dumps(device_config_put_request.to_dict(), indent=2),
+            )
             response = self.api.v1_devices_device_id_config_put(
-                authorization=self.bearer_token, device_id=device_id,
-                v1_devices_device_id_config_put_request=device_config_put_request)
+                authorization=self.bearer_token,
+                device_id=device_id,
+                v1_devices_device_id_config_put_request=device_config_put_request,
+            )
             # Verify device portal status and connection status.
             self.verify_device_portal_status(device_id=device_id)
             return response
         except ForbiddenException as e:
             LOG.error("put_device_config: Got ForbiddenException while config push %s", e)
-            raise APIError(f"put_device_config : Retrying, Got ForbiddenException "
-                           f"while config push to {device_id}. "
-                           f"User {self.config.username} does not have permissions "
-                           f"to perform the requested operation "
-                           f"(v1_devices_device_id_config_put).")
+            raise APIError(
+                f"put_device_config : Retrying, Got ForbiddenException "
+                f"while config push to {device_id}. "
+                f"User {self.config.username} does not have permissions "
+                f"to perform the requested operation "
+                f"(v1_devices_device_id_config_put)."
+            )
         except ApiException as e:
             LOG.warning("put_device_config : Exception while config push %s", e)
-            raise APIError(f"put_device_config : Retrying, Exception while config push to {device_id}. "
-                           f"Exception: {e}")
+            raise APIError(
+                f"put_device_config : Retrying, Exception while config push to {device_id}. " f"Exception: {e}"
+            )
 
     def put_device_config_raw(self, device_id: int, payload: dict):
         """
@@ -465,44 +497,54 @@ class GraphiantPortalClient():
             config push after retries
         """
         # Extract edge and core from payload
-        edge = payload.get('edge')
-        core = payload.get('core')
+        edge = payload.get("edge")
+        core = payload.get("core")
 
-        device_config_put_request = \
-            graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
+        device_config_put_request = graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
 
         # Add optional fields if present in payload
-        if 'description' in payload:
-            device_config_put_request.description = payload['description']
-        if 'configurationMetadata' in payload:
-            device_config_put_request.configuration_metadata = payload['configurationMetadata']
+        if "description" in payload:
+            device_config_put_request.description = payload["description"]
+        if "configurationMetadata" in payload:
+            device_config_put_request.configuration_metadata = payload["configurationMetadata"]
 
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] put_device_config_raw would push config for device_id=%s: %s",
-                     device_id, json.dumps(device_config_put_request.to_dict(), indent=2))
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] put_device_config_raw would push config for device_id=%s: %s",
+                device_id,
+                json.dumps(device_config_put_request.to_dict(), indent=2),
+            )
             return None
         try:
             # Verify device portal status and connection status.
             self.verify_device_portal_status(device_id=device_id)
-            LOG.info("put_device_config_raw : config to be pushed for %s: \n%s",
-                     device_id, json.dumps(device_config_put_request.to_dict(), indent=2))
+            LOG.info(
+                "put_device_config_raw : config to be pushed for %s: \n%s",
+                device_id,
+                json.dumps(device_config_put_request.to_dict(), indent=2),
+            )
             response = self.api.v1_devices_device_id_config_put(
-                authorization=self.bearer_token, device_id=device_id,
-                v1_devices_device_id_config_put_request=device_config_put_request)
+                authorization=self.bearer_token,
+                device_id=device_id,
+                v1_devices_device_id_config_put_request=device_config_put_request,
+            )
             # Verify device portal status and connection status.
             self.verify_device_portal_status(device_id=device_id)
             return response
         except ForbiddenException as e:
             LOG.error("put_device_config_raw: Got ForbiddenException while config push %s", e)
-            raise AssertionError(f"put_device_config_raw : Retrying, Got ForbiddenException "
-                                 f"while config push to {device_id}. "
-                                 f"User {self.config.username} does not have permissions "
-                                 f"to perform the requested operation "
-                                 f"(v1_devices_device_id_config_put).")
+            raise AssertionError(
+                f"put_device_config_raw : Retrying, Got ForbiddenException "
+                f"while config push to {device_id}. "
+                f"User {self.config.username} does not have permissions "
+                f"to perform the requested operation "
+                f"(v1_devices_device_id_config_put)."
+            )
         except ApiException as e:
             LOG.warning("put_device_config_raw : Exception while config push %s", e)
-            raise AssertionError(f"put_device_config_raw : Retrying, Exception while config push to {device_id}. "
-                                 f"Exception: {e}")
+            raise AssertionError(
+                f"put_device_config_raw : Retrying, Exception while config push to {device_id}. " f"Exception: {e}"
+            )
 
     def show_validated_payload(self, device_id: int, payload: dict):
         """
@@ -524,22 +566,24 @@ class GraphiantPortalClient():
             Exception: If payload structure validation fails
         """
         # Extract edge and core from payload
-        edge = payload.get('edge')
-        core = payload.get('core')
+        edge = payload.get("edge")
+        core = payload.get("core")
 
-        device_config_put_request = \
-            graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
+        device_config_put_request = graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
 
         # Add optional fields if present in payload
-        if 'description' in payload:
-            device_config_put_request.description = payload['description']
-        if 'configurationMetadata' in payload:
-            device_config_put_request.configuration_metadata = payload['configurationMetadata']
+        if "description" in payload:
+            device_config_put_request.description = payload["description"]
+        if "configurationMetadata" in payload:
+            device_config_put_request.configuration_metadata = payload["configurationMetadata"]
 
         # Convert to dict to validate structure
         validated_payload_dict = device_config_put_request.to_dict()
-        LOG.info("show_validated_payload : validated config for %s: \n%s",
-                 device_id, json.dumps(validated_payload_dict, indent=2))
+        LOG.info(
+            "show_validated_payload : validated config for %s: \n%s",
+            device_id,
+            json.dumps(validated_payload_dict, indent=2),
+        )
 
         LOG.info("show_validated_payload: Successfully showed validated payload for %s", device_id)
         return validated_payload_dict
@@ -554,10 +598,11 @@ class GraphiantPortalClient():
         Returns:
             response: The response from the API call to bring up the devices.
         """
-        data = {'deviceIds': device_ids}
+        data = {"deviceIds": device_ids}
         LOG.debug("post_devices_bringup : %s", data)
-        response = self.api.v1_devices_bringup_post(authorization=self.bearer_token,
-                                                    v1_devices_bringup_post_request=data)
+        response = self.api.v1_devices_bringup_post(
+            authorization=self.bearer_token, v1_devices_bringup_post_request=data
+        )
         return response
 
     def put_devices_bringup(self, device_ids, status):
@@ -576,22 +621,21 @@ class GraphiantPortalClient():
         Returns:
             bool: True if the status update was successful, False if ApiException occurs.
         """
-        data = {'deviceIds': device_ids, 'status': ''}
-        data['status'] = status
-        if status.lower() in ['allowed', 'active', 'activate']:
-            data['status'] = 'Allowed'
-        if status.lower() in ['denied', 'deactivate']:
-            data['status'] = 'Denied'
-        if status.lower() in ['removed', 'decommission']:
-            data['status'] = 'Removed'
-        if status.lower() in ['pending', 'staging', 'stage']:
-            data['status'] = 'Pending'
-        if status.lower() == 'maintenance':
-            data['status'] = 'Maintenance'
+        data = {"deviceIds": device_ids, "status": ""}
+        data["status"] = status
+        if status.lower() in ["allowed", "active", "activate"]:
+            data["status"] = "Allowed"
+        if status.lower() in ["denied", "deactivate"]:
+            data["status"] = "Denied"
+        if status.lower() in ["removed", "decommission"]:
+            data["status"] = "Removed"
+        if status.lower() in ["pending", "staging", "stage"]:
+            data["status"] = "Pending"
+        if status.lower() == "maintenance":
+            data["status"] = "Maintenance"
         try:
             LOG.debug("put_devices_bringup : %s", data)
-            self.api.v1_devices_bringup_put(authorization=self.bearer_token,
-                                            v1_devices_bringup_put_request=data)
+            self.api.v1_devices_bringup_put(authorization=self.bearer_token, v1_devices_bringup_put_request=data)
             time.sleep(15)
             return True
         except ApiException:
@@ -612,34 +656,34 @@ class GraphiantPortalClient():
 
         """
         patch_global_config_request = graphiant_sdk.V1GlobalConfigPatchRequest(
-            global_prefix_sets=kwargs.get('global_prefix_sets'),
-            ipfix_exporters=kwargs.get('ipfix_exporters'),
-            ntps=kwargs.get('ntps'),
-            prefix_sets=kwargs.get('prefix_sets'),
-            routing_policies=kwargs.get('routing_policies'),
-            snmps=kwargs.get('snmps'),
-            syslog_servers=kwargs.get('syslog_servers'),
-            traffic_policies=kwargs.get('traffic_policies'),
-            vpn_profiles=kwargs.get('vpn_profiles'))
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] patch_global_config would push: %s",
-                     json.dumps(patch_global_config_request.to_dict(), indent=2))
+            global_prefix_sets=kwargs.get("global_prefix_sets"),
+            ipfix_exporters=kwargs.get("ipfix_exporters"),
+            ntps=kwargs.get("ntps"),
+            prefix_sets=kwargs.get("prefix_sets"),
+            routing_policies=kwargs.get("routing_policies"),
+            snmps=kwargs.get("snmps"),
+            syslog_servers=kwargs.get("syslog_servers"),
+            traffic_policies=kwargs.get("traffic_policies"),
+            vpn_profiles=kwargs.get("vpn_profiles"),
+        )
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] patch_global_config would push: %s",
+                json.dumps(patch_global_config_request.to_dict(), indent=2),
+            )
             return None
         try:
-            LOG.info("patch_global_config : config to be pushed : \n%s",
-                     json.dumps(patch_global_config_request.to_dict(), indent=2))
+            LOG.info(
+                "patch_global_config : config to be pushed : \n%s",
+                json.dumps(patch_global_config_request.to_dict(), indent=2),
+            )
             response = self.api.v1_global_config_patch(
-                authorization=self.bearer_token,
-                v1_global_config_patch_request=patch_global_config_request
+                authorization=self.bearer_token, v1_global_config_patch_request=patch_global_config_request
             )
             return response
         except ForbiddenException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/global/config"
-            self._log_api_error(
-                method_name="v1_global_config_patch",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="v1_global_config_patch", api_url=api_url, exception=e)
             error_msg = (
                 f"patch_global_config: Got ForbiddenException (403). "
                 f"This may indicate insufficient permissions or authentication issues. "
@@ -649,11 +693,15 @@ class GraphiantPortalClient():
             LOG.error(error_msg)
             raise APIError(error_msg)
         except (NotFoundException, ServiceException) as e:
-            LOG.error("patch_global_config: Got Exception while v1_global_config_patch request. "
-                      "Global object(s) might not exist.")
-            raise APIError(f"patch_global_config : Got Exception {e} while "
-                           f"v1_global_config_patch request. "
-                           f"Global object(s) in the request might not exist.")
+            LOG.error(
+                "patch_global_config: Got Exception while v1_global_config_patch request. "
+                "Global object(s) might not exist."
+            )
+            raise APIError(
+                f"patch_global_config : Got Exception {e} while "
+                f"v1_global_config_patch request. "
+                f"Global object(s) in the request might not exist."
+            )
         except ApiException as e:
             LOG.warning("patch_global_config : Exception While Global config patch %s", e)
             raise APIError("patch_global_config : Retrying, Exception while Global config patch")
@@ -673,8 +721,9 @@ class GraphiantPortalClient():
         body = graphiant_sdk.V1GlobalSummaryPostRequest(**kwargs)
         try:
             LOG.info("post_global_summary: %s", body.to_dict())
-            response = self.api.v1_global_summary_post(authorization=self.bearer_token,
-                                                       v1_global_summary_post_request=body)
+            response = self.api.v1_global_summary_post(
+                authorization=self.bearer_token, v1_global_summary_post_request=body
+            )
             return response
         except ApiException as e:
             LOG.warning("post_global_summary : Exception While Global config patch %s", e)
@@ -693,11 +742,11 @@ class GraphiantPortalClient():
         """
         try:
             result = self.post_global_summary(**summary_kwargs)
-            data = result.to_dict() if hasattr(result, 'to_dict') else result
+            data = result.to_dict() if hasattr(result, "to_dict") else result
             if not isinstance(data, dict):
                 return []
             raw_list = None
-            for key in ('summaries', 'Summaries'):
+            for key in ("summaries", "Summaries"):
                 if key in data and isinstance(data[key], list):
                     raw_list = data[key]
                     break
@@ -713,7 +762,7 @@ class GraphiantPortalClient():
             for item in raw_list:
                 if isinstance(item, dict):
                     out.append(item)
-                elif hasattr(item, 'to_dict'):
+                elif hasattr(item, "to_dict"):
                     out.append(item.to_dict())
                 else:
                     out.append(item)  # keep as-is; is_global_object_in_use handles objects
@@ -744,20 +793,23 @@ class GraphiantPortalClient():
         """
         num_devices = self._summary_int(
             summary,
-            'num_attached_devices', 'numAttachedDevices',
+            "num_attached_devices",
+            "numAttachedDevices",
         )
         if num_devices > 0:
             return True
         num_sites = self._summary_int(
             summary,
-            'num_attached_sites', 'numAttachedSites',
+            "num_attached_sites",
+            "numAttachedSites",
         )
         if num_sites > 0:
             return True
         if check_num_policies:
             num_policies = self._summary_int(
                 summary,
-                'num_policies', 'numPolicies',
+                "num_policies",
+                "numPolicies",
             )
             if num_policies > 0:
                 return True
@@ -772,7 +824,7 @@ class GraphiantPortalClient():
             set: Names from the summary response, or empty set on failure.
         """
         summaries = self._get_global_summaries(**summary_kwargs)
-        return {s.get('name') for s in summaries if s.get('name')}
+        return {s.get("name") for s in summaries if s.get("name")}
 
     def get_global_routing_policy_summaries(self):
         """Return list of routing policy (BGP filter) summary dicts from the portal."""
@@ -863,8 +915,8 @@ class GraphiantPortalClient():
             str or None: The ID of the routing policy if found, otherwise None.
         """
         for summary in self.get_global_routing_policy_summaries():
-            if summary.get('name') == policy_name:
-                return summary.get('id')
+            if summary.get("name") == policy_name:
+                return summary.get("id")
         return None
 
     # Site API methods
@@ -881,25 +933,17 @@ class GraphiantPortalClient():
         Raises:
             ApiException: If the API call fails.
         """
-        if getattr(self, 'check_mode', False):
+        if getattr(self, "check_mode", False):
             LOG.info("[check_mode] create_site would create: %s", json.dumps(site_data, indent=2))
-            return type('MockSite', (), {'id': 0})()
+            return type("MockSite", (), {"id": 0})()
         try:
             LOG.info("create_site: Creating site with data: %s", json.dumps(site_data, indent=2))
-            response = self.api.v1_sites_post(
-                authorization=self.bearer_token,
-                v1_sites_post_request=site_data
-            )
+            response = self.api.v1_sites_post(authorization=self.bearer_token, v1_sites_post_request=site_data)
             LOG.info("create_site: Successfully created site with ID: %s", response.site.id)
             return response.site
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/sites"
-            self._log_api_error(
-                method_name="create_site",
-                api_url=api_url,
-                request_body=site_data,
-                exception=e
-            )
+            self._log_api_error(method_name="create_site", api_url=api_url, request_body=site_data, exception=e)
             raise e
 
     def delete_site(self, site_id: int):
@@ -912,24 +956,18 @@ class GraphiantPortalClient():
         Returns:
             bool: True if deletion was successful, False otherwise
         """
-        if getattr(self, 'check_mode', False):
+        if getattr(self, "check_mode", False):
             LOG.info("[check_mode] delete_site would delete site with ID: %s", site_id)
             return True
         try:
             LOG.info("delete_site: Deleting site with ID: %s", site_id)
-            self.api.v1_sites_site_id_delete(
-                authorization=self.bearer_token,
-                site_id=site_id
-            )
+            self.api.v1_sites_site_id_delete(authorization=self.bearer_token, site_id=site_id)
             LOG.info("delete_site: Successfully deleted site with ID: %s", site_id)
             return True
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/sites/{site_id}"
             self._log_api_error(
-                method_name="delete_site",
-                api_url=api_url,
-                path_params={"site_id": site_id},
-                exception=e
+                method_name="delete_site", api_url=api_url, path_params={"site_id": site_id}, exception=e
             )
             return False
 
@@ -946,11 +984,7 @@ class GraphiantPortalClient():
             return response.sites
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/sites/details"
-            self._log_api_error(
-                method_name="get_sites_details",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_sites_details", api_url=api_url, exception=e)
             return []
 
     def site_exists(self, site_name: str) -> bool:
@@ -984,17 +1018,19 @@ class GraphiantPortalClient():
         Raises:
             ApiException: If the API call fails.
         """
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] post_site_config would push for site_id=%s: %s",
-                     site_id, json.dumps(site_config, indent=2))
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] post_site_config would push for site_id=%s: %s",
+                site_id,
+                json.dumps(site_config, indent=2),
+            )
             return None
         try:
-            LOG.info("post_site_config : config to be pushed for site %s: \n%s",
-                     site_id, json.dumps(site_config, indent=2))
+            LOG.info(
+                "post_site_config : config to be pushed for site %s: \n%s", site_id, json.dumps(site_config, indent=2)
+            )
             response = self.api.v1_sites_site_id_post(
-                authorization=self.bearer_token,
-                site_id=site_id,
-                v1_sites_site_id_post_request=site_config
+                authorization=self.bearer_token, site_id=site_id, v1_sites_site_id_post_request=site_config
             )
             return response
         except ApiException as e:
@@ -1029,10 +1065,7 @@ class GraphiantPortalClient():
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/sites"
             self._log_api_error(
-                method_name="get_site_id",
-                api_url=api_url,
-                query_params={"name": site_name},
-                exception=e
+                method_name="get_site_id", api_url=api_url, query_params={"name": site_name}, exception=e
             )
             return None
 
@@ -1048,19 +1081,14 @@ class GraphiantPortalClient():
         Returns:
             dict: Response containing the created LAN segment ID
         """
-        post_lan_segments_request = graphiant_sdk.V1GlobalLanSegmentsPostRequest(
-            name=name,
-            description=description
-        )
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] post_global_lan_segments would create: name=%s description=%s",
-                     name, description)
-            return type('MockResponse', (), {'id': 0})()
+        post_lan_segments_request = graphiant_sdk.V1GlobalLanSegmentsPostRequest(name=name, description=description)
+        if getattr(self, "check_mode", False):
+            LOG.info("[check_mode] post_global_lan_segments would create: name=%s description=%s", name, description)
+            return type("MockResponse", (), {"id": 0})()
         try:
             LOG.info("post_global_lan_segments: Creating LAN segment '%s' with description '%s'", name, description)
             response = self.api.v1_global_lan_segments_post(
-                authorization=self.bearer_token,
-                v1_global_lan_segments_post_request=post_lan_segments_request
+                authorization=self.bearer_token, v1_global_lan_segments_post_request=post_lan_segments_request
             )
             LOG.info("post_global_lan_segments: Successfully created LAN segment '%s' with ID: %s", name, response.id)
             return response
@@ -1070,7 +1098,7 @@ class GraphiantPortalClient():
                 method_name="post_global_lan_segments",
                 api_url=api_url,
                 request_body={"name": name, "description": description},
-                exception=e
+                exception=e,
             )
             raise
 
@@ -1084,16 +1112,13 @@ class GraphiantPortalClient():
         Returns:
             bool: True if deletion was successful, False otherwise
         """
-        if getattr(self, 'check_mode', False):
+        if getattr(self, "check_mode", False):
             LOG.info("[check_mode] delete_global_lan_segments would delete LAN segment with ID: %s", lan_segment_id)
             return True
         try:
             LOG.info("delete_global_lan_segments: Deleting LAN segment with ID: %s", lan_segment_id)
             # Use the correct method name from the SDK
-            self.api.v1_global_lan_segments_id_delete(
-                authorization=self.bearer_token,
-                id=lan_segment_id
-            )
+            self.api.v1_global_lan_segments_id_delete(authorization=self.bearer_token, id=lan_segment_id)
             # DELETE operations typically return 204 (No Content) or empty response
             # We consider any successful call (no exception) as success
             LOG.info("delete_global_lan_segments: Successfully deleted LAN segment with ID: %s", lan_segment_id)
@@ -1113,18 +1138,14 @@ class GraphiantPortalClient():
             response = self.api.v1_global_lan_segments_get(authorization=self.bearer_token)
             LOG.debug("get_global_lan_segments: %s", response)
             # Ensure we always return a list, even if entries is None
-            if hasattr(response, 'entries') and response.entries is not None:
+            if hasattr(response, "entries") and response.entries is not None:
                 return response.entries
             else:
                 LOG.info("get_global_lan_segments: No LAN segments found or entries is None")
                 return []
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/global/lan-segments"
-            self._log_api_error(
-                method_name="get_global_lan_segments",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_global_lan_segments", api_url=api_url, exception=e)
             return []
 
     def get_lan_segment_id(self, lan_segment_name):
@@ -1162,15 +1183,13 @@ class GraphiantPortalClient():
         """
         Create a global site list.
         """
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] create_global_site_list would create: %s",
-                     json.dumps(site_list_config, indent=2))
+        if getattr(self, "check_mode", False):
+            LOG.info("[check_mode] create_global_site_list would create: %s", json.dumps(site_list_config, indent=2))
             return None
         try:
-            LOG.info("create_global_site_list: Creating site list '%s'", site_list_config.get('name'))
+            LOG.info("create_global_site_list: Creating site list '%s'", site_list_config.get("name"))
             response = self.api.v1_global_site_lists_post(
-                authorization=self.bearer_token,
-                v1_global_site_lists_post_request=site_list_config
+                authorization=self.bearer_token, v1_global_site_lists_post_request=site_list_config
             )
             LOG.info("create_global_site_list: Successfully created site list with ID: %s", response.id)
             return response
@@ -1182,22 +1201,21 @@ class GraphiantPortalClient():
         """
         Delete a global site list.
         """
-        if getattr(self, 'check_mode', False):
+        if getattr(self, "check_mode", False):
             LOG.info("[check_mode] delete_global_site_list would delete site list with ID: %s", site_list_id)
             return True
         try:
             LOG.info("delete_global_site_list: Deleting site list with ID: %s", site_list_id)
-            self.api.v1_global_site_lists_id_delete(
-                authorization=self.bearer_token,
-                id=site_list_id
-            )
+            self.api.v1_global_site_lists_id_delete(authorization=self.bearer_token, id=site_list_id)
             LOG.info("delete_global_site_list: Successfully deleted site list with ID: %s", site_list_id)
             return True
         except Exception as e:
             # Handle validation errors for DELETE operations (often return empty responses)
             if "validation error" in str(e) and "V1GlobalSiteListsIdDeleteResponse" in str(e):
-                LOG.info("delete_global_site_list: Delete operation completed (validation error can be ignored): %s",
-                         site_list_id)
+                LOG.info(
+                    "delete_global_site_list: Delete operation completed (validation error can be ignored): %s",
+                    site_list_id,
+                )
                 return True
             LOG.error("delete_global_site_list: Got Exception while deleting site list %s: %s", site_list_id, e)
             return False
@@ -1208,10 +1226,8 @@ class GraphiantPortalClient():
         """
         try:
             LOG.info("get_global_site_lists: Retrieving all global site lists")
-            response = self.api.v1_global_site_lists_get(
-                authorization=self.bearer_token
-            )
-            if response and hasattr(response, 'entries') and response.entries:
+            response = self.api.v1_global_site_lists_get(authorization=self.bearer_token)
+            if response and hasattr(response, "entries") and response.entries:
                 LOG.info("get_global_site_lists: Successfully retrieved %s site lists", len(response.entries))
                 return response.entries
             else:
@@ -1227,10 +1243,7 @@ class GraphiantPortalClient():
         """
         try:
             LOG.info("get_global_site_list: Retrieving site list with ID: %s", site_list_id)
-            response = self.api.v1_global_site_lists_id_get(
-                authorization=self.bearer_token,
-                id=site_list_id
-            )
+            response = self.api.v1_global_site_lists_id_get(authorization=self.bearer_token, id=site_list_id)
             LOG.info("get_global_site_list: Successfully retrieved site list")
             return response
         except ApiException as e:
@@ -1254,8 +1267,11 @@ class GraphiantPortalClient():
             if site_lists is None:
                 LOG.info("get_site_list_id: No site lists found")
                 return None
-            LOG.info("get_site_list_id: Looking for site_list '%s' in %s site_lists using v1/global/site-lists",
-                     site_list_name, len(site_lists))
+            LOG.info(
+                "get_site_list_id: Looking for site_list '%s' in %s site_lists using v1/global/site-lists",
+                site_list_name,
+                len(site_lists),
+            )
 
             # Log available site_lists for debugging
             available_site_lists = [site_list.name for site_list in site_lists]
@@ -1265,16 +1281,16 @@ class GraphiantPortalClient():
                 if site_list.name == site_list_name:
                     LOG.info("get_site_list_id: Found site_list '%s' with ID %s", site_list_name, site_list.id)
                     return site_list.id
-            LOG.warning("get_site_list_id: Site_list '%s' not found. Available site_lists: %s",
-                        site_list_name, available_site_lists)
+            LOG.warning(
+                "get_site_list_id: Site_list '%s' not found. Available site_lists: %s",
+                site_list_name,
+                available_site_lists,
+            )
             return None
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/global/site-lists"
             self._log_api_error(
-                method_name="get_site_list_id",
-                api_url=api_url,
-                query_params={"name": site_list_name},
-                exception=e
+                method_name="get_site_list_id", api_url=api_url, query_params={"name": site_list_name}, exception=e
             )
             return None
 
@@ -1293,15 +1309,15 @@ class GraphiantPortalClient():
         Returns:
             dict: Created service response
         """
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] create_data_exchange_services would create: %s",
-                     json.dumps(service_config, indent=2))
-            return type('MockResponse', (), {'id': 0})()
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] create_data_exchange_services would create: %s", json.dumps(service_config, indent=2)
+            )
+            return type("MockResponse", (), {"id": 0})()
         try:
-            LOG.info("create_data_exchange_services: Creating service '%s'", service_config.get('serviceName'))
+            LOG.info("create_data_exchange_services: Creating service '%s'", service_config.get("serviceName"))
             response = self.api.v1_extranets_b2b_peering_producer_post(
-                authorization=self.bearer_token,
-                v1_extranets_b2b_peering_producer_post_request=service_config
+                authorization=self.bearer_token, v1_extranets_b2b_peering_producer_post_request=service_config
             )
             LOG.info("create_data_exchange_services: Successfully created service with ID: %s", response.id)
             return response
@@ -1309,10 +1325,7 @@ class GraphiantPortalClient():
             # Log the actual API endpoint URL and request body for debugging
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/producer"
             self._log_api_error(
-                method_name="create_data_exchange_services",
-                api_url=api_url,
-                request_body=service_config,
-                exception=e
+                method_name="create_data_exchange_services", api_url=api_url, request_body=service_config, exception=e
             )
             raise e
 
@@ -1325,20 +1338,14 @@ class GraphiantPortalClient():
         """
         try:
             LOG.info("get_data_exchange_services_summary: Retrieving services summary")
-            response = self.api.v1_extranets_b2b_general_services_summary_get(
-                authorization=self.bearer_token
-            )
+            response = self.api.v1_extranets_b2b_general_services_summary_get(authorization=self.bearer_token)
             services_count = len(response.info) if response.info else 0
             LOG.info("get_data_exchange_services_summary: Successfully retrieved %s services", services_count)
             return response
         except ApiException as e:
             # Log the actual API endpoint URL for debugging
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-general/services-summary"
-            self._log_api_error(
-                method_name="get_data_exchange_services_summary",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_data_exchange_services_summary", api_url=api_url, exception=e)
             raise e
 
     def get_data_exchange_service_by_name(self, service_name: str):
@@ -1362,7 +1369,9 @@ class GraphiantPortalClient():
 
             for service in services_summary.info:
                 if service.name == service_name:
-                    LOG.info("get_data_exchange_service_by_name: Found service '%s' with ID: %s", service_name, service.id)
+                    LOG.info(
+                        "get_data_exchange_service_by_name: Found service '%s' with ID: %s", service_name, service.id
+                    )
                     return service
 
             LOG.info("get_data_exchange_service_by_name: Service '%s' not found", service_name)
@@ -1408,15 +1417,15 @@ class GraphiantPortalClient():
         Returns:
             dict: Created customer response
         """
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] create_data_exchange_customers would create: %s",
-                     json.dumps(customer_config, indent=2))
-            return type('MockResponse', (), {'id': 0})()
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] create_data_exchange_customers would create: %s", json.dumps(customer_config, indent=2)
+            )
+            return type("MockResponse", (), {"id": 0})()
         try:
-            LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_config.get('name'))
+            LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_config.get("name"))
             response = self.api.v1_extranets_b2b_peering_customer_post(
-                authorization=self.bearer_token,
-                v1_extranets_b2b_peering_customer_post_request=customer_config
+                authorization=self.bearer_token, v1_extranets_b2b_peering_customer_post_request=customer_config
             )
             LOG.info("create_data_exchange_customers: Successfully created customer with ID: %s", response.id)
             return response
@@ -1424,10 +1433,7 @@ class GraphiantPortalClient():
             # Log the actual API endpoint URL and request body for debugging
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer"
             self._log_api_error(
-                method_name="create_data_exchange_customers",
-                api_url=api_url,
-                request_body=customer_config,
-                exception=e
+                method_name="create_data_exchange_customers", api_url=api_url, request_body=customer_config, exception=e
             )
             raise e
 
@@ -1440,20 +1446,14 @@ class GraphiantPortalClient():
         """
         try:
             LOG.info("get_data_exchange_customers_summary: Retrieving customers summary")
-            response = self.api.v1_extranets_b2b_general_customers_summary_get(
-                authorization=self.bearer_token
-            )
+            response = self.api.v1_extranets_b2b_general_customers_summary_get(authorization=self.bearer_token)
             customers_count = len(response.customers) if response.customers else 0
             LOG.info("get_data_exchange_customers_summary: Successfully retrieved %s customers", customers_count)
             return response
         except ApiException as e:
             # Log the actual API endpoint URL for debugging
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-general/customers-summary"
-            self._log_api_error(
-                method_name="get_data_exchange_customers_summary",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_data_exchange_customers_summary", api_url=api_url, exception=e)
             raise e
 
     def get_data_exchange_customer_by_name(self, customer_name: str):
@@ -1477,8 +1477,11 @@ class GraphiantPortalClient():
 
             for customer in customers_summary.customers:
                 if customer.name == customer_name:
-                    LOG.info("get_data_exchange_customer_by_name: Found customer '%s' with ID: %s",
-                             customer_name, customer.id)
+                    LOG.info(
+                        "get_data_exchange_customer_by_name: Found customer '%s' with ID: %s",
+                        customer_name,
+                        customer.id,
+                    )
                     return customer
 
             LOG.info("get_data_exchange_customer_by_name: Customer '%s' not found", customer_name)
@@ -1500,13 +1503,15 @@ class GraphiantPortalClient():
         try:
             LOG.info("get_matched_services_for_customer: Retrieving matched services for customer ID: %s", customer_id)
             response = self.api.v1_extranets_b2b_peering_match_services_summary_id_get(
-                authorization=self.bearer_token,
-                id=customer_id
+                authorization=self.bearer_token, id=customer_id
             )
 
-            if response and hasattr(response, 'services'):
-                LOG.info("get_matched_services_for_customer: Found %s matched services for customer %s",
-                         len(response.services), customer_id)
+            if response and hasattr(response, "services"):
+                LOG.info(
+                    "get_matched_services_for_customer: Found %s matched services for customer %s",
+                    len(response.services),
+                    customer_id,
+                )
                 return response.services
             else:
                 LOG.info("get_matched_services_for_customer: No matched services found for customer %s", customer_id)
@@ -1518,7 +1523,7 @@ class GraphiantPortalClient():
                 method_name="get_matched_services_for_customer",
                 api_url=api_url,
                 query_params={"id": customer_id},
-                exception=e
+                exception=e,
             )
             return None
         except Exception as e:
@@ -1539,25 +1544,28 @@ class GraphiantPortalClient():
         try:
             LOG.info("get_matching_customers_for_service: Retrieving matching customers for service ID: %s", service_id)
             response = self.api.v1_extranets_b2b_peering_producer_id_matching_customers_summary_get(
-                authorization=self.bearer_token,
-                id=service_id
+                authorization=self.bearer_token, id=service_id
             )
 
-            if response and hasattr(response, 'info') and response.info is not None:
-                LOG.info("get_matching_customers_for_service: Found %s matching customers for service %s",
-                         len(response.info), service_id)
+            if response and hasattr(response, "info") and response.info is not None:
+                LOG.info(
+                    "get_matching_customers_for_service: Found %s matching customers for service %s",
+                    len(response.info),
+                    service_id,
+                )
                 return response.info
             else:
                 LOG.info("get_matching_customers_for_service: No matching customers found for service %s", service_id)
                 return []
 
         except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/producer/{service_id}/matching-customers-summary"
+            host = self.api.api_client.configuration.host
+            api_url = f"{host}/v1/extranets-b2b-peering/producer/{service_id}/matching-customers-summary"
             self._log_api_error(
                 method_name="get_matching_customers_for_service",
                 api_url=api_url,
                 query_params={"id": service_id},
-                exception=e
+                exception=e,
             )
             return None
         except Exception as e:
@@ -1574,14 +1582,13 @@ class GraphiantPortalClient():
         Returns:
             dict: Delete response
         """
-        if getattr(self, 'check_mode', False):
+        if getattr(self, "check_mode", False):
             LOG.info("[check_mode] delete_data_exchange_customer would delete customer with ID: %s", customer_id)
-            return type('MockResponse', (), {})()
+            return type("MockResponse", (), {})()
         try:
             LOG.info("delete_data_exchange_customer: Deleting customer with ID: %s", customer_id)
             response = self.api.v1_extranets_b2b_peering_customer_id_delete(
-                authorization=self.bearer_token,
-                id=customer_id
+                authorization=self.bearer_token, id=customer_id
             )
             LOG.info("delete_data_exchange_customer: Successfully deleted customer with ID: %s", customer_id)
             return response
@@ -1592,7 +1599,7 @@ class GraphiantPortalClient():
                 method_name="delete_data_exchange_customer",
                 api_url=api_url,
                 path_params={"customer_id": customer_id},
-                exception=e
+                exception=e,
             )
             raise e
 
@@ -1610,9 +1617,7 @@ class GraphiantPortalClient():
         try:
             LOG.info("get_data_exchange_service_details: Retrieving service details for ID: %s", service_id)
             response = self.api.v1_extranets_b2b_id_producer_get(
-                authorization=self.bearer_token,
-                id=service_id,
-                type=type
+                authorization=self.bearer_token, id=service_id, type=type
             )
             LOG.info("get_data_exchange_service_details: Successfully retrieved service details for ID: %s", service_id)
             return response
@@ -1624,7 +1629,7 @@ class GraphiantPortalClient():
                 api_url=api_url,
                 path_params={"service_id": service_id},
                 query_params={"type": type},
-                exception=e
+                exception=e,
             )
             raise e
 
@@ -1640,27 +1645,25 @@ class GraphiantPortalClient():
         Returns:
             dict: Match response with matchId
         """
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] match_service_to_customer would match: %s",
-                     json.dumps(match_config, indent=2))
-            return type('MockResponse', (), {'match_id': 0, 'timestamp': None})()
+        if getattr(self, "check_mode", False):
+            LOG.info("[check_mode] match_service_to_customer would match: %s", json.dumps(match_config, indent=2))
+            return type("MockResponse", (), {"match_id": 0, "timestamp": None})()
         try:
             LOG.info("match_service_to_customer: Matching service to customer")
             response = self.api.v1_extranets_b2b_peering_match_service_to_customer_post(
                 authorization=self.bearer_token,
-                v1_extranets_b2b_peering_match_service_to_customer_post_request=match_config
+                v1_extranets_b2b_peering_match_service_to_customer_post_request=match_config,
             )
-            LOG.info("match_service_to_customer: Successfully matched service to customer with matchId: %s",
-                     response.match_id)
+            LOG.info(
+                "match_service_to_customer: Successfully matched service to customer with matchId: %s",
+                response.match_id,
+            )
             return response
         except ApiException as e:
             # Log the actual API endpoint URL and request body for debugging
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/match/service-to-customer"
             self._log_api_error(
-                method_name="match_service_to_customer",
-                api_url=api_url,
-                request_body=match_config,
-                exception=e
+                method_name="match_service_to_customer", api_url=api_url, request_body=match_config, exception=e
             )
             raise e
 
@@ -1674,15 +1677,12 @@ class GraphiantPortalClient():
         Returns:
             dict: Delete response
         """
-        if getattr(self, 'check_mode', False):
+        if getattr(self, "check_mode", False):
             LOG.info("[check_mode] delete_data_exchange_service would delete service with ID: %s", service_id)
-            return type('MockResponse', (), {})()
+            return type("MockResponse", (), {})()
         try:
             LOG.info("delete_data_exchange_service: Deleting service with ID: %s", service_id)
-            response = self.api.v1_extranets_b2b_id_delete(
-                authorization=self.bearer_token,
-                id=service_id
-            )
+            response = self.api.v1_extranets_b2b_id_delete(authorization=self.bearer_token, id=service_id)
             LOG.info("delete_data_exchange_service: Successfully deleted service with ID: %s", service_id)
             return response
         except ApiException as e:
@@ -1692,7 +1692,7 @@ class GraphiantPortalClient():
                 method_name="delete_data_exchange_service",
                 api_url=api_url,
                 path_params={"service_id": service_id},
-                exception=e
+                exception=e,
             )
             raise e
 
@@ -1707,17 +1707,20 @@ class GraphiantPortalClient():
         Returns:
             API response object
         """
-        if getattr(self, 'check_mode', False):
-            LOG.info("[check_mode] accept_data_exchange_service would accept match_id=%s: %s",
-                     match_id, json.dumps(acceptance_payload, indent=2))
-            return type('MockResponse', (), {})()
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] accept_data_exchange_service would accept match_id=%s: %s",
+                match_id,
+                json.dumps(acceptance_payload, indent=2),
+            )
+            return type("MockResponse", (), {})()
         try:
             LOG.info("accept_data_exchange_service: Accepting match %s", match_id)
             # Use the correct method with match_id as path parameter
             response = self.api.v1_extranets_b2b_peering_consumer_match_id_post(
                 authorization=self.bearer_token,
                 match_id=match_id,  # Use match_id as the path parameter
-                v1_extranets_b2b_peering_consumer_match_id_post_request=acceptance_payload
+                v1_extranets_b2b_peering_consumer_match_id_post_request=acceptance_payload,
             )
             LOG.info("accept_data_exchange_service: Successfully accepted match %s", match_id)
             return response
@@ -1727,7 +1730,7 @@ class GraphiantPortalClient():
                 method_name="accept_data_exchange_service",
                 api_url=api_url,
                 path_params={"match_id": match_id},
-                exception=e
+                exception=e,
             )
             raise e
 
@@ -1744,30 +1747,36 @@ class GraphiantPortalClient():
             str or None: The inside subnet CIDR, or None if failed
         """
         try:
-            LOG.info("get_ipsec_inside_subnet: Getting %s subnet for region %s, LAN segment %s",
-                     address_family, region_id, lan_segment_id)
+            LOG.info(
+                "get_ipsec_inside_subnet: Getting %s subnet for region %s, LAN segment %s",
+                address_family,
+                region_id,
+                lan_segment_id,
+            )
             response = self.api.v1_gateways_ipsec_regions_region_id_vrfs_vrf_id_inside_subnet_get(
                 authorization=self.bearer_token,
                 region_id=region_id,
                 vrf_id=lan_segment_id,
-                address_family=address_family
+                address_family=address_family,
             )
 
-            if address_family == 'ipv4':
-                subnet = getattr(response, 'ipv4_subnet', None)
+            if address_family == "ipv4":
+                subnet = getattr(response, "ipv4_subnet", None)
             else:  # ipv6
-                subnet = getattr(response, 'ipv6_subnet', None)
+                subnet = getattr(response, "ipv6_subnet", None)
 
             LOG.info("get_ipsec_inside_subnet: Retrieved %s subnet: %s", address_family, subnet)
             return subnet
         except ApiException as e:
-            api_url = (f"{self.api.api_client.configuration.host}/v1/gateways/ipsec/regions/"
-                       f"{region_id}/vrfs/{lan_segment_id}/inside-subnet")
+            api_url = (
+                f"{self.api.api_client.configuration.host}/v1/gateways/ipsec/regions/"
+                f"{region_id}/vrfs/{lan_segment_id}/inside-subnet"
+            )
             self._log_api_error(
                 method_name="get_ipsec_inside_subnet",
                 api_url=api_url,
                 query_params={"addressFamily": address_family},
-                exception=e
+                exception=e,
             )
             return None
         except Exception as e:
@@ -1784,16 +1793,12 @@ class GraphiantPortalClient():
         try:
             LOG.info("get_preshared_key: Getting preshared key")
             response = self.api.v1_presharedkey_get(authorization=self.bearer_token)
-            psk = getattr(response, 'presharedkey', None)
+            psk = getattr(response, "presharedkey", None)
             LOG.info("get_preshared_key: Retrieved preshared key")
             return psk
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/presharedkey"
-            self._log_api_error(
-                method_name="get_preshared_key",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_preshared_key", api_url=api_url, exception=e)
             return None
         except Exception as e:
             LOG.error("get_preshared_key: Unexpected error: %s", e)
@@ -1808,18 +1813,12 @@ class GraphiantPortalClient():
         """
         try:
             LOG.info("get_gateway_summary: Retrieving gateway summary")
-            response = self.api.v1_gateways_summary_get(
-                authorization=self.bearer_token
-            )
+            response = self.api.v1_gateways_summary_get(authorization=self.bearer_token)
             LOG.info("get_gateway_summary: Successfully retrieved gateway summary")
             return response
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/gateways/summary"
-            self._log_api_error(
-                method_name="get_gateway_summary",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_gateway_summary", api_url=api_url, exception=e)
             raise e
 
     def get_gateway_details(self, gateway_id):
@@ -1834,19 +1833,13 @@ class GraphiantPortalClient():
         """
         try:
             LOG.info("get_gateway_details: Retrieving details for gateway %s", gateway_id)
-            response = self.api.v1_gateways_id_details_get(
-                authorization=self.bearer_token,
-                id=gateway_id
-            )
+            response = self.api.v1_gateways_id_details_get(authorization=self.bearer_token, id=gateway_id)
             LOG.info("get_gateway_details: Successfully retrieved details for gateway %s", gateway_id)
             return response
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/gateways/{gateway_id}/details"
             self._log_api_error(
-                method_name="get_gateway_details",
-                api_url=api_url,
-                path_params={"gateway_id": gateway_id},
-                exception=e
+                method_name="get_gateway_details", api_url=api_url, path_params={"gateway_id": gateway_id}, exception=e
             )
             raise e
 
@@ -1865,8 +1858,7 @@ class GraphiantPortalClient():
             LOG.info("get_service_health: Retrieving health for service %s", service_id)
             # Create the proper request object
             health_request = graphiant_sdk.V1ExtranetB2bMonitoringPeeringServiceServiceHealthPostRequest(
-                id=service_id,
-                is_provider=is_provider
+                id=service_id, is_provider=is_provider
             )
             response = self.api.v1_extranet_b2b_monitoring_peering_service_service_health_post(
                 authorization=self.bearer_token,
@@ -1875,13 +1867,12 @@ class GraphiantPortalClient():
             LOG.info("get_service_health: Successfully retrieved health for service %s", service_id)
             return response
         except ApiException as e:
-            api_url = (f"{self.api.api_client.configuration.host}/"
-                       f"v1/extranet-b2b-monitoring/peering-service/service-health")
+            api_url = (
+                f"{self.api.api_client.configuration.host}/"
+                f"v1/extranet-b2b-monitoring/peering-service/service-health"
+            )
             self._log_api_error(
-                method_name="get_service_health",
-                api_url=api_url,
-                path_params={"service_id": service_id},
-                exception=e
+                method_name="get_service_health", api_url=api_url, path_params={"service_id": service_id}, exception=e
             )
             raise e
 
@@ -1899,11 +1890,7 @@ class GraphiantPortalClient():
             return response.regions
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/regions"
-            self._log_api_error(
-                method_name="get_regions",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_regions", api_url=api_url, exception=e)
             return None
 
     def get_region_id_by_name(self, region_name):
@@ -1929,8 +1916,9 @@ class GraphiantPortalClient():
 
             # Log available regions for debugging
             available_regions = [region.name for region in regions]
-            LOG.warning("get_region_id_by_name: Region '%s' not found. Available regions: %s",
-                        region_name, available_regions)
+            LOG.warning(
+                "get_region_id_by_name: Region '%s' not found. Available regions: %s", region_name, available_regions
+            )
             return None
         except Exception as e:
             LOG.error("get_region_id_by_name: Failed to get region ID for '%s': %s", region_name, e)
@@ -1948,13 +1936,13 @@ class GraphiantPortalClient():
             response = self.api.v1_global_ipsec_profile_get(authorization=self.bearer_token)
             profiles = {}
             ipsec_profiles = None
-            if hasattr(response, 'ipsec_profiles'):
+            if hasattr(response, "ipsec_profiles"):
                 ipsec_profiles = response.ipsec_profiles
 
             if ipsec_profiles:
                 for profile_entry in ipsec_profiles:
                     profile_name = None
-                    if hasattr(profile_entry, 'ipsec_profile_name'):
+                    if hasattr(profile_entry, "ipsec_profile_name"):
                         profile_name = profile_entry.ipsec_profile_name
                     if profile_name:
                         profiles[profile_name] = profile_entry
@@ -1967,11 +1955,7 @@ class GraphiantPortalClient():
                 return {}
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/global/ipsec-profile"
-            self._log_api_error(
-                method_name="get_global_ipsec_profiles",
-                api_url=api_url,
-                exception=e
-            )
+            self._log_api_error(method_name="get_global_ipsec_profiles", api_url=api_url, exception=e)
             return {}
         except Exception as e:
             LOG.error("get_global_ipsec_profiles: Unexpected error: %s", e)
@@ -1995,9 +1979,6 @@ class GraphiantPortalClient():
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/devices/{device_id}"
             self._log_api_error(
-                method_name="get_device_info",
-                api_url=api_url,
-                path_params={"device_id": device_id},
-                exception=e
+                method_name="get_device_info", api_url=api_url, path_params={"device_id": device_id}, exception=e
             )
             return None

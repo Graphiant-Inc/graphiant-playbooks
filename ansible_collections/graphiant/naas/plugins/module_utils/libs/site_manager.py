@@ -51,12 +51,8 @@ class SiteManager(BaseManager):
         objects_result = self._manage_site_objects(config_yaml_file, operation="attach")
 
         # Combine results
-        changed = sites_result.get('changed', False) or objects_result.get('changed', False)
-        return {
-            'changed': changed,
-            'sites': sites_result,
-            'objects': objects_result
-        }
+        changed = sites_result.get("changed", False) or objects_result.get("changed", False)
+        return {"changed": changed, "sites": sites_result, "objects": objects_result}
 
     def deconfigure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
@@ -80,12 +76,8 @@ class SiteManager(BaseManager):
         sites_result = self._manage_sites(config_yaml_file, operation="delete")
 
         # Combine results
-        changed = sites_result.get('changed', False) or objects_result.get('changed', False)
-        return {
-            'changed': changed,
-            'sites': sites_result,
-            'objects': objects_result
-        }
+        changed = sites_result.get("changed", False) or objects_result.get("changed", False)
+        return {"changed": changed, "sites": sites_result, "objects": objects_result}
 
     def configure_sites(self, config_yaml_file: str) -> Dict[str, Any]:
         """
@@ -134,46 +126,41 @@ class SiteManager(BaseManager):
             ConfigurationError: If configuration processing fails
             ValidationError: If configuration data is invalid
         """
-        result = {
-            'changed': False,
-            'created': [],
-            'deleted': [],
-            'skipped': []
-        }
+        result = {"changed": False, "created": [], "deleted": [], "skipped": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
 
-            if 'sites' not in config_data:
+            if "sites" not in config_data:
                 LOG.info("No sites configuration found in %s, skipping site %s", config_yaml_file, operation)
                 return result
 
-            site_names = [s.get('name') for s in config_data.get('sites') if s.get('name')]
+            site_names = [s.get("name") for s in config_data.get("sites") if s.get("name")]
             if operation == "delete":
                 LOG.info("Attempting to delete sites: %s", site_names)
             elif operation == "create":
                 LOG.info("Attempting to create sites: %s", site_names)
 
-            for site_config in config_data.get('sites'):
+            for site_config in config_data.get("sites"):
                 try:
-                    site_name = site_config.get('name')
+                    site_name = site_config.get("name")
                     if not site_name:
                         raise ValidationError("Site configuration must include 'name' field")
 
                     if operation == "create":
                         was_created = self._create_site_if_not_exists(site_config)
                         if was_created:
-                            result['created'].append(site_name)
-                            result['changed'] = True
+                            result["created"].append(site_name)
+                            result["changed"] = True
                         else:
-                            result['skipped'].append(site_name)
+                            result["skipped"].append(site_name)
                     elif operation == "delete":
                         was_deleted = self._delete_site_if_exists(site_name)
                         if was_deleted:
-                            result['deleted'].append(site_name)
-                            result['changed'] = True
+                            result["deleted"].append(site_name)
+                            result["changed"] = True
                         else:
-                            result['skipped'].append(site_name)
+                            result["skipped"].append(site_name)
 
                     LOG.info("Successfully processed site: %s (operation: %s)", site_name, operation)
 
@@ -181,14 +168,13 @@ class SiteManager(BaseManager):
                     LOG.error("Error %sing site '%s': %s", operation, site_name, str(e))
                     raise ConfigurationError(f"Failed to {operation} site {site_name}: {str(e)}")
 
-            total_processed = len(result['created']) + len(result['deleted']) + len(result['skipped'])
-            LOG.info("Processed %s sites (operation: %s, changed: %s)",
-                     total_processed, operation, result['changed'])
+            total_processed = len(result["created"]) + len(result["deleted"]) + len(result["skipped"])
+            LOG.info("Processed %s sites (operation: %s, changed: %s)", total_processed, operation, result["changed"])
             # Explicit lists for consistency with global_config/interface_manager deconfigure logging
             if operation == "delete":
-                LOG.info("Deconfigure completed: deleted=%s, skipped=%s", result['deleted'], result['skipped'])
+                LOG.info("Deconfigure completed: deleted=%s, skipped=%s", result["deleted"], result["skipped"])
             elif operation == "create":
-                LOG.info("Configure completed: created=%s, skipped=%s", result['created'], result['skipped'])
+                LOG.info("Configure completed: created=%s, skipped=%s", result["created"], result["skipped"])
 
             return result
 
@@ -209,7 +195,7 @@ class SiteManager(BaseManager):
         Raises:
             ConfigurationError: If site creation fails
         """
-        site_name = site_config.get('name')
+        site_name = site_config.get("name")
 
         # Check if site already exists using v1/sites/details
         if self.gsdk.site_exists(site_name):
@@ -219,12 +205,7 @@ class SiteManager(BaseManager):
 
         try:
             # Prepare site data for creation (simple site creation only)
-            site_data = {
-                "site": {
-                    "name": site_name,
-                    "location": site_config.get('location', {})
-                }
-            }
+            site_data = {"site": {"name": site_name, "location": site_config.get("location", {})}}
 
             # Create the site
             created_site = self.gsdk.create_site(site_data)
@@ -315,28 +296,25 @@ class SiteManager(BaseManager):
             SiteNotFoundError: If any site cannot be found
             ValidationError: If configuration data is invalid
         """
-        result = {
-            'changed': False,
-            'attached': [],
-            'detached': [],
-            'skipped': []
-        }
+        result = {"changed": False, "attached": [], "detached": [], "skipped": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
 
-            if 'site_attachments' not in config_data:
-                LOG.info("No site attachments configuration found in %s, skipping object %s", config_yaml_file, operation)
+            if "site_attachments" not in config_data:
+                LOG.info(
+                    "No site attachments configuration found in %s, skipping object %s", config_yaml_file, operation
+                )
                 return result
 
-            default_operation = 'Attach' if operation.lower().startswith("attach") else 'Detach'
-            attachment_site_names = [list(sc.keys())[0] for sc in config_data.get('site_attachments') if sc]
+            default_operation = "Attach" if operation.lower().startswith("attach") else "Detach"
+            attachment_site_names = [list(sc.keys())[0] for sc in config_data.get("site_attachments") if sc]
             if operation.lower().startswith("detach"):
                 LOG.info("Attempting to detach objects from sites: %s", attachment_site_names)
             else:
                 LOG.info("Attempting to attach objects to sites: %s", attachment_site_names)
 
-            for site_config in config_data.get('site_attachments'):
+            for site_config in config_data.get("site_attachments"):
                 try:
                     # Get the site name from the first (and only) key in the site config
                     site_name = list(site_config.keys())[0]
@@ -346,58 +324,62 @@ class SiteManager(BaseManager):
                     site_payload = {"site": {"name": site_name}}
 
                     # Process SNMP operations
-                    if 'snmps' in site_data:
-                        site_payload['site']['snmpOps'] = {}
-                        for snmp_name in site_data.get('snmps'):
-                            site_payload['site']['snmpOps'][snmp_name] = default_operation
+                    if "snmps" in site_data:
+                        site_payload["site"]["snmpOps"] = {}
+                        for snmp_name in site_data.get("snmps"):
+                            site_payload["site"]["snmpOps"][snmp_name] = default_operation
 
                     # Process SNMP operations (Backward compatibility; Can be removed after testing)
-                    if 'snmp_servers' in site_data:
-                        site_payload['site']['snmpOps'] = {}
-                        for snmp_name in site_data.get('snmp_servers'):
-                            site_payload['site']['snmpOps'][snmp_name] = default_operation
+                    if "snmp_servers" in site_data:
+                        site_payload["site"]["snmpOps"] = {}
+                        for snmp_name in site_data.get("snmp_servers"):
+                            site_payload["site"]["snmpOps"][snmp_name] = default_operation
 
                     # Process Syslog operations
-                    if 'syslog_servers' in site_data:
-                        site_payload['site']['syslogServerOpsV2'] = {}
-                        for syslog_config in site_data.get('syslog_servers'):
+                    if "syslog_servers" in site_data:
+                        site_payload["site"]["syslogServerOpsV2"] = {}
+                        for syslog_config in site_data.get("syslog_servers"):
                             self._process_syslog_config(site_payload, syslog_config, default_operation)
 
                     # Process IPFIX operations
-                    if 'ipfix_exporters' in site_data:
-                        site_payload['site']['ipfixExporterOpsV2'] = {}
-                        for ipfix_config in site_data.get('ipfix_exporters'):
+                    if "ipfix_exporters" in site_data:
+                        site_payload["site"]["ipfixExporterOpsV2"] = {}
+                        for ipfix_config in site_data.get("ipfix_exporters"):
                             self._process_ipfix_config(site_payload, ipfix_config, default_operation)
 
                     # Process NTP operations
-                    if 'ntps' in site_data:
-                        site_payload['site']['ntpOps'] = {}
-                        for ntp_item in site_data.get('ntps') or []:
+                    if "ntps" in site_data:
+                        site_payload["site"]["ntpOps"] = {}
+                        for ntp_item in site_data.get("ntps") or []:
                             if isinstance(ntp_item, dict):
-                                ntp_name = ntp_item.get('name')
+                                ntp_name = ntp_item.get("name")
                             else:
                                 ntp_name = ntp_item
                             if ntp_name:
-                                site_payload['site']['ntpOps'][ntp_name] = default_operation
+                                site_payload["site"]["ntpOps"][ntp_name] = default_operation
 
                     # Execute the site configuration
                     self.gsdk.post_site_config(site_id=site_id, site_config=site_payload)
 
                     # Mark as changed and track the operation
-                    result['changed'] = True
+                    result["changed"] = True
                     if operation.lower().startswith("attach"):
-                        result['attached'].append(site_name)
+                        result["attached"].append(site_name)
                     else:
-                        result['detached'].append(site_name)
+                        result["detached"].append(site_name)
 
-                    LOG.info("Successfully %s global objects for site: %s (ID: %s)",
-                             default_operation.lower(), site_name, site_id)
+                    LOG.info(
+                        "Successfully %s global objects for site: %s (ID: %s)",
+                        default_operation.lower(),
+                        site_name,
+                        site_id,
+                    )
 
                 except SiteNotFoundError:
                     # For detach operations, site not found is acceptable (idempotent)
                     if operation.lower().startswith("detach"):
                         LOG.info("Site '%s' not found, skipping %s operation (idempotent)", site_name, operation)
-                        result['skipped'].append(site_name)
+                        result["skipped"].append(site_name)
                         continue
                     else:
                         LOG.error("Site '%s' not found, cannot %s objects", site_name, operation)
@@ -406,31 +388,43 @@ class SiteManager(BaseManager):
                     error_msg = str(e)
                     # Handle "already attached" errors gracefully
                     if operation.lower().startswith("attach") and (
-                            "already attached" in error_msg.lower() or "already exists" in error_msg.lower()):
-                        LOG.info("Object already %sed to site '%s', skipping: %s",
-                                 default_operation.lower(), site_name, error_msg)
-                        result['skipped'].append(site_name)
+                        "already attached" in error_msg.lower() or "already exists" in error_msg.lower()
+                    ):
+                        LOG.info(
+                            "Object already %sed to site '%s', skipping: %s",
+                            default_operation.lower(),
+                            site_name,
+                            error_msg,
+                        )
+                        result["skipped"].append(site_name)
                         continue
                     # Handle "already detached","not attached" and "not found" errors gracefully for detach operations
                     elif operation.lower().startswith("detach") and (
-                            "already detached" in error_msg.lower() or
-                            "not attached" in error_msg.lower() or "not found" in error_msg.lower()):
-                        LOG.info("Object not attached to site '%s', skipping %s: %s",
-                                 site_name, default_operation.lower(), error_msg)
-                        result['skipped'].append(site_name)
+                        "already detached" in error_msg.lower()
+                        or "not attached" in error_msg.lower()
+                        or "not found" in error_msg.lower()
+                    ):
+                        LOG.info(
+                            "Object not attached to site '%s', skipping %s: %s",
+                            site_name,
+                            default_operation.lower(),
+                            error_msg,
+                        )
+                        result["skipped"].append(site_name)
                         continue
                     else:
-                        LOG.error("Error %sing objects for site '%s': %s", default_operation.lower(), site_name, error_msg)
+                        LOG.error(
+                            "Error %sing objects for site '%s': %s", default_operation.lower(), site_name, error_msg
+                        )
                         raise ConfigurationError(f"Failed to {operation.lower()} objects for {site_name}: {error_msg}")
 
-            total_processed = len(result['attached']) + len(result['detached']) + len(result['skipped'])
-            LOG.info("Processed %s sites for object %s (changed: %s)",
-                     total_processed, operation, result['changed'])
+            total_processed = len(result["attached"]) + len(result["detached"]) + len(result["skipped"])
+            LOG.info("Processed %s sites for object %s (changed: %s)", total_processed, operation, result["changed"])
             # Explicit lists for consistency with global_config/interface_manager deconfigure logging
             if operation.lower().startswith("detach"):
-                LOG.info("Deconfigure completed: detached=%s, skipped=%s", result['detached'], result['skipped'])
+                LOG.info("Deconfigure completed: detached=%s, skipped=%s", result["detached"], result["skipped"])
             else:
-                LOG.info("Configure completed: attached=%s, skipped=%s", result['attached'], result['skipped'])
+                LOG.info("Configure completed: attached=%s, skipped=%s", result["attached"], result["skipped"])
 
             return result
 
@@ -438,8 +432,9 @@ class SiteManager(BaseManager):
             LOG.error("Error in site %s operation: %s", operation, str(e))
             raise ConfigurationError(f"Site {operation} operation failed: {str(e)}")
 
-    def _process_syslog_config(self, site_payload: Dict[str, Any],
-                               syslog_config: Union[str, Dict], default_operation: str) -> None:
+    def _process_syslog_config(
+        self, site_payload: Dict[str, Any], syslog_config: Union[str, Dict], default_operation: str
+    ) -> None:
         """
         Process syslog configuration for site attachment/detachment.
 
@@ -451,26 +446,23 @@ class SiteManager(BaseManager):
         if isinstance(syslog_config, str):
             # Backward compatibility: simple string format
             syslog_name = syslog_config
-            site_payload['site']['syslogServerOpsV2'][syslog_name] = {
-                "operation": default_operation
-            }
+            site_payload["site"]["syslogServerOpsV2"][syslog_name] = {"operation": default_operation}
         else:
             # New format: object with interface specification
-            syslog_name = syslog_config.get('name')
-            interface = syslog_config.get('interface')
+            syslog_name = syslog_config.get("name")
+            interface = syslog_config.get("interface")
 
             if not syslog_name:
                 raise ValidationError("Syslog configuration must include 'name' field")
 
-            site_payload['site']['syslogServerOpsV2'][syslog_name] = {
+            site_payload["site"]["syslogServerOpsV2"][syslog_name] = {
                 "operation": default_operation,
-                "interface": {
-                    "interface": interface
-                }
+                "interface": {"interface": interface},
             }
 
-    def _process_ipfix_config(self, site_payload: Dict[str, Any],
-                              ipfix_config: Union[str, Dict], default_operation: str) -> None:
+    def _process_ipfix_config(
+        self, site_payload: Dict[str, Any], ipfix_config: Union[str, Dict], default_operation: str
+    ) -> None:
         """
         Process IPFIX configuration for site attachment/detachment.
 
@@ -482,20 +474,16 @@ class SiteManager(BaseManager):
         if isinstance(ipfix_config, str):
             # Backward compatibility: simple string format
             ipfix_name = ipfix_config
-            site_payload['site']['ipfixExporterOpsV2'][ipfix_name] = {
-                "operation": default_operation
-            }
+            site_payload["site"]["ipfixExporterOpsV2"][ipfix_name] = {"operation": default_operation}
         else:
             # New format: object with interface specification
-            ipfix_name = ipfix_config.get('name')
-            interface = ipfix_config.get('interface')
+            ipfix_name = ipfix_config.get("name")
+            interface = ipfix_config.get("interface")
 
             if not ipfix_name:
                 raise ValidationError("IPFIX configuration must include 'name' field")
 
-            site_payload['site']['ipfixExporterOpsV2'][ipfix_name] = {
+            site_payload["site"]["ipfixExporterOpsV2"][ipfix_name] = {
                 "operation": default_operation,
-                "interface": {
-                    "interface": interface
-                }
+                "interface": {"interface": interface},
             }

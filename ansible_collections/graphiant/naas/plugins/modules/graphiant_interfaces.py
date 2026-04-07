@@ -14,7 +14,7 @@ This module provides comprehensive interface management capabilities including:
 - Combined interface operations
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_interfaces
 short_description: Manage Graphiant interfaces and circuits
@@ -34,14 +34,21 @@ notes:
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves device names to IDs and validates configurations."
   - "Deconfigure operations are idempotent and safe to run multiple times."
-  - "Configure operations always push the desired config (they may report changed even if the device is already configured)."
+  - >-
+    Configure operations always push the desired config (they may report changed even if the device
+    is already configured).
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
-  - "LAN segment move: When an interface or subinterface is moved to a different LAN segment, the API requires a two-step push (segment-only then full config). The module does this automatically; in check mode both payloads are shown."
+  - >-
+    LAN segment move: When an interface or subinterface is moved to a different LAN segment, the
+    API requires a two-step push (segment-only then full config). The module does this
+    automatically; in check mode both payloads are shown.
   - "WAN static-route cleanup (important):"
   - "  - Detaching a WAN interface from a circuit may be treated by the backend as a circuit removal."
   - "    If that circuit still has static routes, the operation can fail with:"
   - "    'error removing circuit \"<name>\". Remove static routes first.'"
-  - "  - V(deconfigure_wan_circuits_interfaces) and V(deconfigure_interfaces) automatically remove static routes first (when a circuit config is provided)."
+  - >-
+    V(deconfigure_wan_circuits_interfaces) and V(deconfigure_interfaces) automatically remove static
+    routes first (when a circuit config is provided).
   - "  - Use V(deconfigure_circuits) when you only want to remove static routes and keep interfaces/circuits attached."
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
@@ -58,7 +65,9 @@ options:
   circuit_config_file:
     description:
       - Path to the circuit configuration YAML file.
-      - Required for WAN and circuit operations (V(configure_wan_circuits_interfaces), V(deconfigure_wan_circuits_interfaces), V(configure_circuits), V(deconfigure_circuits)).  # noqa: E501
+      - >-
+        Required for WAN and circuit operations (V(configure_wan_circuits_interfaces),
+        V(deconfigure_wan_circuits_interfaces), V(configure_circuits), V(deconfigure_circuits)).
       - Optional for LAN-only operations.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - Configuration files support Jinja2 templating syntax for dynamic generation.
@@ -69,11 +78,16 @@ options:
     description:
       - "The specific interface operation to perform."
       - "V(configure_interfaces): Configure all interfaces (LAN and WAN) in one operation."
-      - "V(deconfigure_interfaces): Deconfigure all interfaces. Removes WAN static routes first (when circuit config provided), then resets parent interface to default LAN and deletes subinterfaces."
+      - >-
+        V(deconfigure_interfaces): Deconfigure all interfaces. Removes WAN static routes first (when
+        circuit config provided), then resets parent interface to default LAN and deletes
+        subinterfaces.
       - "V(configure_lan_interfaces): Configure LAN interfaces (subinterfaces) only."
       - "V(deconfigure_lan_interfaces): Deconfigure LAN interfaces (subinterfaces) only."
       - "V(configure_wan_circuits_interfaces): Configure WAN circuits and interfaces together."
-      - "V(deconfigure_wan_circuits_interfaces): Deconfigure WAN circuits and interfaces together (two-stage: static routes first, then interface reset)."
+      - >-
+        V(deconfigure_wan_circuits_interfaces): Deconfigure WAN circuits and interfaces together
+        (two-stage: static routes first, then interface reset).
       - "V(configure_circuits): Configure circuits only. Can be called separately after interface is configured."
       - "V(deconfigure_circuits): Deconfigure circuits only. Removes static routes if any."
     type: str
@@ -111,10 +125,13 @@ options:
 
 attributes:
   check_mode:
-    description: Supports check mode. In check mode, no configuration is pushed to the devices but payloads that would be pushed are logged with C([check_mode]).
+    description: >
+      Supports check mode. In check mode, no configuration is pushed to the devices but payloads
+      that would be pushed are logged with C([check_mode]).
     support: full
     details: >
-      When run with C(--check), the module logs the exact payloads that would be pushed with a C([check_mode]) prefix so you can see what configuration would be applied.
+      When run with C(--check), the module logs the exact payloads that would be pushed with a
+      C([check_mode]) prefix so you can see what configuration would be applied.
 
 requirements:
   - python >= 3.7
@@ -131,9 +148,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Configure all interfaces (LAN and WAN)
   graphiant.naas.graphiant_interfaces:
     operation: configure_interfaces
@@ -209,9 +226,9 @@ EXAMPLES = r'''
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
@@ -229,9 +246,10 @@ changed:
 operation:
   description:
     - The operation that was performed.
-    - One of V(configure_interfaces), V(deconfigure_interfaces), V(configure_lan_interfaces), V(deconfigure_lan_interfaces),
-      V(configure_wan_circuits_interfaces), V(deconfigure_wan_circuits_interfaces), V(configure_circuits),
-      or V(deconfigure_circuits).
+    - >-
+      One of V(configure_interfaces), V(deconfigure_interfaces), V(configure_lan_interfaces),
+      V(deconfigure_lan_interfaces), V(configure_wan_circuits_interfaces),
+      V(deconfigure_wan_circuits_interfaces), V(configure_circuits), or V(deconfigure_circuits).
   type: str
   returned: always
   sample: "configure_interfaces"
@@ -254,17 +272,15 @@ circuits_only:
   type: bool
   returned: always
   sample: false
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
-    handle_graphiant_exception
+    handle_graphiant_exception,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
-    capture_library_logs
-)
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
 
 
 @capture_library_logs
@@ -282,24 +298,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'changed' and 'result_msg' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+    success_msg = kwargs.pop("success_msg", "Operation completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
-        if isinstance(result, dict) and 'changed' in result:
-            return {
-                'changed': result['changed'],
-                'result_msg': success_msg,
-                'details': result
-            }
+        if isinstance(result, dict) and "changed" in result:
+            return {"changed": result["changed"], "result_msg": success_msg, "details": result}
 
         # Fallback for functions that don't return change status
-        return {
-            'changed': True,
-            'result_msg': success_msg
-        }
+        return {"changed": True, "result_msg": success_msg}
     except Exception as e:
         raise e
 
@@ -312,84 +321,75 @@ def main():
     # Define module arguments
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        interface_config_file=dict(type='str', required=True),
-        circuit_config_file=dict(type='str', required=False, default=None),
+        interface_config_file=dict(type="str", required=True),
+        circuit_config_file=dict(type="str", required=False, default=None),
         operation=dict(
-            type='str',
+            type="str",
             required=False,
             choices=[
-                'configure_interfaces',
-                'deconfigure_interfaces',
-                'configure_lan_interfaces',
-                'deconfigure_lan_interfaces',
-                'configure_wan_circuits_interfaces',
-                'deconfigure_wan_circuits_interfaces',
-                'configure_circuits',
-                'deconfigure_circuits'
-            ]
+                "configure_interfaces",
+                "deconfigure_interfaces",
+                "configure_lan_interfaces",
+                "deconfigure_lan_interfaces",
+                "configure_wan_circuits_interfaces",
+                "deconfigure_wan_circuits_interfaces",
+                "configure_circuits",
+                "deconfigure_circuits",
+            ],
         ),
-        circuits_only=dict(type='bool', required=False, default=False),
-        state=dict(
-            type='str',
-            required=False,
-            default='present',
-            choices=['present', 'absent']
-        ),
-        detailed_logs=dict(
-            type='bool',
-            required=False,
-            default=False
-        )
+        circuits_only=dict(type="bool", required=False, default=False),
+        state=dict(type="str", required=False, default="present", choices=["present", "absent"]),
+        detailed_logs=dict(type="bool", required=False, default=False),
     )
 
     # Create Ansible module
-    module = AnsibleModule(
-        argument_spec=argument_spec,
-        supports_check_mode=True
-    )
+    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
 
     # Get parameters
     params = module.params
-    operation = params.get('operation')
-    state = params.get('state', 'present')
-    interface_config_file = params['interface_config_file']
-    circuit_config_file = params.get('circuit_config_file')
-    circuits_only = params.get('circuits_only', False)
+    operation = params.get("operation")
+    state = params.get("state", "present")
+    interface_config_file = params["interface_config_file"]
+    circuit_config_file = params.get("circuit_config_file")
+    circuits_only = params.get("circuits_only", False)
 
     # Validate that at least one of operation or state is provided
     if not operation and not state:
         supported_operations = [
-            'configure_interfaces', 'deconfigure_interfaces', 'configure_lan_interfaces',
-            'deconfigure_lan_interfaces', 'configure_wan_circuits_interfaces',
-            'deconfigure_wan_circuits_interfaces', 'configure_circuits', 'deconfigure_circuits'
+            "configure_interfaces",
+            "deconfigure_interfaces",
+            "configure_lan_interfaces",
+            "deconfigure_lan_interfaces",
+            "configure_wan_circuits_interfaces",
+            "deconfigure_wan_circuits_interfaces",
+            "configure_circuits",
+            "deconfigure_circuits",
         ]
         module.fail_json(
             msg="Either 'operation' or 'state' parameter must be provided. "
-                f"Supported operations: {', '.join(supported_operations)}"
+            f"Supported operations: {', '.join(supported_operations)}"
         )
 
     # If operation is not specified, use state to determine operation
     if not operation:
-        if state == 'present':
-            operation = 'configure_interfaces'
-        elif state == 'absent':
-            operation = 'deconfigure_interfaces'
+        if state == "present":
+            operation = "configure_interfaces"
+        elif state == "absent":
+            operation = "deconfigure_interfaces"
 
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
 
     # Validate operation-specific requirements
     circuit_operations = [
-        'configure_wan_circuits_interfaces',
-        'deconfigure_wan_circuits_interfaces',
-        'configure_circuits',
-        'deconfigure_circuits'
+        "configure_wan_circuits_interfaces",
+        "deconfigure_wan_circuits_interfaces",
+        "configure_circuits",
+        "deconfigure_circuits",
     ]
 
     if operation in circuit_operations and not circuit_config_file:
-        module.fail_json(
-            msg=f"Operation '{operation}' requires 'circuit_config_file' parameter"
-        )
+        module.fail_json(msg=f"Operation '{operation}' requires 'circuit_config_file' parameter")
 
     # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
@@ -402,61 +402,93 @@ def main():
         changed = False
         result_msg = ""
 
-        if operation == 'configure_interfaces':
-            result = execute_with_logging(module, graphiant_config.interfaces.configure_interfaces,
-                                          interface_config_file, circuit_config_file,
-                                          success_msg="Successfully configured all interfaces")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        if operation == "configure_interfaces":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.configure_interfaces,
+                interface_config_file,
+                circuit_config_file,
+                success_msg="Successfully configured all interfaces",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure_interfaces':
-            result = execute_with_logging(module, graphiant_config.interfaces.deconfigure_interfaces,
-                                          interface_config_file, circuit_config_file, circuits_only,
-                                          success_msg="Successfully deconfigured all interfaces")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure_interfaces":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.deconfigure_interfaces,
+                interface_config_file,
+                circuit_config_file,
+                circuits_only,
+                success_msg="Successfully deconfigured all interfaces",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'configure_lan_interfaces':
-            result = execute_with_logging(module, graphiant_config.interfaces.configure_lan_interfaces,
-                                          interface_config_file,
-                                          success_msg="Successfully configured LAN interfaces")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "configure_lan_interfaces":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.configure_lan_interfaces,
+                interface_config_file,
+                success_msg="Successfully configured LAN interfaces",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure_lan_interfaces':
-            result = execute_with_logging(module, graphiant_config.interfaces.deconfigure_lan_interfaces,
-                                          interface_config_file,
-                                          success_msg="Successfully deconfigured LAN interfaces")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure_lan_interfaces":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.deconfigure_lan_interfaces,
+                interface_config_file,
+                success_msg="Successfully deconfigured LAN interfaces",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'configure_wan_circuits_interfaces':
-            result = execute_with_logging(module, graphiant_config.interfaces.configure_wan_circuits_interfaces,
-                                          circuit_config_file, interface_config_file,
-                                          success_msg="Successfully configured WAN circuits and interfaces")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "configure_wan_circuits_interfaces":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.configure_wan_circuits_interfaces,
+                circuit_config_file,
+                interface_config_file,
+                success_msg="Successfully configured WAN circuits and interfaces",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure_wan_circuits_interfaces':
-            result = execute_with_logging(module, graphiant_config.interfaces.deconfigure_wan_circuits_interfaces,
-                                          interface_config_file, circuit_config_file, circuits_only,
-                                          success_msg="Successfully deconfigured WAN circuits and interfaces")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure_wan_circuits_interfaces":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.deconfigure_wan_circuits_interfaces,
+                interface_config_file,
+                circuit_config_file,
+                circuits_only,
+                success_msg="Successfully deconfigured WAN circuits and interfaces",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'configure_circuits':
-            result = execute_with_logging(module, graphiant_config.interfaces.configure_circuits,
-                                          circuit_config_file, interface_config_file,
-                                          success_msg="Successfully configured circuits")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "configure_circuits":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.configure_circuits,
+                circuit_config_file,
+                interface_config_file,
+                success_msg="Successfully configured circuits",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure_circuits':
-            result = execute_with_logging(module, graphiant_config.interfaces.deconfigure_circuits,
-                                          circuit_config_file, interface_config_file,
-                                          success_msg="Successfully deconfigured circuits")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure_circuits":
+            result = execute_with_logging(
+                module,
+                graphiant_config.interfaces.deconfigure_circuits,
+                circuit_config_file,
+                interface_config_file,
+                success_msg="Successfully deconfigured circuits",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
         # Return success
         module.exit_json(
@@ -465,7 +497,7 @@ def main():
             operation=operation,
             interface_config_file=interface_config_file,
             circuit_config_file=circuit_config_file,
-            circuits_only=circuits_only
+            circuits_only=circuits_only,
         )
 
     except Exception as e:
@@ -473,5 +505,5 @@ def main():
         module.fail_json(msg=error_msg, operation=operation)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -17,7 +17,7 @@ This module provides LAG interface management capabilities including:
 - Deconfigure LAG
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_lag_interfaces
 short_description: Manage Graphiant LAG (Link Aggregation Group) configuration
@@ -150,9 +150,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Configure LAG
   graphiant.naas.graphiant_lag_interfaces:
     operation: configure
@@ -210,9 +210,9 @@ EXAMPLES = r'''
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the operation, including detailed logs when
@@ -240,7 +240,7 @@ lag_config_file:
   type: str
   returned: always
   sample: "sample_lag_interface_config.yaml"
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
@@ -265,24 +265,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'changed' and 'result_msg' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+    success_msg = kwargs.pop("success_msg", "Operation completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
-        if isinstance(result, dict) and 'changed' in result:
-            return {
-                'changed': result['changed'],
-                'result_msg': success_msg,
-                'details': result
-            }
+        if isinstance(result, dict) and "changed" in result:
+            return {"changed": result["changed"], "result_msg": success_msg, "details": result}
 
         # Fallback for functions that don't return change status
-        return {
-            'changed': True,
-            'result_msg': success_msg
-        }
+        return {"changed": True, "result_msg": success_msg}
     except Exception as e:
         raise e
 
@@ -295,65 +288,53 @@ def main():
     # Define module arguments
     argument_spec = dict(
         **graphiant_utils.graphiant_portal_auth_argument_spec(),
-        lag_config_file=dict(type='str', required=True),
+        lag_config_file=dict(type="str", required=True),
         operation=dict(
-            type='str',
+            type="str",
             required=False,
             choices=[
-                'configure',
-                'deconfigure',
-                'add_lag_members',
-                'remove_lag_members',
-                'update_lacp_configs',
-                'delete_lag_subinterfaces'
-            ]
+                "configure",
+                "deconfigure",
+                "add_lag_members",
+                "remove_lag_members",
+                "update_lacp_configs",
+                "delete_lag_subinterfaces",
+            ],
         ),
-        state=dict(
-            type='str',
-            required=False,
-            default='present',
-            choices=['present', 'absent']
-        ),
-        detailed_logs=dict(
-            type='bool',
-            required=False,
-            default=False
-        )
+        state=dict(type="str", required=False, default="present", choices=["present", "absent"]),
+        detailed_logs=dict(type="bool", required=False, default=False),
     )
 
     # Create Ansible module
-    module = AnsibleModule(
-        argument_spec=argument_spec,
-        supports_check_mode=True
-    )
+    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
 
     # Get parameters
     params = module.params
-    operation = params.get('operation')
-    state = params.get('state', 'present')
-    lag_config_file = params['lag_config_file']
+    operation = params.get("operation")
+    state = params.get("state", "present")
+    lag_config_file = params["lag_config_file"]
 
     # Validate that at least one of operation or state is provided
     if not operation and not state:
         supported_operations = [
-            'configure',
-            'deconfigure',
-            'add_lag_members',
-            'remove_lag_members',
-            'update_lacp_configs',
-            'delete_lag_subinterfaces',
+            "configure",
+            "deconfigure",
+            "add_lag_members",
+            "remove_lag_members",
+            "update_lacp_configs",
+            "delete_lag_subinterfaces",
         ]
         module.fail_json(
             msg="Either 'operation' or 'state' parameter must be provided. "
-                f"Supported operations: {', '.join(supported_operations)}"
+            f"Supported operations: {', '.join(supported_operations)}"
         )
 
     # If operation is not specified, use state to determine operation
     if not operation:
-        if state == 'present':
-            operation = 'configure'
-        elif state == 'absent':
-            operation = 'deconfigure'
+        if state == "present":
+            operation = "configure"
+        elif state == "absent":
+            operation = "deconfigure"
 
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
@@ -369,65 +350,65 @@ def main():
         changed = False
         result_msg = ""
 
-        if operation == 'configure':
+        if operation == "configure":
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.configure,
                 lag_config_file,
                 success_msg="Successfully configured LAG interfaces",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure':
+        elif operation == "deconfigure":
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.deconfigure,
                 lag_config_file,
                 success_msg="Successfully deconfigured LAG",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'add_lag_members':
+        elif operation == "add_lag_members":
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.add_lag_members,
                 lag_config_file,
                 success_msg="Successfully added LAG members",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'remove_lag_members':
+        elif operation == "remove_lag_members":
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.remove_lag_members,
                 lag_config_file,
                 success_msg="Successfully removed LAG members",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'update_lacp_configs':
+        elif operation == "update_lacp_configs":
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.update_lacp_configs,
                 lag_config_file,
                 success_msg="Successfully updated LACP configuration",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'delete_lag_subinterfaces':
+        elif operation == "delete_lag_subinterfaces":
             result = execute_with_logging(
                 module,
                 graphiant_config.lag_interfaces.delete_lag_subinterfaces,
                 lag_config_file,
                 success_msg="Successfully deleted LAG subinterfaces",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
         else:
             module.fail_json(
@@ -436,17 +417,12 @@ def main():
             )
 
         # Return success
-        module.exit_json(
-            changed=changed,
-            msg=result_msg,
-            operation=operation,
-            lag_config_file=lag_config_file
-        )
+        module.exit_json(changed=changed, msg=result_msg, operation=operation, lag_config_file=lag_config_file)
 
     except Exception as e:
         error_msg = graphiant_utils.handle_graphiant_exception(e, operation)
         module.fail_json(msg=error_msg, operation=operation)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

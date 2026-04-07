@@ -1,6 +1,7 @@
 """
 Logging decorator for Ansible modules to capture detailed library logs
 """
+
 import logging
 import io
 import functools
@@ -22,6 +23,7 @@ def _import_setup_logger():
     # Strategy 1: Use Ansible FQCN import (required for Ansible module execution)
     try:
         from ansible_collections.graphiant.naas.plugins.module_utils.libs.logger import setup_logger
+
         return setup_logger
     except ImportError:
         pass
@@ -33,6 +35,7 @@ def _import_setup_logger():
 
     try:
         from libs.logger import setup_logger
+
         return setup_logger
     except ImportError:
         # Final fallback: return None and use basic logging
@@ -58,10 +61,11 @@ def capture_library_logs(func):
             # Your operation code here
             pass
     """
+
     @functools.wraps(func)
     def wrapper(module, *args, **kwargs):
         # Check if detailed logging is enabled
-        detailed_logs = module.params.get('detailed_logs', False)
+        detailed_logs = module.params.get("detailed_logs", False)
 
         if not detailed_logs:
             # If detailed logging is disabled, just run the function normally
@@ -81,12 +85,12 @@ def capture_library_logs(func):
                 self.buffer = buffer
 
             def emit(self, record):
-                self.buffer.write(self.format(record) + '\n')
+                self.buffer.write(self.format(record) + "\n")
 
         # Create and configure the handler
         log_handler = LogCaptureHandler(log_capture)
         log_handler.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         log_handler.setFormatter(formatter)
 
         # Get the library logger using imported setup_logger (same as libs/logger.py)
@@ -105,8 +109,8 @@ def capture_library_logs(func):
 
             # Capture the logs
             captured_logs = log_capture.getvalue()
-            if captured_logs and 'result_msg' in result:
-                result['result_msg'] += f"\n\nDetailed logs:\n{captured_logs}"
+            if captured_logs and "result_msg" in result:
+                result["result_msg"] += f"\n\nDetailed logs:\n{captured_logs}"
 
             return result
 

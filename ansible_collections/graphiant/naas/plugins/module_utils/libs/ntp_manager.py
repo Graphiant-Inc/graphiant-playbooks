@@ -124,9 +124,7 @@ class NtpManager(BaseManager):
                         f"{self.gsdk.enterprise_info['company_name']}. Please check device name."
                     )
 
-                ntp_cfg = (
-                    device_cfg.get("ntps")
-                )
+                ntp_cfg = device_cfg.get("ntps")
                 # Build per-device ntpGlobalObject payload (inline)
                 items: List[Dict[str, Any]]
                 if ntp_cfg is None:

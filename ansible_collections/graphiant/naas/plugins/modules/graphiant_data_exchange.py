@@ -14,7 +14,7 @@ This module provides Data Exchange management capabilities including:
 - Service invitation acceptance
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_data_exchange
 short_description: Manage Graphiant Data Exchange services, customers, matches, and invitations
@@ -48,13 +48,21 @@ options:
       - "Configuration file must contain I(data_exchange_services) list with service definitions."
       - "Services define peering services with LAN segments, sites, and service prefixes."
       - "Optional I(policy.globalObjectOps): keys are device names (resolved to device IDs) or device IDs;"
-      - "values can include I(routingPolicyOps) to attach Graphiant filters per device (e.g. I(Policy-DC1-Primary): I(Attach))."
-      - "Configure Graphiant filters first with M(graphiant.naas.graphiant_global_config) and I(configure_graphiant_filters)."
-      - "V(delete_services): Delete Data Exchange services from YAML configuration. Services must be deleted after customers that depend on them."
+      - >-
+        values can include I(routingPolicyOps) to attach Graphiant filters per device
+        (e.g. I(Policy-DC1-Primary): I(Attach)).
+      - >-
+        Configure Graphiant filters first with M(graphiant.naas.graphiant_global_config) and
+        I(configure_graphiant_filters).
+      - >-
+        V(delete_services): Delete Data Exchange services from YAML configuration. Services must be
+        deleted after customers that depend on them.
       - "V(create_customers): Create Data Exchange customers from YAML configuration (Workflow 2)."
       - "Configuration file must contain I(data_exchange_customers) list with customer definitions."
       - "Customers can be non-Graphiant peers that can be invited to connect to services."
-      - "V(delete_customers): Delete Data Exchange customers from YAML configuration. Customers must be deleted before services they depend on."
+      - >-
+        V(delete_customers): Delete Data Exchange customers from YAML configuration. Customers must be
+        deleted before services they depend on.
       - "V(match_service_to_customers): Match services to customers from YAML configuration (Workflow 3)."
       - "Configuration file must contain I(data_exchange_matches) list with match definitions."
       - "Automatically saves match responses to JSON file for use in Workflow 4."
@@ -146,9 +154,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Workflow 1 - Create Data Exchange services
   graphiant.naas.graphiant_data_exchange:
     operation: create_services
@@ -308,9 +316,9 @@ EXAMPLES = r'''
         - "{{ create_customers_result }}"
         - "{{ match_result }}"
         - "{{ accept_result }}"
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
@@ -369,17 +377,15 @@ config_file:
   type: str
   returned: when applicable
   sample: "de_workflows_configs/sample_data_exchange_services.yaml"
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
-    handle_graphiant_exception
+    handle_graphiant_exception,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
-    capture_library_logs
-)
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
 
 
 @capture_library_logs
@@ -397,24 +403,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'changed' and 'result_msg' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+    success_msg = kwargs.pop("success_msg", "Operation completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
-        if isinstance(result, dict) and 'changed' in result:
-            return {
-                'changed': result['changed'],
-                'result_msg': success_msg,
-                'details': result
-            }
+        if isinstance(result, dict) and "changed" in result:
+            return {"changed": result["changed"], "result_msg": success_msg, "details": result}
 
         # Fallback for functions that don't return change status
-        return {
-            'changed': True,
-            'result_msg': success_msg
-        }
+        return {"changed": True, "result_msg": success_msg}
     except Exception as e:
         raise e
 
@@ -426,61 +425,56 @@ def main():
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
         operation=dict(
-            type='str',
+            type="str",
             required=True,
             choices=[
-                'create_services',
-                'delete_services',
-                'create_customers',
-                'delete_customers',
-                'match_service_to_customers',
-                'accept_invitation'
-            ]
+                "create_services",
+                "delete_services",
+                "create_customers",
+                "delete_customers",
+                "match_service_to_customers",
+                "accept_invitation",
+            ],
         ),
-        state=dict(
-            type='str',
-            choices=['present', 'absent'],
-            default='present'
-        ),
-        config_file=dict(type='str', required=False),
-        matches_file=dict(type='str', required=False),
-        detailed_logs=dict(type='bool', default=False)
+        state=dict(type="str", choices=["present", "absent"], default="present"),
+        config_file=dict(type="str", required=False),
+        matches_file=dict(type="str", required=False),
+        detailed_logs=dict(type="bool", default=False),
     )
 
     # Create module instance
     module = AnsibleModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        mutually_exclusive=[
-            ('operation', 'state')
-        ],
-        required_one_of=[
-            ('operation', 'state')
-        ]
+        mutually_exclusive=[("operation", "state")],
+        required_one_of=[("operation", "state")],
     )
 
     # Get parameters
     params = module.params
-    operation = params.get('operation')
-    state = params.get('state')
-    config_file = params.get('config_file')
+    operation = params.get("operation")
+    state = params.get("state")
+    config_file = params.get("config_file")
 
     # Determine operation based on state if operation not provided
     if not operation:
-        if state == 'present':
+        if state == "present":
             # Default to create_services for present state
-            operation = 'create_services'
-        elif state == 'absent':
+            operation = "create_services"
+        elif state == "absent":
             # Default to delete_services for absent state
-            operation = 'delete_services'
+            operation = "delete_services"
 
     # Validate required parameters
-    if operation in ['create_services', 'delete_services', 'create_customers', 'delete_customers',
-                     'match_service_to_customers']:
+    if operation in [
+        "create_services",
+        "delete_services",
+        "create_customers",
+        "delete_customers",
+        "match_service_to_customers",
+    ]:
         if not config_file:
-            module.fail_json(
-                msg=f"config_file parameter is required for operation '{operation}'"
-            )
+            module.fail_json(msg=f"config_file parameter is required for operation '{operation}'")
 
     try:
         # Get Graphiant connection
@@ -492,66 +486,86 @@ def main():
         result_msg = ""
         result_data = {}
 
-        if operation == 'create_services':
-            result = execute_with_logging(module, graphiant_config.data_exchange.create_services,
-                                          config_file,
-                                          success_msg=f"Successfully created Data Exchange services from {config_file}")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        if operation == "create_services":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.create_services,
+                config_file,
+                success_msg=f"Successfully created Data Exchange services from {config_file}",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'delete_services':
-            result = execute_with_logging(module, graphiant_config.data_exchange.delete_services,
-                                          config_file,
-                                          success_msg=f"Successfully deleted Data Exchange services from {config_file}")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "delete_services":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.delete_services,
+                config_file,
+                success_msg=f"Successfully deleted Data Exchange services from {config_file}",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'create_customers':
-            result = execute_with_logging(module, graphiant_config.data_exchange.create_customers,
-                                          config_file,
-                                          success_msg=f"Successfully created Data Exchange customers {config_file}")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "create_customers":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.create_customers,
+                config_file,
+                success_msg=f"Successfully created Data Exchange customers {config_file}",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'delete_customers':
-            result = execute_with_logging(module, graphiant_config.data_exchange.delete_customers,
-                                          config_file,
-                                          success_msg=f"Successfully deleted Data Exchange customers {config_file}")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "delete_customers":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.delete_customers,
+                config_file,
+                success_msg=f"Successfully deleted Data Exchange customers {config_file}",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'match_service_to_customers':
-            result = execute_with_logging(module, graphiant_config.data_exchange.match_service_to_customers,
-                                          config_file,
-                                          success_msg="Successfully matched Data Exchange services to customers")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "match_service_to_customers":
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.match_service_to_customers,
+                config_file,
+                success_msg="Successfully matched Data Exchange services to customers",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'accept_invitation':
+        elif operation == "accept_invitation":
             # accept_invitation operation supports config_file and optional matches_file
             if not config_file:
                 module.fail_json(msg="accept_invitation operation requires config_file parameter")
 
-            matches_file = params.get('matches_file')
+            matches_file = params.get("matches_file")
 
             success_msg = f"Successfully accepted Data Exchange service invitation from {config_file}"
             if module.check_mode:
-                success_msg = (f"Check mode: validated Data Exchange service invitation from {config_file} "
-                               "(API calls skipped)")
+                success_msg = (
+                    f"Check mode: validated Data Exchange service invitation from {config_file} " "(API calls skipped)"
+                )
 
-            result = execute_with_logging(module, graphiant_config.data_exchange.accept_invitation,
-                                          config_file, matches_file,
-                                          success_msg=success_msg)
+            result = execute_with_logging(
+                module,
+                graphiant_config.data_exchange.accept_invitation,
+                config_file,
+                matches_file,
+                success_msg=success_msg,
+            )
 
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
         else:
             module.fail_json(
                 msg=f"Unsupported operation: {operation}. "
-                    f"Supported operations are: create_services, delete_services, create_customers, "
-                    f"delete_customers, match_service_to_customers, accept_invitation. "
-                    f"For query operations, use graphiant.naas.graphiant_data_exchange_info module."
+                f"Supported operations are: create_services, delete_services, create_customers, "
+                f"delete_customers, match_service_to_customers, accept_invitation. "
+                f"For query operations, use graphiant.naas.graphiant_data_exchange_info module."
             )
 
         # Return success
@@ -560,14 +574,14 @@ def main():
             msg=result_msg,
             result_msg=result_msg,
             result_data=result_data,
-            operation=operation or 'unknown',
-            config_file=config_file if config_file else None
+            operation=operation or "unknown",
+            config_file=config_file if config_file else None,
         )
 
     except Exception as e:
-        error_msg = handle_graphiant_exception(e, operation or 'unknown')
-        module.fail_json(msg=error_msg, operation=operation or 'unknown')
+        error_msg = handle_graphiant_exception(e, operation or "unknown")
+        module.fail_json(msg=error_msg, operation=operation or "unknown")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

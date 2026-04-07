@@ -29,19 +29,19 @@ def graphiant_portal_auth_argument_spec():
         dict: Argument spec for host, username, password, access_token.
     """
     return {
-        'host': dict(type='str', required=True, aliases=['base_url']),
-        'username': dict(type='str', required=False),
-        'password': dict(type='str', required=False, no_log=True, default=None),
-        'access_token': dict(type='str', required=False, no_log=True, default=None),
+        "host": dict(type="str", required=True, aliases=["base_url"]),
+        "username": dict(type="str", required=False),
+        "password": dict(type="str", required=False, no_log=True, default=None),
+        "access_token": dict(type="str", required=False, no_log=True, default=None),
     }
 
 
 def _resolved_access_token(module_params: Dict[str, Any]):
     """Prefer module access_token, then GRAPHIANT_ACCESS_TOKEN from the environment."""
-    explicit = module_params.get('access_token')
+    explicit = module_params.get("access_token")
     if explicit is not None and str(explicit).strip():
         return str(explicit).strip()
-    env_t = os.environ.get('GRAPHIANT_ACCESS_TOKEN')
+    env_t = os.environ.get("GRAPHIANT_ACCESS_TOKEN")
     if env_t is not None and str(env_t).strip():
         return str(env_t).strip()
     return None
@@ -52,7 +52,7 @@ def _password_auth_usable(username, password) -> bool:
         return False
     if not str(username).strip():
         return False
-    if str(password) == '':
+    if str(password) == "":
         return False
     return True
 
@@ -80,12 +80,14 @@ def _import_graphiant_libs():
     # This tells Ansible to bundle the libs/ directory in the module payload
     # Do NOT modify sys.path here - let Ansible handle it
     try:
-        from ansible_collections.graphiant.naas.plugins.module_utils.libs.graphiant_config import (
-            GraphiantConfig
-        )
+        from ansible_collections.graphiant.naas.plugins.module_utils.libs.graphiant_config import GraphiantConfig
         from ansible_collections.graphiant.naas.plugins.module_utils.libs.exceptions import (
-            GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError
+            GraphiantPlaybookError,
+            ConfigurationError,
+            APIError,
+            DeviceNotFoundError,
         )
+
         return GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError
     except ImportError:
         pass
@@ -100,6 +102,7 @@ def _import_graphiant_libs():
     try:
         from libs.graphiant_config import GraphiantConfig
         from libs.exceptions import GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError
+
         return GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError
     except ImportError:
         # Return None values instead of raising to allow ansible-test validate-modules
@@ -226,12 +229,12 @@ def get_graphiant_connection(module_params: Dict[str, Any], check_mode: bool = F
     Returns:
         GraphiantConnection: Initialized connection object
     """
-    if 'host' not in module_params or not module_params.get('host'):
+    if "host" not in module_params or not module_params.get("host"):
         raise ValueError("Missing required parameter: host")
 
     token = _resolved_access_token(module_params)
-    username = module_params.get('username')
-    password = module_params.get('password')
+    username = module_params.get("username")
+    password = module_params.get("password")
 
     if token is None and not _password_auth_usable(username, password):
         raise ValueError(
@@ -240,7 +243,7 @@ def get_graphiant_connection(module_params: Dict[str, Any], check_mode: bool = F
         )
 
     return GraphiantConnection(
-        host=module_params['host'],
+        host=module_params["host"],
         username=username,
         password=password,
         access_token=token,
