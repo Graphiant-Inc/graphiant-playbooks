@@ -22,6 +22,7 @@ from typing import Dict, Any, Optional
 
 try:
     from jinja2 import Template, TemplateError as Jinja2TemplateError
+
     HAS_JINJA2 = True
 except ImportError:
     HAS_JINJA2 = False
@@ -29,7 +30,9 @@ except ImportError:
 
     class Jinja2TemplateError(Exception):
         """Placeholder for Jinja2 TemplateError when Jinja2 is not installed."""
+
         pass
+
 
 from .base_manager import BaseManager
 from .logger import setup_logger
@@ -85,7 +88,7 @@ class DeviceConfigManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {'changed': False, 'configured_devices': [], 'skipped_devices': []}
+        result = {"changed": False, "configured_devices": [], "skipped_devices": []}
 
         LOG.info("Configuring devices from %s", config_yaml_file)
         if template_file:
@@ -122,14 +125,11 @@ class DeviceConfigManager(BaseManager):
                 payload = self._parse_payload(config_data, device_name)
                 if payload is None:
                     LOG.warning("Skipping device '%s' - no valid payload", device_name)
-                    result['skipped_devices'].append(device_name)
+                    result["skipped_devices"].append(device_name)
                     continue
 
                 # Build output config for concurrent execution
-                output_config[device_id] = {
-                    "device_id": device_id,
-                    "payload": payload
-                }
+                output_config[device_id] = {"device_id": device_id, "payload": payload}
                 device_names[device_id] = device_name
                 LOG.info(" ✓ Prepared configuration for device: %s (ID: %s)", device_name, device_id)
 
@@ -139,10 +139,13 @@ class DeviceConfigManager(BaseManager):
                 self.execute_concurrent_tasks(self.gsdk.show_validated_payload, output_config)
                 LOG.info("Pushing configuration to %d device(s)...", len(output_config))
                 self.execute_concurrent_tasks(self.gsdk.put_device_config_raw, output_config)
-                result['changed'] = True
-                result['configured_devices'] = [device_names[did] for did in output_config.keys()]
-                LOG.info("Successfully configured %d device(s), skipped %d",
-                         len(result['configured_devices']), len(result['skipped_devices']))
+                result["changed"] = True
+                result["configured_devices"] = [device_names[did] for did in output_config.keys()]
+                LOG.info(
+                    "Successfully configured %d device(s), skipped %d",
+                    len(result["configured_devices"]),
+                    len(result["skipped_devices"]),
+                )
             else:
                 LOG.warning("No devices to configure")
 
@@ -153,6 +156,7 @@ class DeviceConfigManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to configure devices: %s", str(e))
             import traceback
+
             LOG.error("Traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Device configuration failed: {str(e)}")
 
@@ -222,19 +226,14 @@ class DeviceConfigManager(BaseManager):
                     continue
 
                 # Build output config for concurrent validation
-                output_config[device_id] = {
-                    "device_id": device_id,
-                    "payload": payload
-                }
+                output_config[device_id] = {"device_id": device_id, "payload": payload}
                 validated_count += 1
                 LOG.info(" ✓ Configuration parsed for device: %s (ID: %s)", device_name, device_id)
 
             # Execute concurrent configuration validation
             if output_config:
                 LOG.info("Showing validated payload for %d device(s)...", len(output_config))
-                results = self.execute_concurrent_tasks(
-                    self.gsdk.show_validated_payload, output_config
-                )
+                results = self.execute_concurrent_tasks(self.gsdk.show_validated_payload, output_config)
                 LOG.info("Successfully showed validated payload for %d device(s) - DRY-RUN complete", validated_count)
                 LOG.info("No configuration was pushed. Use 'configure' operation to apply changes.")
                 return results
@@ -247,6 +246,7 @@ class DeviceConfigManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to validate device configuration: %s", str(e))
             import traceback
+
             LOG.error("Traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Device configuration validation failed: {str(e)}")
 
@@ -298,11 +298,11 @@ class DeviceConfigManager(BaseManager):
             config_data = self._render_user_template(template_file, config_data)
 
         # Extract device_config section
-        if 'device_config' not in config_data:
+        if "device_config" not in config_data:
             LOG.info("No 'device_config' section found in configuration file")
             return {}
 
-        device_config_list = config_data['device_config']
+        device_config_list = config_data["device_config"]
         if not isinstance(device_config_list, list):
             raise ConfigurationError("'device_config' must be a list of device configurations")
 
@@ -313,9 +313,7 @@ class DeviceConfigManager(BaseManager):
                 for device_name, config in device_entry.items():
                     device_configs[device_name] = config
             else:
-                raise ConfigurationError(
-                    f"Invalid device_config entry format. Expected dict, got {type(device_entry)}"
-                )
+                raise ConfigurationError(f"Invalid device_config entry format. Expected dict, got {type(device_entry)}")
 
         LOG.info("Loaded configuration for %d device(s)", len(device_configs))
         return device_configs
@@ -341,19 +339,15 @@ class DeviceConfigManager(BaseManager):
             template_path = template_file
         else:
             # First check in config_path (for user-provided templates)
-            template_path = os.path.normpath(
-                os.path.join(self.config_utils.config_path, template_file)
-            )
+            template_path = os.path.normpath(os.path.join(self.config_utils.config_path, template_file))
             # If not found in config_path, check in template_path (for bundled templates)
             if not os.path.exists(template_path):
-                template_path = os.path.normpath(
-                    os.path.join(self.config_utils.template_path, template_file)
-                )
+                template_path = os.path.normpath(os.path.join(self.config_utils.template_path, template_file))
 
         LOG.info("Rendering user template: %s", template_path)
 
         try:
-            with open(template_path, 'r') as f:
+            with open(template_path, "r") as f:
                 template_content = f.read()
 
             template = Template(template_content)
@@ -392,7 +386,7 @@ class DeviceConfigManager(BaseManager):
         if config_data is None:
             return None
 
-        payload = config_data.get('payload')
+        payload = config_data.get("payload")
         if payload is None:
             LOG.warning("No 'payload' field found for device '%s'", device_name)
             return None
@@ -409,11 +403,8 @@ class DeviceConfigManager(BaseManager):
                 LOG.debug("Successfully parsed JSON payload for '%s'", device_name)
                 return parsed_payload
             except json.JSONDecodeError as e:
-                raise ConfigurationError(
-                    f"Invalid JSON payload for device '{device_name}': {str(e)}"
-                )
+                raise ConfigurationError(f"Invalid JSON payload for device '{device_name}': {str(e)}")
 
         raise ConfigurationError(
-            f"Invalid payload type for device '{device_name}'. "
-            f"Expected dict or JSON string, got {type(payload)}"
+            f"Invalid payload type for device '{device_name}'. " f"Expected dict or JSON string, got {type(payload)}"
         )

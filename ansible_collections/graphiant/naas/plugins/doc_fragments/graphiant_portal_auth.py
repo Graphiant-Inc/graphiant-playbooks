@@ -2,13 +2,14 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 
 class ModuleDocFragment(object):
     """Documentation fragment for Graphiant portal authentication options shared by all modules."""
 
-    DOCUMENTATION = r'''
+    DOCUMENTATION = r"""
 options:
   host:
     description:
@@ -32,13 +33,15 @@ options:
   username:
     description:
       - Graphiant portal username for authentication.
-      - Required for password-based login when no valid bearer token is available from O(access_token) or C(GRAPHIANT_ACCESS_TOKEN).
+      - Required for password-based login when no valid bearer token is available from
+        O(access_token) or C(GRAPHIANT_ACCESS_TOKEN).
     type: str
     required: false
   password:
     description:
       - Graphiant portal password for authentication.
-      - Required for password-based login when no valid bearer token is available from O(access_token) or C(GRAPHIANT_ACCESS_TOKEN).
+      - Required for password-based login when no valid bearer token is available from
+        O(access_token) or C(GRAPHIANT_ACCESS_TOKEN).
     type: str
     required: false
-'''
+"""

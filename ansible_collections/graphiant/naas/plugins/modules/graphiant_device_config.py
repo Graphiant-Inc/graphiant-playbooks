@@ -12,15 +12,19 @@ to the Graphiant API spec directly to multiple devices. Users can capture the
 request payload from the Graphiant Portal UI developer tools and use it directly.
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_device_config
 short_description: Push raw device configurations to Graphiant devices
 description:
-  - This module pushes device configurations directly to Graphiant devices using the C(/v1/devices/{device_id}/config) API.
+  - >-
+    This module pushes device configurations directly to Graphiant devices using the
+    C(/v1/devices/{device_id}/config) API.
   - Supports Edge, Gateway, and Core device types.
   - Enables pushing any configuration that conforms to the Graphiant API specification.
-  - Users can capture API payloads from the Graphiant Portal UI developer tools and use them directly in configuration files.
+  - >-
+    Users can capture API payloads from the Graphiant Portal UI developer tools and use them
+    directly in configuration files.
   - Supports optional user-defined Jinja2 templates for configuration generation.
   - Configuration files support Jinja2 templating syntax for dynamic configuration generation.
   - Provides dry-run validation mode to validate configurations before deployment.
@@ -125,9 +129,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Push device configuration to edge devices
   graphiant.naas.graphiant_device_config:
     operation: configure
@@ -210,9 +214,9 @@ EXAMPLES = r'''
 #           },
 #           "description": "Configure custom DNS"
 #         }
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
@@ -246,17 +250,15 @@ template_file:
   type: str
   returned: when applicable
   sample: "device_config_template.yaml"
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
-    handle_graphiant_exception
+    handle_graphiant_exception,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
-    capture_library_logs
-)
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
 
 
 @capture_library_logs
@@ -274,25 +276,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'changed' and 'result_msg' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+    success_msg = kwargs.pop("success_msg", "Operation completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
-        if isinstance(result, dict) and 'changed' in result:
-            return {
-                'changed': result['changed'],
-                'result_msg': success_msg,
-                'result_data': result
-            }
+        if isinstance(result, dict) and "changed" in result:
+            return {"changed": result["changed"], "result_msg": success_msg, "result_data": result}
 
         # Fallback for functions that don't return change status
-        return {
-            'changed': True,
-            'result_msg': success_msg,
-            'result_data': result
-        }
+        return {"changed": True, "result_msg": success_msg, "result_data": result}
     except Exception as e:
         raise e
 
@@ -305,47 +299,29 @@ def main():
     # Define module arguments
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        config_file=dict(type='str', required=True),
-        template_file=dict(type='str', required=False, default=None),
+        config_file=dict(type="str", required=True),
+        template_file=dict(type="str", required=False, default=None),
         operation=dict(
-            type='str',
-            required=False,
-            default='configure',
-            choices=[
-                'configure',
-                'show_validated_payload'
-            ]
+            type="str", required=False, default="configure", choices=["configure", "show_validated_payload"]
         ),
-        state=dict(
-            type='str',
-            required=False,
-            default='present',
-            choices=['present']
-        ),
-        detailed_logs=dict(
-            type='bool',
-            required=False,
-            default=False
-        )
+        state=dict(type="str", required=False, default="present", choices=["present"]),
+        detailed_logs=dict(type="bool", required=False, default=False),
     )
 
     # Create Ansible module
-    module = AnsibleModule(
-        argument_spec=argument_spec,
-        supports_check_mode=True
-    )
+    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
 
     # Get parameters
     params = module.params
-    operation = params.get('operation')
-    state = params.get('state', 'present')
-    config_file = params['config_file']
-    template_file = params.get('template_file')
+    operation = params.get("operation")
+    state = params.get("state", "present")
+    config_file = params["config_file"]
+    template_file = params.get("template_file")
 
     # If operation is not specified, use state to determine operation
     if not operation:
-        if state == 'present':
-            operation = 'configure'
+        if state == "present":
+            operation = "configure"
 
     # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
 
@@ -358,44 +334,39 @@ def main():
         changed = False
         result_msg = ""
 
-        if operation == 'configure':
+        if operation == "configure":
             result = execute_with_logging(
                 module,
                 graphiant_config.device_config.configure,
                 config_file,
                 template_file,
-                success_msg=f"Successfully configured devices from {config_file}"
+                success_msg=f"Successfully configured devices from {config_file}",
             )
-            changed = result['changed']
-            result_msg = result['result_msg']
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'show_validated_payload':
+        elif operation == "show_validated_payload":
             result = execute_with_logging(
                 module,
                 graphiant_config.device_config.show_validated_payload,
                 config_file,
                 template_file,
-                success_msg=f"Successfully previewed device configuration from {config_file}"
+                success_msg=f"Successfully previewed device configuration from {config_file}",
             )
             # Preview doesn't make changes
             changed = False
-            result_msg = result['result_msg']
+            result_msg = result["result_msg"]
 
         else:
             module.fail_json(
                 msg=f"Unsupported operation: {operation}. "
-                    f"Supported operations are: configure, show_validated_payload"
+                f"Supported operations are: configure, show_validated_payload"
             )
 
         # Return success
-        result_dict = dict(
-            changed=changed,
-            msg=result_msg,
-            operation=operation,
-            config_file=config_file
-        )
+        result_dict = dict(changed=changed, msg=result_msg, operation=operation, config_file=config_file)
         if template_file:
-            result_dict['template_file'] = template_file
+            result_dict["template_file"] = template_file
 
         module.exit_json(**result_dict)
 
@@ -404,5 +375,5 @@ def main():
         module.fail_json(msg=error_msg, operation=operation)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

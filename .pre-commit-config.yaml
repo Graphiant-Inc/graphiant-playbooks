@@ -5,12 +5,15 @@ repos:
     rev: '6.1.0'
     hooks:
       - id: flake8
+        args: ["--max-line-length=120"]
+        files: ^(ansible_collections/graphiant/naas/plugins/.*\.py|scripts/.*\.py)$
   - repo: https://github.com/pylint-dev/pylint
     rev: 'v3.0.1'
     hooks:
       - id: pylint
         args: ["--errors-only"]
         language: system # So that local venv is used containing dependencies
+        files: ^(ansible_collections/graphiant/naas/plugins/.*\.py|scripts/.*\.py)$
   - repo: local
     hooks:
       - id: check-inclusion-checklist
@@ -19,4 +22,3 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        files: ^ansible_collections/graphiant/naas/plugins/modules/.*\.py$

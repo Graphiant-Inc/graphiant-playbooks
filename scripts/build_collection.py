@@ -42,8 +42,9 @@ def build_collection():
         "collection",
         "build",
         str(collection_dir),
-        "--output-path", str(output_dir),
-        "--force"  # Overwrite existing archive
+        "--output-path",
+        str(output_dir),
+        "--force",  # Overwrite existing archive
     ]
 
     print(f"Running: {' '.join(cmd)}")
@@ -95,5 +96,5 @@ def build_collection():
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(build_collection())

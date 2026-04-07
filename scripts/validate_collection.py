@@ -21,11 +21,8 @@ import os
 import argparse
 from pathlib import Path
 
-
 # Installed collection path
-INSTALLED_COLLECTION_PATH = os.path.expanduser(
-    "~/.ansible/collections/ansible_collections/graphiant/naas"
-)
+INSTALLED_COLLECTION_PATH = os.path.expanduser("~/.ansible/collections/ansible_collections/graphiant/naas")
 
 
 def check_structure(base_path):
@@ -35,55 +32,57 @@ def check_structure(base_path):
 
     # Galaxy required files
     galaxy_required_files = [
-        'galaxy.yml',           # Required: Collection metadata
-        'README.md',            # Required: Documentation
-        'LICENSE',              # Required: License file
-        'meta/runtime.yml',     # Required: Runtime metadata (minimal, supports ansible-core >= 2.17.0)
-        'meta/execution-environment.yml',  # Required: Execution Environment configuration
+        "galaxy.yml",  # Required: Collection metadata
+        "README.md",  # Required: Documentation
+        "LICENSE",  # Required: License file
+        "meta/runtime.yml",  # Required: Runtime metadata (minimal, supports ansible-core >= 2.17.0)
+        "meta/execution-environment.yml",  # Required: Execution Environment configuration
     ]
 
     # Recommended files
     recommended_files = [
-        'changelogs/changelog.yaml',  # Recommended: Changelog in YAML format (for antsibull-changelog)
-        'requirements-ee.txt',         # Recommended: Runtime dependencies for Execution Environments
+        "changelogs/changelog.yaml",  # Recommended: Changelog in YAML format (for antsibull-changelog)
+        "requirements-ee.txt",  # Recommended: Runtime dependencies for Execution Environments
     ]
 
     # Graphiant collection specific files
     collection_files = [
-        'plugins/modules/graphiant_interfaces.py',
-        'plugins/modules/graphiant_lag_interfaces.py',
-        'plugins/modules/graphiant_vrrp.py',
-        'plugins/modules/graphiant_bgp.py',
-        'plugins/modules/graphiant_global_config.py',
-        'plugins/modules/graphiant_site_to_site_vpn.py',     
-        'plugins/modules/graphiant_static_routes.py',
-        'plugins/modules/graphiant_sites.py',
-        'plugins/modules/graphiant_data_exchange.py',
-        'plugins/modules/graphiant_data_exchange_info.py',  # Info module for query operations
-        'plugins/module_utils/graphiant_utils.py',
-        'plugins/module_utils/logging_decorator.py',
-        'plugins/module_utils/libs/__init__.py',  # Required for Python package
+        "plugins/modules/graphiant_interfaces.py",
+        "plugins/modules/graphiant_lag_interfaces.py",
+        "plugins/modules/graphiant_vrrp.py",
+        "plugins/modules/graphiant_bgp.py",
+        "plugins/modules/graphiant_global_config.py",
+        "plugins/modules/graphiant_site_to_site_vpn.py",
+        "plugins/modules/graphiant_static_routes.py",
+        "plugins/modules/graphiant_sites.py",
+        "plugins/modules/graphiant_data_exchange.py",
+        "plugins/modules/graphiant_data_exchange_info.py",  # Info module for query operations
+        "plugins/modules/graphiant_device_config.py",
+        "plugins/modules/graphiant_ntp.py",
+        "plugins/module_utils/graphiant_utils.py",
+        "plugins/module_utils/logging_decorator.py",
+        "plugins/module_utils/libs/__init__.py",  # Required for Python package
     ]
 
     required_files = galaxy_required_files + collection_files
 
     # Galaxy standard directories
     galaxy_dirs = [
-        'meta',
-        'plugins',
-        'plugins/modules',
-        'plugins/module_utils',
+        "meta",
+        "plugins",
+        "plugins/modules",
+        "plugins/module_utils",
     ]
 
     # Graphiant collection specific directories
     collection_dirs = [
-        'plugins/module_utils/libs',
-        'playbooks',
-        'configs',
-        'templates',
-        'tests',
-        'docs',  # Documentation (optional but recommended)
-        'changelogs',  # Changelog directory (for changelog.yaml)
+        "plugins/module_utils/libs",
+        "playbooks",
+        "configs",
+        "templates",
+        "tests",
+        "docs",  # Documentation (optional but recommended)
+        "changelogs",  # Changelog directory (for changelog.yaml)
     ]
 
     required_dirs = galaxy_dirs + collection_dirs
@@ -119,21 +118,21 @@ def check_structure(base_path):
             warnings.append(f"Missing recommended file: {file_path}")
 
     # Check embedded libraries
-    libs_dir = os.path.join(base_path, 'plugins/module_utils/libs')
+    libs_dir = os.path.join(base_path, "plugins/module_utils/libs")
     if os.path.exists(libs_dir):
-        lib_files = [f for f in os.listdir(libs_dir) if f.endswith('.py') and not f.startswith('__')]
+        lib_files = [f for f in os.listdir(libs_dir) if f.endswith(".py") and not f.startswith("__")]
         print(f"  ✅ libs/ ({len(lib_files)} Python files)")
 
-        key_libs = ['graphiant_config.py', 'base_manager.py', 'portal_utils.py', 'exceptions.py']
+        key_libs = ["graphiant_config.py", "base_manager.py", "portal_utils.py", "exceptions.py"]
         for lib in key_libs:
             if not os.path.exists(os.path.join(libs_dir, lib)):
                 errors.append(f"Missing key library: libs/{lib}")
 
     # Check for legacy CHANGELOG.md (warn if found, recommend migration to YAML format)
-    changelog_md = os.path.join(base_path, 'CHANGELOG.md')
-    changelog_yaml = os.path.join(base_path, 'changelogs', 'changelog.yaml')
+    changelog_md = os.path.join(base_path, "CHANGELOG.md")
+    changelog_yaml = os.path.join(base_path, "changelogs", "changelog.yaml")
     if os.path.exists(changelog_md) and not os.path.exists(changelog_yaml):
-        print(f"  ⚠️  CHANGELOG.md found (consider migrating to changelogs/changelog.yaml)")
+        print("  ⚠️  CHANGELOG.md found (consider migrating to changelogs/changelog.yaml)")
         warnings.append("Legacy CHANGELOG.md found - consider migrating to changelogs/changelog.yaml")
 
     # Print warnings if any
@@ -148,12 +147,12 @@ def check_galaxy_yml_fields(collection_path):
     """Check that galaxy.yml has required fields per Ansible Galaxy standards."""
     import yaml
 
-    galaxy_file = os.path.join(collection_path, 'galaxy.yml')
+    galaxy_file = os.path.join(collection_path, "galaxy.yml")
     if not os.path.exists(galaxy_file):
         return False, ["galaxy.yml not found"]
 
     try:
-        with open(galaxy_file, 'r') as f:
+        with open(galaxy_file, "r") as f:
             galaxy_data = yaml.safe_load(f)
     except Exception as e:
         return False, [f"Failed to parse galaxy.yml: {e}"]
@@ -162,22 +161,22 @@ def check_galaxy_yml_fields(collection_path):
     warnings = []
 
     # Required fields per Ansible Galaxy
-    required_fields = ['namespace', 'name', 'version']
+    required_fields = ["namespace", "name", "version"]
     for field in required_fields:
         if field not in galaxy_data or not galaxy_data[field]:
             errors.append(f"Missing required field: {field}")
 
     # Recommended fields
-    recommended_fields = ['description', 'authors', 'license_file', 'readme']
+    recommended_fields = ["description", "authors", "license_file", "readme"]
     for field in recommended_fields:
         if field not in galaxy_data or not galaxy_data[field]:
             warnings.append(f"Missing recommended field: {field}")
 
     # Check version format (should be semantic versioning)
-    if 'version' in galaxy_data:
-        version = galaxy_data['version']
+    if "version" in galaxy_data:
+        version = galaxy_data["version"]
         # Basic semantic version check (MAJOR.MINOR.PATCH)
-        if not isinstance(version, str) or version.count('.') != 2:
+        if not isinstance(version, str) or version.count(".") != 2:
             warnings.append(f"Version '{version}' may not follow semantic versioning (MAJOR.MINOR.PATCH)")
 
     # Print results
@@ -192,13 +191,13 @@ def check_galaxy_yml_fields(collection_path):
         print("  ✅ galaxy.yml has all required and recommended fields")
 
     # Check execution-environment.yml
-    ee_file = os.path.join(collection_path, 'meta', 'execution-environment.yml')
+    ee_file = os.path.join(collection_path, "meta", "execution-environment.yml")
     if os.path.exists(ee_file):
         try:
-            with open(ee_file, 'r') as f:
+            with open(ee_file, "r") as f:
                 ee_data = yaml.safe_load(f)
-            if isinstance(ee_data, dict) and 'requirements_file' in ee_data:
-                req_file = ee_data.get('requirements_file')
+            if isinstance(ee_data, dict) and "requirements_file" in ee_data:
+                req_file = ee_data.get("requirements_file")
                 req_path = os.path.join(collection_path, req_file)
                 if os.path.exists(req_path):
                     print(f"  ✅ meta/execution-environment.yml references {req_file}")
@@ -230,10 +229,7 @@ def install_collection(collection_path):
     print("\n📦 Installing collection for linting...")
     print("-" * 50)
 
-    cmd = [
-        "ansible-galaxy", "collection", "install",
-        str(collection_path), "--force"
-    ]
+    cmd = ["ansible-galaxy", "collection", "install", str(collection_path), "--force"]
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -279,7 +275,7 @@ def run_ansible_lint(collection_path):
             print("  ❌ ansible-lint found issues:")
             if result.stdout:
                 # Show summary only
-                lines = result.stdout.strip().split('\n')
+                lines = result.stdout.strip().split("\n")
                 for line in lines[-10:]:  # Last 10 lines
                     print(f"     {line}")
             return False
@@ -296,12 +292,12 @@ def run_docs_lint(collection_path):
     print("-" * 50)
 
     # Check for required docs files
-    docs_dir = os.path.join(collection_path, 'docs')
-    docsite_dir = os.path.join(docs_dir, 'docsite')
+    docs_dir = os.path.join(collection_path, "docs")
+    docsite_dir = os.path.join(docs_dir, "docsite")
 
     if os.path.exists(docsite_dir):
         # Check for links.yml (recommended for antsibull)
-        links_yml = os.path.join(docsite_dir, 'links.yml')
+        links_yml = os.path.join(docsite_dir, "links.yml")
         if os.path.exists(links_yml):
             print("  ✅ docs/docsite/links.yml exists")
         else:
@@ -310,10 +306,11 @@ def run_docs_lint(collection_path):
     # Run antsibull-docs lint-collection-docs
     # Use --plugin-docs to check module documentation strings
     cmd = [
-        "antsibull-docs", "lint-collection-docs",
+        "antsibull-docs",
+        "lint-collection-docs",
         "--plugin-docs",
         "--skip-rstcheck",  # Skip rstcheck if not installed
-        str(collection_path)
+        str(collection_path),
     ]
 
     try:
@@ -325,7 +322,7 @@ def run_docs_lint(collection_path):
             print("  ⚠️  Documentation issues found:")
             output = result.stdout or result.stderr
             if output:
-                lines = output.strip().split('\n')
+                lines = output.strip().split("\n")
                 for line in lines[:10]:  # First 10 lines
                     if line.strip():
                         print(f"     {line}")
@@ -391,11 +388,11 @@ Examples:
 
 Note: ansible-lint requires the collection to be installed to resolve module references.
       The --lint and --full options will install the collection automatically.
-        """
+        """,
     )
-    parser.add_argument('--full', action='store_true', help='Run all validation tools')
-    parser.add_argument('--lint', action='store_true', help='Run ansible-lint (installs collection first)')
-    parser.add_argument('--docs', action='store_true', help='Run documentation validation')
+    parser.add_argument("--full", action="store_true", help="Run all validation tools")
+    parser.add_argument("--lint", action="store_true", help="Run ansible-lint (installs collection first)")
+    parser.add_argument("--docs", action="store_true", help="Run documentation validation")
 
     args = parser.parse_args()
 
@@ -411,27 +408,27 @@ Note: ansible-lint requires the collection to be installed to resolve module ref
 
     # Always run structure check
     structure_ok, errors = check_structure(collection_path)
-    results['Structure'] = structure_ok
+    results["Structure"] = structure_ok
     if errors:
         for error in errors:
             print(f"   ⚠️  {error}")
 
     # Run galaxy.yml validation
-    results['galaxy.yml'] = run_galaxy_build_check(collection_path)
+    results["galaxy.yml"] = run_galaxy_build_check(collection_path)
 
     # Run additional tools based on args
     if args.full or args.lint:
         # Install collection first for ansible-lint to work
         if install_collection(collection_path):
-            results['ansible-lint'] = run_ansible_lint(collection_path)
+            results["ansible-lint"] = run_ansible_lint(collection_path)
         else:
-            results['ansible-lint'] = False
+            results["ansible-lint"] = False
 
     if args.full or args.docs:
-        results['Documentation'] = run_docs_lint(collection_path)
+        results["Documentation"] = run_docs_lint(collection_path)
 
     return print_summary(results, collection_path, script_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -7,12 +7,14 @@ from typing import Dict, Any
 
 try:
     import yaml
+
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
 
 try:
     from jinja2 import Environment, FileSystemLoader, TemplateNotFound, TemplateSyntaxError
+
     HAS_JINJA2 = True
 except ImportError:
     HAS_JINJA2 = False
@@ -20,11 +22,14 @@ except ImportError:
 
     class TemplateNotFound(Exception):  # pylint: disable=duplicate-bases
         """Dummy exception for when Jinja2 is not available"""
+
         pass
 
     class TemplateSyntaxError(Exception):  # pylint: disable=duplicate-bases
         """Dummy exception for when Jinja2 is not available"""
+
         pass
+
 
 from .logger import setup_logger
 from .exceptions import TemplateError, ConfigurationError
@@ -46,19 +51,19 @@ class ConfigTemplates:
 
     # Template mapping for different configuration types
     TEMPLATE_MAPPING = {
-        'interface': 'interface_template.yaml',
-        'lag_interfaces': 'lag_interfaces_template.yaml',
-        'circuit': 'circuit_template.yaml',
-        'global_prefix_set': 'global_prefix_set_template.yaml',
-        'global_bgp_filter': 'global_bgp_routing_policies_template.yaml',
-        'global_graphiant_filter': 'global_graphiant_routing_policies_template.yaml',
-        'bgp_peering': 'bgp_peering_template.yaml',
-        'snmp_service': 'global_snmps_template.yaml',
-        'syslog_service': 'global_syslog_template.yaml',
-        'ipfix_service': 'global_ipfix_template.yaml',
-        'vpn_profile': 'global_vpn_profile_template.yaml',
-        'site_list': 'global_site_lists_template.yaml',
-        'vrrp_interfaces': 'vrrp_interfaces_template.yaml'
+        "interface": "interface_template.yaml",
+        "lag_interfaces": "lag_interfaces_template.yaml",
+        "circuit": "circuit_template.yaml",
+        "global_prefix_set": "global_prefix_set_template.yaml",
+        "global_bgp_filter": "global_bgp_routing_policies_template.yaml",
+        "global_graphiant_filter": "global_graphiant_routing_policies_template.yaml",
+        "bgp_peering": "bgp_peering_template.yaml",
+        "snmp_service": "global_snmps_template.yaml",
+        "syslog_service": "global_syslog_template.yaml",
+        "ipfix_service": "global_ipfix_template.yaml",
+        "vpn_profile": "global_vpn_profile_template.yaml",
+        "site_list": "global_site_lists_template.yaml",
+        "vrrp_interfaces": "vrrp_interfaces_template.yaml",
     }
 
     def __init__(self, config_template_path: str):
@@ -157,47 +162,47 @@ class ConfigTemplates:
     # Specific template rendering methods
     def render_interface(self, **kwargs) -> Dict[str, Any]:
         """Render interface template."""
-        return self.render_by_type('interface', **kwargs)
+        return self.render_by_type("interface", **kwargs)
 
     def render_circuit(self, **kwargs) -> Dict[str, Any]:
         """Render circuit template."""
-        return self.render_by_type('circuit', **kwargs)
+        return self.render_by_type("circuit", **kwargs)
 
     def render_lag_interfaces(self, **kwargs) -> Dict[str, Any]:
         """Render LAG interfaces template."""
-        return self.render_by_type('lag_interfaces', **kwargs)
+        return self.render_by_type("lag_interfaces", **kwargs)
 
     def render_global_prefix_set(self, **kwargs) -> Dict[str, Any]:
         """Render global prefix set template."""
-        return self.render_by_type('global_prefix_set', **kwargs)
+        return self.render_by_type("global_prefix_set", **kwargs)
 
     def render_global_bgp_filter(self, **kwargs) -> Dict[str, Any]:
         """Render global BGP filter template."""
-        return self.render_by_type('global_bgp_filter', **kwargs)
+        return self.render_by_type("global_bgp_filter", **kwargs)
 
     def render_global_graphiant_filter(self, **kwargs) -> Dict[str, Any]:
         """Render global Graphiant filter template."""
-        return self.render_by_type('global_graphiant_filter', **kwargs)
+        return self.render_by_type("global_graphiant_filter", **kwargs)
 
     def render_bgp_peering(self, **kwargs) -> Dict[str, Any]:
         """Render BGP peering template."""
-        return self.render_by_type('bgp_peering', **kwargs)
+        return self.render_by_type("bgp_peering", **kwargs)
 
     def render_snmp_service(self, **kwargs) -> Dict[str, Any]:
         """Render SNMP service template."""
-        return self.render_by_type('snmp_service', **kwargs)
+        return self.render_by_type("snmp_service", **kwargs)
 
     def render_syslog_service(self, **kwargs) -> Dict[str, Any]:
         """Render syslog service template."""
-        return self.render_by_type('syslog_service', **kwargs)
+        return self.render_by_type("syslog_service", **kwargs)
 
     def render_vrrp_interfaces(self, **kwargs) -> Dict[str, Any]:
         """Render VRRP on interfaces template."""
-        return self.render_by_type('vrrp_interfaces', **kwargs)
+        return self.render_by_type("vrrp_interfaces", **kwargs)
 
     def render_ipfix_service(self, **kwargs) -> Dict[str, Any]:
         """Render IPFIX service template."""
-        return self.render_by_type('ipfix_service', **kwargs)
+        return self.render_by_type("ipfix_service", **kwargs)
 
     def render_vpn_profile(self, **kwargs) -> Dict[str, Any]:
         """
@@ -208,11 +213,11 @@ class ConfigTemplates:
         """
         try:
             # Apply VPN algorithm mapping if needed
-            if 'vpn_profiles' in kwargs:
-                kwargs['vpn_profiles'] = map_vpn_profiles(kwargs['vpn_profiles'])
-                LOG.info("Applied VPN algorithm mapping %s", kwargs['vpn_profiles'])
+            if "vpn_profiles" in kwargs:
+                kwargs["vpn_profiles"] = map_vpn_profiles(kwargs["vpn_profiles"])
+                LOG.info("Applied VPN algorithm mapping %s", kwargs["vpn_profiles"])
 
-            return self.render_by_type('vpn_profile', **kwargs)
+            return self.render_by_type("vpn_profile", **kwargs)
 
         except ImportError as e:
             error_msg = f"Failed to import VPN mappings: {str(e)}"
@@ -225,7 +230,7 @@ class ConfigTemplates:
 
     def render_site_list(self, **kwargs) -> Dict[str, Any]:
         """Render site list template."""
-        return self.render_by_type('site_list', **kwargs)
+        return self.render_by_type("site_list", **kwargs)
 
     def get_available_templates(self) -> Dict[str, str]:
         """

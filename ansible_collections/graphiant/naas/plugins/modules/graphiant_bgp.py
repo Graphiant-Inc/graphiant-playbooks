@@ -13,7 +13,7 @@ This module provides BGP management capabilities including:
 - Routing policy management
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_bgp
 short_description: Manage Graphiant BGP peering and routing policies
@@ -32,7 +32,8 @@ notes:
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves device names, site names, and policy names to IDs."
   - "All operations are idempotent and safe to run multiple times."
-  - "Global BGP filters must be created using M(graphiant.naas.graphiant_global_config) module before attaching to BGP peers."
+  - "Global BGP filters must be created using M(graphiant.naas.graphiant_global_config) module"
+  - "before attaching to BGP peers."
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:
@@ -97,9 +98,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Configure BGP peering and attach policies
   graphiant.naas.graphiant_bgp:
     operation: configure
@@ -142,9 +143,9 @@ EXAMPLES = r'''
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
@@ -171,17 +172,15 @@ bgp_config_file:
   type: str
   returned: always
   sample: "sample_bgp_peering.yaml"
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     get_graphiant_connection,
     graphiant_portal_auth_argument_spec,
-    handle_graphiant_exception
+    handle_graphiant_exception,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
-    capture_library_logs
-)
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
 
 
 @capture_library_logs
@@ -199,24 +198,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'changed' and 'result_msg' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+    success_msg = kwargs.pop("success_msg", "Operation completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
-        if isinstance(result, dict) and 'changed' in result:
-            return {
-                'changed': result['changed'],
-                'result_msg': success_msg,
-                'details': result
-            }
+        if isinstance(result, dict) and "changed" in result:
+            return {"changed": result["changed"], "result_msg": success_msg, "details": result}
 
         # Fallback for functions that don't return change status
-        return {
-            'changed': True,
-            'result_msg': success_msg
-        }
+        return {"changed": True, "result_msg": success_msg}
     except Exception as e:
         raise e
 
@@ -229,55 +221,35 @@ def main():
     # Define module arguments
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        bgp_config_file=dict(type='str', required=True),
-        operation=dict(
-            type='str',
-            required=False,
-            choices=[
-                'configure',
-                'deconfigure',
-                'detach_policies'
-            ]
-        ),
-        state=dict(
-            type='str',
-            required=False,
-            default='present',
-            choices=['present', 'absent']
-        ),
-        detailed_logs=dict(
-            type='bool',
-            required=False,
-            default=False
-        )
+        bgp_config_file=dict(type="str", required=True),
+        operation=dict(type="str", required=False, choices=["configure", "deconfigure", "detach_policies"]),
+        state=dict(type="str", required=False, default="present", choices=["present", "absent"]),
+        detailed_logs=dict(type="bool", required=False, default=False),
     )
 
     # Create Ansible module
-    module = AnsibleModule(
-        argument_spec=argument_spec,
-        supports_check_mode=True
-    )
+    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
 
     # Get parameters
     params = module.params
-    operation = params.get('operation')
-    state = params.get('state', 'present')
-    bgp_config_file = params['bgp_config_file']
+    operation = params.get("operation")
+    state = params.get("state", "present")
+    bgp_config_file = params["bgp_config_file"]
 
     # Validate that at least one of operation or state is provided
     if not operation and not state:
-        supported_operations = ['configure', 'deconfigure', 'detach_policies']
+        supported_operations = ["configure", "deconfigure", "detach_policies"]
         module.fail_json(
             msg="Either 'operation' or 'state' parameter must be provided. "
-                f"Supported operations: {', '.join(supported_operations)}"
+            f"Supported operations: {', '.join(supported_operations)}"
         )
 
     # If operation is not specified, use state to determine operation
     if not operation:
-        if state == 'present':
-            operation = 'configure'
-        elif state == 'absent':
-            operation = 'deconfigure'
+        if state == "present":
+            operation = "configure"
+        elif state == "absent":
+            operation = "deconfigure"
 
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
@@ -293,36 +265,43 @@ def main():
         changed = False
         result_msg = ""
 
-        if operation == 'configure':
-            result = execute_with_logging(module, graphiant_config.bgp.configure, bgp_config_file,
-                                          success_msg="Successfully configured BGP peering and attached policies")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        if operation == "configure":
+            result = execute_with_logging(
+                module,
+                graphiant_config.bgp.configure,
+                bgp_config_file,
+                success_msg="Successfully configured BGP peering and attached policies",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'detach_policies':
-            result = execute_with_logging(module, graphiant_config.bgp.detach_policies, bgp_config_file,
-                                          success_msg="Successfully detached policies from BGP peers")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "detach_policies":
+            result = execute_with_logging(
+                module,
+                graphiant_config.bgp.detach_policies,
+                bgp_config_file,
+                success_msg="Successfully detached policies from BGP peers",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure':
-            result = execute_with_logging(module, graphiant_config.bgp.deconfigure, bgp_config_file,
-                                          success_msg="Successfully deconfigured BGP peering")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure":
+            result = execute_with_logging(
+                module,
+                graphiant_config.bgp.deconfigure,
+                bgp_config_file,
+                success_msg="Successfully deconfigured BGP peering",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
         # Return success
-        module.exit_json(
-            changed=changed,
-            msg=result_msg,
-            operation=operation,
-            bgp_config_file=bgp_config_file
-        )
+        module.exit_json(changed=changed, msg=result_msg, operation=operation, bgp_config_file=bgp_config_file)
 
     except Exception as e:
         error_msg = handle_graphiant_exception(e, operation)
         module.fail_json(msg=error_msg, operation=operation)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

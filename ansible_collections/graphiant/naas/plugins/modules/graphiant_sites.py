@@ -13,7 +13,7 @@ This module provides site management capabilities including:
 - Managing site-level configurations
 """
 
-DOCUMENTATION = r'''
+DOCUMENTATION = r"""
 ---
 module: graphiant_sites
 short_description: Manage Graphiant sites and object attachments
@@ -110,9 +110,9 @@ seealso:
 author:
   - Graphiant Team (@graphiant)
 
-'''
+"""
 
-EXAMPLES = r'''
+EXAMPLES = r"""
 - name: Configure sites (create sites and attach objects)
   graphiant.naas.graphiant_sites:
     operation: configure
@@ -173,9 +173,9 @@ EXAMPLES = r'''
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
-'''
+"""
 
-RETURN = r'''
+RETURN = r"""
 msg:
   description:
     - Result message from the operation, including detailed logs when O(detailed_logs) is enabled.
@@ -192,7 +192,9 @@ changed:
 operation:
   description:
     - The operation that was performed.
-    - One of V(configure), V(deconfigure), V(configure_sites), V(deconfigure_sites), V(attach_objects), or V(detach_objects).
+    - >-
+      One of V(configure), V(deconfigure), V(configure_sites), V(deconfigure_sites),
+      V(attach_objects), or V(detach_objects).
   type: str
   returned: always
   sample: "configure"
@@ -202,17 +204,15 @@ site_config_file:
   type: str
   returned: always
   sample: "sample_sites.yaml"
-'''
+"""
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
-    handle_graphiant_exception
+    handle_graphiant_exception,
 )
-from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
-    capture_library_logs
-)
+from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
 
 
 @capture_library_logs
@@ -230,24 +230,17 @@ def execute_with_logging(module, func, *args, **kwargs):
         dict: Result with 'changed' and 'result_msg' keys
     """
     # Extract success_msg from kwargs before passing to func
-    success_msg = kwargs.pop('success_msg', 'Operation completed successfully')
+    success_msg = kwargs.pop("success_msg", "Operation completed successfully")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
-        if isinstance(result, dict) and 'changed' in result:
-            return {
-                'changed': result['changed'],
-                'result_msg': success_msg,
-                'details': result
-            }
+        if isinstance(result, dict) and "changed" in result:
+            return {"changed": result["changed"], "result_msg": success_msg, "details": result}
 
         # Fallback for functions that don't return change status
-        return {
-            'changed': True,
-            'result_msg': success_msg
-        }
+        return {"changed": True, "result_msg": success_msg}
     except Exception as e:
         raise e
 
@@ -260,59 +253,53 @@ def main():
     # Define module arguments
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        site_config_file=dict(type='str', required=True),
+        site_config_file=dict(type="str", required=True),
         operation=dict(
-            type='str',
+            type="str",
             required=False,
             choices=[
-                'configure',
-                'deconfigure',
-                'configure_sites',
-                'deconfigure_sites',
-                'attach_objects',
-                'detach_objects'
-            ]
+                "configure",
+                "deconfigure",
+                "configure_sites",
+                "deconfigure_sites",
+                "attach_objects",
+                "detach_objects",
+            ],
         ),
-        state=dict(
-            type='str',
-            required=False,
-            default='present',
-            choices=['present', 'absent']
-        ),
-        detailed_logs=dict(
-            type='bool',
-            required=False,
-            default=False
-        )
+        state=dict(type="str", required=False, default="present", choices=["present", "absent"]),
+        detailed_logs=dict(type="bool", required=False, default=False),
     )
 
     # Create Ansible module
-    module = AnsibleModule(
-        argument_spec=argument_spec,
-        supports_check_mode=True
-    )
+    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
 
     # Get parameters
     params = module.params
-    operation = params.get('operation')
-    state = params.get('state', 'present')
-    site_config_file = params['site_config_file']
+    operation = params.get("operation")
+    state = params.get("state", "present")
+    site_config_file = params["site_config_file"]
 
     # Validate that at least one of operation or state is provided
     if not operation and not state:
-        supported_operations = ['configure', 'deconfigure', 'configure_sites', 'deconfigure_sites',
-                                'attach_objects', 'detach_objects']
+        supported_operations = [
+            "configure",
+            "deconfigure",
+            "configure_sites",
+            "deconfigure_sites",
+            "attach_objects",
+            "detach_objects",
+        ]
         module.fail_json(
             msg="Either 'operation' or 'state' parameter must be provided. "
-                f"Supported operations: {', '.join(supported_operations)}"
+            f"Supported operations: {', '.join(supported_operations)}"
         )
 
     # If operation is not specified, use state to determine operation
     if not operation:
-        if state == 'present':
-            operation = 'configure'
-        elif state == 'absent':
-            operation = 'deconfigure'
+        if state == "present":
+            operation = "configure"
+        elif state == "absent":
+            operation = "deconfigure"
 
     # If operation is specified, it takes precedence over state
     # No additional mapping needed as operation is explicit
@@ -328,54 +315,73 @@ def main():
         changed = False
         result_msg = ""
 
-        if operation == 'configure':
-            result = execute_with_logging(module, graphiant_config.sites.configure, site_config_file,
-                                          success_msg="Successfully configured (created sites and attached objects)")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        if operation == "configure":
+            result = execute_with_logging(
+                module,
+                graphiant_config.sites.configure,
+                site_config_file,
+                success_msg="Successfully configured (created sites and attached objects)",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure':
-            result = execute_with_logging(module, graphiant_config.sites.deconfigure, site_config_file,
-                                          success_msg="Successfully deconfigured (detached objects and deleted sites)")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure":
+            result = execute_with_logging(
+                module,
+                graphiant_config.sites.deconfigure,
+                site_config_file,
+                success_msg="Successfully deconfigured (detached objects and deleted sites)",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'configure_sites':
-            result = execute_with_logging(module, graphiant_config.sites.configure_sites, site_config_file,
-                                          success_msg="Successfully created sites")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "configure_sites":
+            result = execute_with_logging(
+                module,
+                graphiant_config.sites.configure_sites,
+                site_config_file,
+                success_msg="Successfully created sites",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation == 'deconfigure_sites':
-            result = execute_with_logging(module, graphiant_config.sites.deconfigure_sites, site_config_file,
-                                          success_msg="Successfully deleted sites")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation == "deconfigure_sites":
+            result = execute_with_logging(
+                module,
+                graphiant_config.sites.deconfigure_sites,
+                site_config_file,
+                success_msg="Successfully deleted sites",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation.lower().startswith('attach'):
-            result = execute_with_logging(module, graphiant_config.sites.attach_objects, site_config_file,
-                                          success_msg="Successfully attached global system objects to sites")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation.lower().startswith("attach"):
+            result = execute_with_logging(
+                module,
+                graphiant_config.sites.attach_objects,
+                site_config_file,
+                success_msg="Successfully attached global system objects to sites",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
-        elif operation.lower().startswith('detach'):
-            result = execute_with_logging(module, graphiant_config.sites.detach_objects, site_config_file,
-                                          success_msg="Successfully detached global system objects from sites")
-            changed = result['changed']
-            result_msg = result['result_msg']
+        elif operation.lower().startswith("detach"):
+            result = execute_with_logging(
+                module,
+                graphiant_config.sites.detach_objects,
+                site_config_file,
+                success_msg="Successfully detached global system objects from sites",
+            )
+            changed = result["changed"]
+            result_msg = result["result_msg"]
 
         # Return success
-        module.exit_json(
-            changed=changed,
-            msg=result_msg,
-            operation=operation,
-            site_config_file=site_config_file
-        )
+        module.exit_json(changed=changed, msg=result_msg, operation=operation, site_config_file=site_config_file)
 
     except Exception as e:
         error_msg = handle_graphiant_exception(e, operation)
         module.fail_json(msg=error_msg, operation=operation)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

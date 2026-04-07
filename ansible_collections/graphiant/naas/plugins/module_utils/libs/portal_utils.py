@@ -4,12 +4,14 @@ from concurrent.futures.thread import ThreadPoolExecutor
 
 try:
     import yaml
+
     HAS_YAML = True
 except ImportError:
     HAS_YAML = False
 
 try:
     from jinja2 import Template, TemplateError as Jinja2TemplateError
+
     HAS_JINJA2 = True
 except ImportError:
     HAS_JINJA2 = False
@@ -28,23 +30,23 @@ LOG = setup_logger()
 class PortalUtils(object):
 
     def __init__(self, base_url=None, username=None, password=None, **kwargs):
-        check_mode = kwargs.pop('check_mode', False)
-        access_token = kwargs.pop('access_token', None)
+        check_mode = kwargs.pop("check_mode", False)
+        access_token = kwargs.pop("access_token", None)
         # Logs: Use current working directory (where playbook is run from)
-        self.logs_path = os.path.join(os.getcwd(), "logs") + "/"    # Default logs path
+        self.logs_path = os.path.join(os.getcwd(), "logs") + "/"  # Default logs path
         self.config_path = None
         self.template_path = None
 
         # Priority 1: Check user-configured environment variables (highest priority)
-        configs_path = os.environ.get('GRAPHIANT_CONFIGS_PATH')
+        configs_path = os.environ.get("GRAPHIANT_CONFIGS_PATH")
         if configs_path and os.path.exists(configs_path):
             LOG.info("PortalUtils : Using GRAPHIANT_CONFIGS_PATH: %s", configs_path)
-            self.config_path = configs_path if configs_path.endswith('/') else configs_path + "/"
+            self.config_path = configs_path if configs_path.endswith("/") else configs_path + "/"
 
-        templates_path = os.environ.get('GRAPHIANT_TEMPLATES_PATH')
+        templates_path = os.environ.get("GRAPHIANT_TEMPLATES_PATH")
         if templates_path and os.path.exists(templates_path):
             LOG.info("PortalUtils : Using GRAPHIANT_TEMPLATES_PATH: %s", templates_path)
-            self.template_path = templates_path if templates_path.endswith('/') else templates_path + "/"
+            self.template_path = templates_path if templates_path.endswith("/") else templates_path + "/"
 
         # Priority 2: Find the collection root and set paths from there
         if not self.config_path or not self.template_path:
@@ -100,13 +102,12 @@ class PortalUtils(object):
         # Method 1: Find the collection root based on common Ansible installation paths
         # NOTE: We avoid importing ansible.constants here as it can cause issues inside AnsiballZ
         common_collection_paths = [
-            os.path.expanduser('~/.ansible/collections'),
-            '/usr/share/ansible/collections',
+            os.path.expanduser("~/.ansible/collections"),
+            "/usr/share/ansible/collections",
         ]
         for collections_path in common_collection_paths:
             if collections_path and os.path.exists(collections_path):
-                collection_check = os.path.join(collections_path,
-                                                'ansible_collections', 'graphiant', 'naas')
+                collection_check = os.path.join(collections_path, "ansible_collections", "graphiant", "naas")
                 if os.path.exists(collection_check):
                     LOG.info("Found graphiant collection root via common path: %s", collection_check)
                     return collection_check
@@ -119,12 +120,12 @@ class PortalUtils(object):
         current_dir = current_file_dir
         for unused_level in range(4):  # Walk up 4 levels max  # pylint: disable=unused-variable
             # Check if this is the collection root (has plugins/module_utils/libs/)
-            libs_check = os.path.join(current_dir, 'plugins', 'module_utils', 'libs')
+            libs_check = os.path.join(current_dir, "plugins", "module_utils", "libs")
             if os.path.exists(libs_check):
                 LOG.debug("Found collection root by walking up from file location: %s", current_dir)
                 return current_dir
             # Also check if we're at the repo root (has ansible_collections/graphiant/naas/)
-            collection_check = os.path.join(current_dir, 'ansible_collections', 'graphiant', 'naas')
+            collection_check = os.path.join(current_dir, "ansible_collections", "graphiant", "naas")
             if os.path.exists(collection_check):
                 LOG.debug("Found collection root at repo root: %s", collection_check)
                 return collection_check
@@ -162,7 +163,7 @@ class PortalUtils(object):
         """
         futures = [item for item in posible_futures if item is not None]
         LOG.debug("Waiting for futures %s to complete", futures)
-        (_done, not_done) = wait(futures)
+        _done, not_done = wait(futures)
 
         if not_done:
             LOG.warning("%s futures did not finish running", len(not_done))
@@ -242,13 +243,15 @@ class PortalUtils(object):
             raise ConfigurationError(error_msg)
         except yaml.YAMLError as e:
             # Provide user-friendly YAML error messages
-            if hasattr(e, 'problem_mark'):
+            if hasattr(e, "problem_mark"):
                 line_num = e.problem_mark.line + 1
                 col_num = e.problem_mark.column + 1
                 error_msg = f"YAML syntax error in '{input_file_path}' at line {line_num}, column {col_num}:\n"
                 error_msg += f"  {str(e)}\n"
-                error_msg += f"Please check the YAML syntax around line {line_num} " \
-                             "and fix any indentation or formatting issues."
+                error_msg += (
+                    f"Please check the YAML syntax around line {line_num} "
+                    "and fix any indentation or formatting issues."
+                )
                 raise ConfigurationError(error_msg)
             else:
                 raise ConfigurationError(f"YAML parsing error in '{input_file_path}': {str(e)}")

@@ -75,6 +75,7 @@ class BaseManager(ABC):
             LOG.error("Error rendering configuration file %s: %s", yaml_file, str(e))
             LOG.error("Exception type: %s", type(e).__name__)
             import traceback
+
             LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Error rendering configuration file {yaml_file}: {str(e)}")
 

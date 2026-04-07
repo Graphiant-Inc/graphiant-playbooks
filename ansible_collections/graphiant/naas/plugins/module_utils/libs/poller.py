@@ -5,6 +5,7 @@ import traceback
 
 try:
     from future.utils import raise_
+
     HAS_FUTURE = True
 except ImportError:
     HAS_FUTURE = False
@@ -12,6 +13,7 @@ except ImportError:
 
     def raise_(exc_type, exc_value, exc_traceback):
         raise exc_value.with_traceback(exc_traceback)
+
 
 from .logger import setup_logger
 
@@ -52,17 +54,17 @@ def poller(timeout=60, wait=0.1, retries=None):
             exc = None
             while (time.time() - start_time) < timeout:
                 remain = timeout - (time.time() - start_time)
-                LOG.info('%s.%s(): attempt %s, time remaining %.2fs', fun.__module__, fun.__name__, attempt + 1, remain)
+                LOG.info("%s.%s(): attempt %s, time remaining %.2fs", fun.__module__, fun.__name__, attempt + 1, remain)
                 try:
                     return fun(*fun_args, **fun_kwargs)
                 except Exception as e:
                     exc = sys.exc_info()
-                    LOG.info('Exception caught while calling method %s(): %r', fun.__name__, e)
-                LOG.info('Sleeping for %s seconds before poller re-attempt...', wait)
+                    LOG.info("Exception caught while calling method %s(): %r", fun.__name__, e)
+                LOG.info("Sleeping for %s seconds before poller re-attempt...", wait)
                 time.sleep(wait)
                 attempt += 1
             if exc:
-                LOG.warning(''.join(traceback.format_exception(*exc)))
+                LOG.warning("".join(traceback.format_exception(*exc)))
                 raise_(exc[0], exc[1], exc[2])
             return False
 
@@ -73,17 +75,17 @@ def poller(timeout=60, wait=0.1, retries=None):
             """
             exc = None
             for attempt in range(0, retries):
-                LOG.info('Poller attempt: %s/%s', attempt + 1, retries)
-                LOG.info('Calling method %s()...', fun.__name__)
+                LOG.info("Poller attempt: %s/%s", attempt + 1, retries)
+                LOG.info("Calling method %s()...", fun.__name__)
                 try:
                     return fun(*fun_args, **fun_kwargs)
                 except Exception as e:
                     exc = sys.exc_info()
-                    LOG.info('Exception caught while calling method %s(): %s', fun.__name__, e)
-                LOG.info('Sleeping for %s seconds before retry...', wait)
+                    LOG.info("Exception caught while calling method %s(): %s", fun.__name__, e)
+                LOG.info("Sleeping for %s seconds before retry...", wait)
                 time.sleep(wait)
             if exc:
-                LOG.warning(''.join(traceback.format_exception(*exc)))
+                LOG.warning("".join(traceback.format_exception(*exc)))
                 raise_(exc[0], exc[1], exc[2])
             return False
 

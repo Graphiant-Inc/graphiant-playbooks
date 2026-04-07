@@ -27,14 +27,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-try:
-    import yaml
-except ImportError:
-    print("Error: PyYAML is required. Install it with: pip install PyYAML")
-    print("Or install all dependencies: pip install -r requirements-ee.txt")
-    sys.exit(1)
-
-
 # Get the collection root directory
 # Script is at scripts/bump_version.py, collection is at ansible_collections/graphiant/naas/
 SCRIPT_DIR = Path(__file__).parent  # scripts/
@@ -45,7 +37,7 @@ COLLECTION_ROOT = REPO_ROOT / "ansible_collections" / "graphiant" / "naas"
 def load_version() -> str:
     """Load current version from _version.py"""
     version_file = COLLECTION_ROOT / "_version.py"
-    with open(version_file, 'r') as f:
+    with open(version_file, "r") as f:
         content = f.read()
         match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
         if match:
@@ -56,32 +48,22 @@ def load_version() -> str:
 def update_version_file(new_version: str) -> None:
     """Update _version.py with new version"""
     version_file = COLLECTION_ROOT / "_version.py"
-    with open(version_file, 'r') as f:
+    with open(version_file, "r") as f:
         content = f.read()
 
     # Update __version__ and COLLECTION_VERSION
-    content = re.sub(
-        r'__version__\s*=\s*["\'][^"\']+["\']',
-        f'__version__ = "{new_version}"',
-        content
-    )
-    content = re.sub(
-        r'COLLECTION_VERSION\s*=\s*__version__',
-        'COLLECTION_VERSION = __version__',
-        content
-    )
+    content = re.sub(r'__version__\s*=\s*["\'][^"\']+["\']', f'__version__ = "{new_version}"', content)
+    content = re.sub(r"COLLECTION_VERSION\s*=\s*__version__", "COLLECTION_VERSION = __version__", content)
 
     # Update MODULE_VERSION_ADDED (major.minor format)
-    major, minor, patch = new_version.split('.')
+    major, minor, patch = new_version.split(".")
     del patch  # Unused, but needed for unpacking
     module_version = f"{major}.{minor}.0"
     content = re.sub(
-        r'MODULE_VERSION_ADDED\s*=\s*["\'][^"\']+["\']',
-        f'MODULE_VERSION_ADDED = "{module_version}"',
-        content
+        r'MODULE_VERSION_ADDED\s*=\s*["\'][^"\']+["\']', f'MODULE_VERSION_ADDED = "{module_version}"', content
     )
 
-    with open(version_file, 'w') as f:
+    with open(version_file, "w") as f:
         f.write(content)
     print(f"✅ Updated _version.py: {new_version}")
 
@@ -89,19 +71,15 @@ def update_version_file(new_version: str) -> None:
 def update_galaxy_yml(new_version: str) -> None:
     """Update galaxy.yml with new version. Only the version line is changed to preserve formatting."""
     galaxy_file = COLLECTION_ROOT / "galaxy.yml"
-    with open(galaxy_file, 'r', encoding='utf-8') as f:
+    with open(galaxy_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     # Replace only the version line to avoid PyYAML reformatting the whole file
     content = re.sub(
-        r'^version:\s*["\']?[\d.]+["\']?\s*$',
-        f'version: {new_version}',
-        content,
-        count=1,
-        flags=re.MULTILINE
+        r'^version:\s*["\']?[\d.]+["\']?\s*$', f"version: {new_version}", content, count=1, flags=re.MULTILINE
     )
 
-    with open(galaxy_file, 'w', encoding='utf-8') as f:
+    with open(galaxy_file, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"✅ Updated galaxy.yml: {new_version}")
 
@@ -119,7 +97,7 @@ def update_changelog(new_version: str, old_version: str) -> None:
         print(f"⚠️  Warning: {changelog_file} not found, skipping changelog update")
         return
 
-    with open(changelog_file, 'r', encoding='utf-8') as f:
+    with open(changelog_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     today = date.today().isoformat()
@@ -128,21 +106,21 @@ def update_changelog(new_version: str, old_version: str) -> None:
     marker = "releases:\n"
     pos = content.find(marker)
     if pos == -1:
-        print(f"⚠️  Warning: Could not find 'releases:' in changelog.yaml, skipping changelog update")
+        print("⚠️  Warning: Could not find 'releases:' in changelog.yaml, skipping changelog update")
         return
     insert_at = pos + len(marker)
 
     # Use same style as existing file: quoted version key, quoted values, one entry per line
-    new_block = f'''  "{new_version}":
+    new_block = f"""  "{new_version}":
     release_date: "{today}"
     changes:
       minor_changes:
         - "Collection version bumped to {new_version}"
-'''
+"""
 
     content = content[:insert_at] + new_block + content[insert_at:]
 
-    with open(changelog_file, 'w', encoding='utf-8') as f:
+    with open(changelog_file, "w", encoding="utf-8") as f:
         f.write(content)
     print(f"✅ Updated changelogs/changelog.yaml: Added release entry for {new_version}")
 
@@ -150,7 +128,7 @@ def update_changelog(new_version: str, old_version: str) -> None:
 def update_module_version_added(new_version: str) -> None:
     """Update version_added in all module files"""
     # Extract major.minor from version (e.g., 25.12.2 -> 25.12.0)
-    major, minor, patch = new_version.split('.')
+    major, minor, patch = new_version.split(".")
     del patch  # Unused, but needed for unpacking
     module_version = f"{major}.{minor}.0"
 
@@ -160,33 +138,29 @@ def update_module_version_added(new_version: str) -> None:
         return
 
     module_files = list(modules_dir.glob("graphiant_*.py"))
-    
+
     if not module_files:
         print(f"⚠️  Warning: No module files found in {modules_dir}")
         return
 
     updated_count = 0
     for module_file in module_files:
-        with open(module_file, 'r', encoding='utf-8') as f:
+        with open(module_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Check if version_added exists in the file
-        if 'version_added' not in content:
+        if "version_added" not in content:
             print(f"⚠️  Warning: {module_file.name} does not contain version_added field")
             continue
 
         # Update version_added in DOCUMENTATION section
         # Match: version_added: "25.11.0" or version_added: '25.11.0'
         old_content = content
-        content = re.sub(
-            r'version_added:\s*["\'][^"\']+["\']',
-            f'version_added: "{module_version}"',
-            content
-        )
+        content = re.sub(r'version_added:\s*["\'][^"\']+["\']', f'version_added: "{module_version}"', content)
 
         # Only write if content changed
         if content != old_content:
-            with open(module_file, 'w', encoding='utf-8') as f:
+            with open(module_file, "w", encoding="utf-8") as f:
                 f.write(content)
             print(f"✅ Updated {module_file.name}: version_added = {module_version}")
             updated_count += 1
@@ -196,7 +170,7 @@ def update_module_version_added(new_version: str) -> None:
     if updated_count > 0:
         print(f"✅ Updated version_added in {updated_count} module(s)")
     else:
-        print(f"ℹ️  No modules needed version_added updates")
+        print("ℹ️  No modules needed version_added updates")
 
 
 def update_requirements_txt(dependency_updates: Optional[dict] = None) -> None:
@@ -213,7 +187,7 @@ def update_version_file_dependencies(dependency_updates: Optional[dict] = None) 
         return
 
     version_file = COLLECTION_ROOT / "_version.py"
-    with open(version_file, 'r') as f:
+    with open(version_file, "r") as f:
         content = f.read()
 
     for dep_name, dep_version in dependency_updates.items():
@@ -222,24 +196,24 @@ def update_version_file_dependencies(dependency_updates: Optional[dict] = None) 
         replacement = f'"{dep_name}": "{dep_version}"'
         content = re.sub(pattern, replacement, content)
 
-    with open(version_file, 'w') as f:
+    with open(version_file, "w") as f:
         f.write(content)
     print("✅ Updated _version.py with dependency versions")
 
 
 def bump_version(old_version: str, bump_type: str) -> str:
     """Calculate new version based on bump type"""
-    major, minor, patch = map(int, old_version.split('.'))
+    major, minor, patch = map(int, old_version.split("."))
 
-    if bump_type == 'major':
+    if bump_type == "major":
         return f"{major + 1}.0.0"
-    elif bump_type == 'minor':
+    elif bump_type == "minor":
         return f"{major}.{minor + 1}.0"
-    elif bump_type == 'patch':
+    elif bump_type == "patch":
         return f"{major}.{minor}.{patch + 1}"
     else:
         # Assume it's a specific version
-        if re.match(r'^\d+\.\d+\.\d+$', bump_type):
+        if re.match(r"^\d+\.\d+\.\d+$", bump_type):
             return bump_type
         else:
             raise ValueError(f"Invalid version format: {bump_type}")
@@ -249,8 +223,8 @@ def parse_dependency_updates(args: list) -> dict:
     """Parse dependency update arguments (e.g., graphiant-sdk=25.12.0)"""
     updates = {}
     for arg in args:
-        if '=' in arg:
-            dep_name, dep_version = arg.split('=', 1)
+        if "=" in arg:
+            dep_name, dep_version = arg.split("=", 1)
             updates[dep_name] = dep_version
     return updates
 
@@ -270,7 +244,7 @@ def main():
     print(f"Current version: {old_version}")
 
     # Calculate new version
-    if bump_type in ['major', 'minor', 'patch']:
+    if bump_type in ["major", "minor", "patch"]:
         new_version = bump_version(old_version, bump_type)
     else:
         new_version = bump_type
@@ -299,9 +273,15 @@ def main():
         print("1. Review the changes:")
         print("   git diff")
         print()
-        print("2. Update changelogs/changelog.yaml with actual changes (or add fragments, then run antsibull-changelog release)")
+        print(
+            "2. Update changelogs/changelog.yaml with actual changes "
+            "(or add fragments, then run antsibull-changelog release)"
+        )
         print()
-        print("3. If you added new modules, set their version_added to this release (e.g. X.Y.0) in the DOCUMENTATION block.")
+        print(
+            "3. If you added new modules, set their version_added to this release "
+            "(e.g. X.Y.0) in the DOCUMENTATION block."
+        )
         print()
         print("4. Commit the changes:")
         print("   git add -A")
@@ -319,5 +299,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

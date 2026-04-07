@@ -11,10 +11,12 @@ Workflows follow the same **ansible-core** matrix conventions as the upstream [c
 
 ### `lint.yml` - Comprehensive Linting
 Detailed linting workflow that runs multiple linting checks in parallel:
+- **Python** (`python-lint` job): `black` (check, line length 120), `flake8` (`--max-line-length=120`), and `pylint --errors-only` on `ansible_collections/graphiant/naas/plugins/` (Python 3.12; installs `requirements-ee.txt` then `black`, `flake8`, `pylint`)
 - Jinja2 template linting (djlint)
 - Ansible lint (matrix: `stable-2.17` … `stable-2.20`, `devel`)
 - Documentation lint (antsibull-docs)
 - ansible-test sanity (same matrix; Docker-based via ansible-test-gh-action)
+- Ansible inclusion checklist compliance (`scripts/check_inclusion_checklist.py --strict`)
 
 ### `test.yml` - Testing
 Runs all tests for the collection:
@@ -85,7 +87,22 @@ The `e2e-integration-test` job in `test.yml` requires the following secrets/vari
 
 ### Running Workflows Locally
 
-While you can't run GitHub Actions locally, you can run the same commands:
+While you can't run GitHub Actions locally, you can run the same commands.
+
+**From the repository root** (matches the `python-lint` job):
+
+```bash
+python -m pip install --upgrade pip
+pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
+pip install black flake8 pylint
+
+black ansible_collections/graphiant/naas/plugins/ -l 120 --check
+flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
+export PYTHONPATH="$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins"
+pylint --errors-only ansible_collections/graphiant/naas/plugins/
+```
+
+**From the collection directory** (`ansible_collections/graphiant/naas`):
 
 ```bash
 cd ansible_collections/graphiant/naas

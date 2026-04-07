@@ -14,7 +14,7 @@ Thank you for your interest in contributing!
    ```
 3. **Set up development environment:**
    ```bash
-   python3.7 -m venv venv
+   python3.12 -m venv venv
    source venv/bin/activate
    pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
    ```
@@ -57,17 +57,29 @@ Thank you for your interest in contributing!
 
 5. **Run linting (before commit):**
    ```bash
-   # Python linting with flake8 (local development only, not in CI)
-   flake8 ansible_collections/graphiant/naas/plugins/module_utils/libs
+   # Install development tools needed for linting
+   source venv/bin/activate
+   pip install black flake8 pylint djlint ansible-lint pre-commit
 
-   # Python linting with pylint (errors only, local development only, not in CI)
-   export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/module_utils/libs
-   pylint --errors-only ansible_collections/graphiant/naas/plugins/module_utils/libs
+   # Python code formatting check with black (runs in CI)
+   black ansible_collections/graphiant/naas/plugins/ -l 120 --check
+   
+   # Python code formatting with black if required
+   black ansible_collections/graphiant/naas/plugins/ -l 120 --check --diff
+   black ansible_collections/graphiant/naas/plugins/ -l 120
 
-   # Ansible playbook linting (runs in CI, requires collection to be installed - step 3)
+   # Python linting with flake8 (runs in CI)
+   flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
+
+   # Python linting with pylint (runs in CI)
+   export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/
+   pylint --errors-only ansible_collections/graphiant/naas/plugins/
+
+   # Ansible playbook linting (runs in CI, requires collection to be installed first)
+   ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
    ansible-lint --config-file ~/.ansible/collections/ansible_collections/graphiant/naas/.ansible-lint ~/.ansible/collections/ansible_collections/graphiant/naas/playbooks/
 
-   # YAML/Jinja template linting with djlint (runs in CI)
+   # YAML/Jinja template linting (runs in CI)
    djlint ansible_collections/graphiant/naas/configs -e yaml
    djlint ansible_collections/graphiant/naas/templates -e yaml
    ```
@@ -94,7 +106,7 @@ Thank you for your interest in contributing!
    # Run hooks manually
    pre-commit run --all-files
    ```
-   > **Note:** Pre-commit hooks include the Ansible Inclusion Checklist check, which validates FQCN usage and semantic markup compliance.
+   > **Note:** Pre-commit hooks (see `.pre-commit-config.yaml`) include `flake8` and `pylint --errors-only` on `plugins/`, plus the Ansible Inclusion Checklist check (FQCN and semantic markup). Run `black` locally or rely on the `python-lint` CI job for formatting checks.
 
 7. **Commit with clear messages:**
    ```bash
@@ -119,16 +131,19 @@ The project uses multiple linting tools to ensure code quality:
 
 | Tool | Purpose | Target | CI/CD |
 |------|---------|--------|-------|
-| `flake8` | Python style guide (PEP 8) | `plugins/module_utils/libs/`, `tests/` | Local only |
-| `pylint` | Python code analysis | `plugins/module_utils/libs/` | Local only |
+| `black` | Python formatting | `ansible_collections/graphiant/naas/plugins/` | Yes (`python-lint` job in `lint.yml`) |
+| `flake8` | Python style guide (PEP 8) | `ansible_collections/graphiant/naas/plugins/` | Yes (`python-lint` job) |
+| `pylint` | Python code analysis (`--errors-only`) | `ansible_collections/graphiant/naas/plugins/` | Yes (`python-lint` job) |
 | `ansible-lint` | Ansible playbook best practices | `playbooks/` | Yes (lint stage) |
 | `djlint` | Jinja2/YAML template linting | `configs/`, `templates/` | Yes (lint stage) |
 | `ansible-test sanity` | Ansible collection sanity tests | Collection | Yes (lint and test/run stages) |
+| `pre-commit` | Local git hooks (`flake8`, `pylint`, inclusion checklist; see `.pre-commit-config.yaml`) | Plugins tree (per config) | Optional locally; not a GitHub Actions job |
 
 Configuration files:
 - `.ansible-lint` - Ansible lint rules
+- `.pre-commit-config.yaml` (repository root) - optional local hooks aligned with Python lint targets
 
-**Note:** `flake8` and `pylint` are available for local development but are not part of the CI/CD pipeline. The CI/CD pipeline runs `ansible-lint`, `djlint`, `antsibull-docs`, and `ansible-test sanity` for linting, and `ansible-test sanity` and E2E integration test for testing.
+**Note:** The **`python-lint`** job in `lint.yml` runs `black --check`, `flake8`, and `pylint --errors-only` on the collection `plugins/` tree. CI also runs `ansible-lint`, `djlint`, `antsibull-docs` / changelog lint, `ansible-test sanity`, the inclusion checklist script, and (when configured) E2E integration tests.
 
 ### ansible-test Sanity Configuration
 

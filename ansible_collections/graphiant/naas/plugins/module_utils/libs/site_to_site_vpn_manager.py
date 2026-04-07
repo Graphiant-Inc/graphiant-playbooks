@@ -38,21 +38,21 @@ class SiteToSiteVpnManager(BaseManager):
         Returns:
             dict: VPN name -> config (camelCase dict). Empty if none or on error.
         """
-        if not hasattr(gcs_device_info, 'device'):
+        if not hasattr(gcs_device_info, "device"):
             LOG.debug("_get_existing_site_to_site_vpn: No 'device' attribute in gcs_device_info")
             return {}
         device = gcs_device_info.device
-        tunnels = getattr(device, 'ipsec_tunnels', None) or getattr(device, 'ipsecTunnels', None)
+        tunnels = getattr(device, "ipsec_tunnels", None) or getattr(device, "ipsecTunnels", None)
         if not tunnels:
             return {}
         result = {}
         for t in tunnels:
-            name = getattr(t, 'name', None)
+            name = getattr(t, "name", None)
             if not name:
                 continue
-            if hasattr(t, 'model_dump'):
+            if hasattr(t, "model_dump"):
                 d = t.model_dump(by_alias=True, exclude_none=True)
-            elif hasattr(t, 'to_dict') and callable(t.to_dict):
+            elif hasattr(t, "to_dict") and callable(t.to_dict):
                 d = t.to_dict()
             else:
                 d = dict(t) if isinstance(t, dict) else {}
@@ -77,17 +77,19 @@ class SiteToSiteVpnManager(BaseManager):
         """
         self.delete_site_to_site_vpn(config_yaml_file)
 
-    def _inject_vault_secrets(self, vpn_config: Dict[str, Any], vault_keys: Dict[str, Any], vault_md5_passwords: Dict[str, Any]) -> None:
+    def _inject_vault_secrets(
+        self, vpn_config: Dict[str, Any], vault_keys: Dict[str, Any], vault_md5_passwords: Dict[str, Any]
+    ) -> None:
         """
         Inject presharedKey and md5Password from vault only (by VPN name).
         Config must not set these; they are overwritten from vault. Then _normalize_bgp_md5_password handles API shape.
         """
-        vpn_name = vpn_config.get('name')
+        vpn_name = vpn_config.get("name")
         if not vpn_name:
             return
         # Preshared key: vault only (required)
         if vpn_name in vault_keys and vault_keys[vpn_name]:
-            vpn_config['presharedKey'] = vault_keys[vpn_name]
+            vpn_config["presharedKey"] = vault_keys[vpn_name]
             LOG.debug("Injected presharedKey for VPN '%s' from vault", vpn_name)
         else:
             raise ConfigurationError(
@@ -95,36 +97,36 @@ class SiteToSiteVpnManager(BaseManager):
                 "Pass it via vault_site_to_site_vpn_keys from Ansible Vault (see configs/vault_secrets.yml.example)."
             )
         # BGP md5Password: vault only
-        routing = vpn_config.get('routing')
-        if isinstance(routing, dict) and isinstance(routing.get('bgp'), dict):
-            bgp = routing['bgp']
+        routing = vpn_config.get("routing")
+        if isinstance(routing, dict) and isinstance(routing.get("bgp"), dict):
+            bgp = routing["bgp"]
             if vpn_name in vault_md5_passwords and vault_md5_passwords[vpn_name]:
                 pwd = vault_md5_passwords[vpn_name]
-                bgp['md5Password'] = str(pwd).strip() if pwd else None
+                bgp["md5Password"] = str(pwd).strip() if pwd else None
                 LOG.debug("Injected md5Password for VPN '%s' from vault", vpn_name)
             else:
-                bgp['md5Password'] = None
+                bgp["md5Password"] = None
 
     def _normalize_bgp_md5_password(self, vpn_config: Dict[str, Any]) -> None:
         """
         Normalize BGP md5Password for API: SDK expects ManaV2NullableMd5Password
         (a dict with md5Password key), not a plain string.
         """
-        routing = vpn_config.get('routing')
-        if not isinstance(routing, dict) or 'bgp' not in routing:
+        routing = vpn_config.get("routing")
+        if not isinstance(routing, dict) or "bgp" not in routing:
             return
-        bgp = routing['bgp']
+        bgp = routing["bgp"]
         if not isinstance(bgp, dict):
             return
-        md5_val = bgp.get('md5Password')
+        md5_val = bgp.get("md5Password")
         if md5_val is None:
             return
         if isinstance(md5_val, str):
-            bgp['md5Password'] = {'md5Password': md5_val}
+            bgp["md5Password"] = {"md5Password": md5_val}
         elif isinstance(md5_val, dict):
             # Already a dict; ensure API shape (camelCase key)
-            if 'md5Password' not in md5_val and 'md5_password' in md5_val:
-                bgp['md5Password'] = {'md5Password': md5_val['md5_password']}
+            if "md5Password" not in md5_val and "md5_password" in md5_val:
+                bgp["md5Password"] = {"md5Password": md5_val["md5_password"]}
 
     def _normalize_policy_field(self, val: Any) -> Any:
         """Ensure policy is API shape: { policy: str or None }. Accepts string or dict."""
@@ -194,8 +196,10 @@ class SiteToSiteVpnManager(BaseManager):
 
         Args:
             vpn_config_file: Path to the YAML file containing Site-to-Site VPN configurations.
-            vault_site_to_site_vpn_keys: Dict of VPN name -> preshared key (pass from Ansible Vault; never written to disk).
-            vault_bgp_md5_passwords: Dict of VPN name -> BGP MD5 password (pass from Ansible Vault; never written to disk).
+            vault_site_to_site_vpn_keys: Dict of VPN name -> preshared key (pass from Ansible
+                Vault; never written to disk).
+            vault_bgp_md5_passwords: Dict of VPN name -> BGP MD5 password (pass from Ansible
+                Vault; never written to disk).
 
         Returns:
             dict: Result with 'changed' status and list of created devices
@@ -204,7 +208,7 @@ class SiteToSiteVpnManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {'changed': False, 'created_devices': []}
+        result = {"changed": False, "created_devices": []}
 
         try:
             vault_keys = (vault_site_to_site_vpn_keys if vault_site_to_site_vpn_keys is not None else {}) or {}
@@ -239,10 +243,7 @@ class SiteToSiteVpnManager(BaseManager):
                             )
 
                         if device_id not in output_config:
-                            output_config[device_id] = {
-                                "device_id": device_id,
-                                "edge": {"siteToSiteVpn": {}}
-                            }
+                            output_config[device_id] = {"device_id": device_id, "edge": {"siteToSiteVpn": {}}}
 
                         LOG.info("[create] Processing device: %s (ID: %s)", device_name, device_id)
 
@@ -250,7 +251,7 @@ class SiteToSiteVpnManager(BaseManager):
                             vpn_configs = [vpn_configs]
 
                         for vpn_config in vpn_configs:
-                            vpn_name = vpn_config.get('name')
+                            vpn_name = vpn_config.get("name")
                             if not vpn_name:
                                 LOG.warning("Skipping VPN config - missing 'name' field")
                                 continue
@@ -263,9 +264,7 @@ class SiteToSiteVpnManager(BaseManager):
                             self._inject_vault_secrets(inner, vault_keys, vault_md5)
                             self._normalize_bgp_md5_password(inner)
                             self._normalize_bgp_address_families_for_api(inner)
-                            output_config[device_id]["edge"]["siteToSiteVpn"][vpn_name] = {
-                                "siteToSiteVpn": inner
-                            }
+                            output_config[device_id]["edge"]["siteToSiteVpn"][vpn_name] = {"siteToSiteVpn": inner}
                             LOG.info(" ✓ Added Site-to-Site VPN: %s", vpn_name)
 
                     except DeviceNotFoundError:
@@ -295,14 +294,22 @@ class SiteToSiteVpnManager(BaseManager):
                         if o is None:
                             return None
                         if isinstance(o, dict):
-                            return {k: _drop_secrets(v) for k, v in o.items() if k not in ('presharedKey', 'md5Password')}
+                            return {
+                                k: _drop_secrets(v) for k, v in o.items() if k not in ("presharedKey", "md5Password")
+                            }
                         if isinstance(o, list):
                             return [_drop_secrets(x) for x in o]
                         return o
 
                     result = _drop_secrets(out)
-                    if not from_intended and isinstance(result, dict) and "bgp" in result and isinstance(result["bgp"], dict):
-                        # API returns bgp.addressFamilies as list; intended uses dict with 'family' wrapper. Normalize existing.
+                    if (
+                        not from_intended
+                        and isinstance(result, dict)
+                        and "bgp" in result
+                        and isinstance(result["bgp"], dict)
+                    ):
+                        # API returns bgp.addressFamilies as list; intended uses dict with 'family'
+                        # wrapper. Normalize existing.
                         af = result["bgp"].get("addressFamilies")
                         if isinstance(af, list):
                             by_name = {}
@@ -314,7 +321,8 @@ class SiteToSiteVpnManager(BaseManager):
                             result = dict(result)
                             result["bgp"] = dict(result["bgp"])
                             result["bgp"]["addressFamilies"] = by_name
-                        # Ensure each address family has 'family' wrapper and policy as { policy } for comparison with intended.
+                        # Ensure each address family has 'family' wrapper and policy as { policy }
+                        # for comparison with intended.
                         af = result["bgp"].get("addressFamilies")
                         if isinstance(af, dict):
                             for k, v in list(af.items()):
@@ -327,15 +335,23 @@ class SiteToSiteVpnManager(BaseManager):
                                             if pk in fam and isinstance(fam[pk], str):
                                                 fam[pk] = {"policy": fam[pk]}
                                         # Mirror filter <-> policy for comparison (API may return either naming)
-                                        for fk, pk in (("inboundFilter", "inboundPolicy"), ("outboundFilter", "outboundPolicy")):
+                                        for fk, pk in (
+                                            ("inboundFilter", "inboundPolicy"),
+                                            ("outboundFilter", "outboundPolicy"),
+                                        ):
                                             if fk in fam and isinstance(fam[fk], dict) and pk not in fam:
                                                 fam[pk] = {"policy": fam[fk].get("policy")}
                                             elif pk in fam and isinstance(fam[pk], dict) and fk not in fam:
                                                 fam[fk] = {"policy": fam[pk].get("policy")}
                     return result
 
-                def _intended_matches_existing(intended_compare: Dict[str, Any], existing_compare: Dict[str, Any]) -> bool:
-                    """True if every intended VPN is present and every key we set matches existing (ignore extra keys on device)."""
+                def _intended_matches_existing(
+                    intended_compare: Dict[str, Any], existing_compare: Dict[str, Any]
+                ) -> bool:
+                    """True if every intended VPN is present and keys we set match existing.
+
+                    Extra keys on the device are ignored.
+                    """
                     for name, i_cfg in intended_compare.items():
                         if name not in existing_compare:
                             return False
@@ -392,8 +408,8 @@ class SiteToSiteVpnManager(BaseManager):
                     ) from e
                 LOG.info("Pushing Site-to-Site VPN creation to %d device(s)...", len(configs_to_push))
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, configs_to_push)
-                result['changed'] = True
-                result['created_devices'] = list(configs_to_push)
+                result["changed"] = True
+                result["created_devices"] = list(configs_to_push)
                 LOG.info("Successfully created Site-to-Site VPN for %s devices", len(configs_to_push))
             elif output_config:
                 LOG.info("Site-to-Site VPN unchanged for all %d device(s), Nothing to push", len(output_config))
@@ -420,7 +436,7 @@ class SiteToSiteVpnManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {'changed': False, 'deleted_devices': []}
+        result = {"changed": False, "deleted_devices": []}
 
         try:
             # Load Site-to-Site VPN configurations
@@ -448,10 +464,7 @@ class SiteToSiteVpnManager(BaseManager):
                             )
 
                         if device_id not in output_config:
-                            output_config[device_id] = {
-                                "device_id": device_id,
-                                "edge": {"siteToSiteVpn": {}}
-                            }
+                            output_config[device_id] = {"device_id": device_id, "edge": {"siteToSiteVpn": {}}}
 
                         LOG.info("[delete] Processing device: %s (ID: %s)", device_name, device_id)
 
@@ -459,7 +472,7 @@ class SiteToSiteVpnManager(BaseManager):
                             vpn_configs = [vpn_configs]
 
                         for vpn_config in vpn_configs:
-                            vpn_name = vpn_config.get('name')
+                            vpn_name = vpn_config.get("name")
                             if not vpn_name:
                                 LOG.warning("Skipping VPN config - missing 'name' field")
                                 continue
@@ -467,9 +480,7 @@ class SiteToSiteVpnManager(BaseManager):
                             LOG.info("Deleting Site-to-Site VPN: %s", vpn_name)
 
                             # Build delete payload directly (no template)
-                            output_config[device_id]["edge"]["siteToSiteVpn"][vpn_name] = {
-                                "siteToSiteVpn": None
-                            }
+                            output_config[device_id]["edge"]["siteToSiteVpn"][vpn_name] = {"siteToSiteVpn": None}
                             LOG.info(" ✓ Removed Site-to-Site VPN: %s", vpn_name)
 
                     except DeviceNotFoundError:
@@ -485,7 +496,9 @@ class SiteToSiteVpnManager(BaseManager):
                     gcs_device_info = self.gsdk.get_device_info(device_id)
                     existing_s2s = self._get_existing_site_to_site_vpn(gcs_device_info)
                     requested_deletes = list((pl.get("edge") or {}).get("siteToSiteVpn") or {})
-                    to_delete = {k: v for k, v in (pl.get("edge") or {}).get("siteToSiteVpn", {}).items() if k in existing_s2s}
+                    to_delete = {
+                        k: v for k, v in (pl.get("edge") or {}).get("siteToSiteVpn", {}).items() if k in existing_s2s
+                    }
                     if not to_delete:
                         LOG.info("Device %s: no VPNs to delete (already absent), skipping", device_id)
                         continue
@@ -510,13 +523,11 @@ class SiteToSiteVpnManager(BaseManager):
                     self.execute_concurrent_tasks(self.gsdk.show_validated_payload, validation_config)
                 except Exception as e:
                     LOG.error("SDK validation failed: %s", str(e))
-                    raise ConfigurationError(
-                        f"Site-to-Site VPN deletion validation failed: {str(e)}."
-                    ) from e
+                    raise ConfigurationError(f"Site-to-Site VPN deletion validation failed: {str(e)}.") from e
                 LOG.info("Pushing Site-to-Site VPN deletion to %d device(s)...", len(output_config))
                 self.execute_concurrent_tasks(self.gsdk.put_device_config, output_config)
-                result['changed'] = True
-                result['deleted_devices'] = list(output_config)
+                result["changed"] = True
+                result["deleted_devices"] = list(output_config)
                 LOG.info("Successfully deleted Site-to-Site VPN for %s devices", len(output_config))
             else:
                 LOG.warning("No valid device configurations found")
