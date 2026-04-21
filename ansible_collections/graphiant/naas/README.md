@@ -6,6 +6,14 @@
 
 The Ansible Graphiant NaaS collection includes modules for automating the management of Graphiant NaaS (Network as a Service) infrastructure.
 
+### Ansible community package
+
+**`graphiant.naas`** is included in the **[Ansible community package](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html)** (the curated `ansible` distribution on PyPI and in downstream OS packages). Official collection documentation - module reference, plugin index, and version metadata - is published with the rest of Ansible's community collections:
+
+**[Graphiant.Naas - Ansible Documentation](https://docs.ansible.com/projects/ansible/latest/collections/graphiant/naas/index.html#plugins-in-graphiant-naas)**
+
+You can still install or upgrade the collection explicitly with `ansible-galaxy collection install graphiant.naas` (for example, to pick up a newer release than the one bundled with your `ansible` install).
+
 ## Description
 
 This collection provides Ansible modules to automate:

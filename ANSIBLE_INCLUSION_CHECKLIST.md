@@ -6,6 +6,8 @@
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
+**Ansible community package:** This collection is shipped and documented as part of the Ansible community distribution. Official docs: [Graphiant.Naas on docs.ansible.com](https://docs.ansible.com/projects/ansible/latest/collections/graphiant/naas/index.html#plugins-in-graphiant-naas).
+
 ---
 
 ## 1. Public Availability and Communication
