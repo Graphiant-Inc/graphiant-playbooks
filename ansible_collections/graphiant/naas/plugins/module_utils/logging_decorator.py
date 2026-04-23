@@ -5,8 +5,6 @@ Logging decorator for Ansible modules to capture detailed library logs
 import logging
 import io
 import functools
-import sys
-import os
 
 
 def _import_setup_logger():
@@ -28,17 +26,12 @@ def _import_setup_logger():
     except ImportError:
         pass
 
-    # Strategy 2: Fallback for direct Python usage
-    module_utils_dir = os.path.dirname(os.path.abspath(__file__))
-    if module_utils_dir not in sys.path:
-        sys.path.append(module_utils_dir)
-
+    # Strategy 2: package-relative import (e.g. unit tests with PYTHONPATH at collection root)
     try:
-        from libs.logger import setup_logger
+        from .libs.logger import setup_logger
 
         return setup_logger
     except ImportError:
-        # Final fallback: return None and use basic logging
         return None
 
 

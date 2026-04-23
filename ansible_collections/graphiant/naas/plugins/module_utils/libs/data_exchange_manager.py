@@ -15,8 +15,10 @@ Deconfigure workflow consistency (with global_config_manager, site_manager):
   with explicit lists (aligned with global_config and site_manager).
 """
 
+from __future__ import annotations
+
 import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, Set
 
 try:
     from tabulate import tabulate
@@ -51,7 +53,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and details of operations performed
         """
-        result = {"changed": False, "details": {}}
+        result: Dict[str, Any] = {"changed": False, "details": {}}
 
         LOG.info("Configuring Data Exchange resources from %s", config_yaml_file)
 
@@ -87,7 +89,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and details of operations performed
         """
-        result = {"changed": False, "details": {}}
+        result: Dict[str, Any] = {"changed": False, "details": {}}
 
         LOG.info("Deconfiguring Data Exchange resources from %s", config_yaml_file)
 
@@ -116,7 +118,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result = {"changed": False, "created": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "created": [], "skipped": []}
 
         try:
             LOG.info("Creating Data Exchange service from %s", config_yaml_file)
@@ -282,7 +284,7 @@ class DataExchangeManager(BaseManager):
         policy_config["globalObjectOps"] = resolved
 
     def _validate_global_object_ops_routing_policies(
-        self, policy_config: dict, service_name: str, existing_policy_names: set = None
+        self, policy_config: dict, service_name: str, existing_policy_names=None
     ) -> None:
         """
         Validate that all Graphiant routing policy (filter) names referenced in
@@ -297,7 +299,7 @@ class DataExchangeManager(BaseManager):
         """
         if "globalObjectOps" not in policy_config or not isinstance(policy_config["globalObjectOps"], dict):
             return
-        policy_names = set()
+        policy_names: Set[str] = set()
         for device_ops in policy_config["globalObjectOps"].values():
             if not isinstance(device_ops, dict):
                 continue
@@ -391,7 +393,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result = {"changed": False, "created": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "created": [], "skipped": []}
 
         try:
             LOG.info("Creating Data Exchange customer from %s", config_yaml_file)
@@ -518,7 +520,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of deleted/skipped items
         """
-        result = {"changed": False, "deleted": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": []}
 
         try:
             LOG.info("Deleting Data Exchange customers from %s", config_yaml_file)
@@ -582,7 +584,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of deleted/skipped items
         """
-        result = {"changed": False, "deleted": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": []}
 
         try:
             LOG.info("Deleting Data Exchange services from %s", config_yaml_file)
@@ -762,7 +764,7 @@ class DataExchangeManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of matched/skipped items
         """
-        result = {"changed": False, "matched": [], "skipped": [], "failed": []}
+        result: Dict[str, Any] = {"changed": False, "matched": [], "skipped": [], "failed": []}
 
         try:
             LOG.info("Matching Data Exchange services to customers from %s", config_yaml_file)
@@ -943,7 +945,7 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to match Data Exchange services to customers: %s", e)
             raise ConfigurationError(f"Data Exchange service to customer matching failed: {e}")
 
-    def accept_invitation(self, config_yaml_file: str, matches_file: str = None) -> None:
+    def accept_invitation(self, config_yaml_file: str, matches_file=None) -> None:
         """
         Accept Data Exchange service invitation (Workflow 4).
 
@@ -1312,7 +1314,7 @@ class DataExchangeManager(BaseManager):
                     if callable(getattr(response, "to_dict", None)):
                         result = response.to_dict()
                     else:
-                        result = {
+                        result: Dict[str, Any] = {
                             "check_mode": True,
                             "message": "API call skipped in check mode",
                             "payload_validated": True,

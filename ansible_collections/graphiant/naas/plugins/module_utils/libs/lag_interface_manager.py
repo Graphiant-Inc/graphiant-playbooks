@@ -15,6 +15,8 @@ Idempotency Support:
     - delete_lag_subinterfaces: Deletes specified subinterfaces.
 """
 
+from typing import Any, Dict
+
 from .base_manager import BaseManager
 from .exceptions import ConfigurationError
 from .logger import setup_logger
@@ -320,11 +322,16 @@ class LagInterfaceManager(BaseManager):
             DeviceNotFoundError: If any device cannot be found.
         """
         try:
-            result = {"changed": False, "configured_devices": [], "created_lags": [], "updated_lags": []}
+            result: Dict[str, Any] = {
+                "changed": False,
+                "configured_devices": [],
+                "created_lags": [],
+                "updated_lags": [],
+            }
 
             config_data = self.render_config_file(config_yaml_file)
             output_config = {}
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
             # Cache for device info to avoid redundant API calls
             device_info_cache = {}
 
@@ -332,7 +339,7 @@ class LagInterfaceManager(BaseManager):
                 LOG.warning("No LAG interfaces configuration found in %s", config_yaml_file)
                 return result
 
-            for device_info in config_data.get("lagInterfaces"):
+            for device_info in config_data.get("lagInterfaces") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = []
@@ -668,12 +675,17 @@ class LagInterfaceManager(BaseManager):
             DeviceNotFoundError: If any device cannot be found.
         """
         try:
-            result = {"changed": False, "deconfigured_devices": [], "deconfigured_lags": [], "skipped_lags": []}
+            result: Dict[str, Any] = {
+                "changed": False,
+                "deconfigured_devices": [],
+                "deconfigured_lags": [],
+                "skipped_lags": [],
+            }
 
             config_data = self.render_config_file(config_yaml_file)
             del_lag_subinterfaces_config = {}
             del_lag_interface_config = {}
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
             # Cache for device info to avoid redundant API calls
             device_info_cache = {}
 
@@ -681,7 +693,7 @@ class LagInterfaceManager(BaseManager):
                 LOG.warning("No LAG interfaces configuration found in %s", config_yaml_file)
                 return result
 
-            for device_info in config_data.get("lagInterfaces"):
+            for device_info in config_data.get("lagInterfaces") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = []

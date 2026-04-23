@@ -10,6 +10,8 @@ Idempotency Support:
       Skips interfaces where VRRP is already disabled (enabled=false).
 """
 
+from typing import Any, Dict
+
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
@@ -189,7 +191,12 @@ class VRRPInterfaceManager(BaseManager):
             ConfigurationError: If VRRP configuration doesn't exist or processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "enabled_devices": [], "enabled_interfaces": [], "skipped_interfaces": []}
+        result: Dict[str, Any] = {
+            "changed": False,
+            "enabled_devices": [],
+            "enabled_interfaces": [],
+            "skipped_interfaces": [],
+        }
 
         try:
             # Load VRRP configurations
@@ -197,10 +204,10 @@ class VRRPInterfaceManager(BaseManager):
             output_config = {}
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect VRRP configurations per device
-            for device_info in vrrp_config_data.get("vrrp_config"):
+            for device_info in vrrp_config_data.get("vrrp_config") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = {"interfaces": []}
@@ -393,7 +400,7 @@ class VRRPInterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "configured_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": []}
 
         try:
             # Load VRRP configurations
@@ -401,10 +408,10 @@ class VRRPInterfaceManager(BaseManager):
             output_config = {}
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect VRRP configurations per device
-            for device_info in vrrp_config_data.get("vrrp_config"):
+            for device_info in vrrp_config_data.get("vrrp_config") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = {"interfaces": []}
@@ -493,7 +500,12 @@ class VRRPInterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "deconfigured_devices": [], "deconfigured_interfaces": [], "skipped_interfaces": []}
+        result: Dict[str, Any] = {
+            "changed": False,
+            "deconfigured_devices": [],
+            "deconfigured_interfaces": [],
+            "skipped_interfaces": [],
+        }
 
         try:
             # Load VRRP configurations
@@ -501,10 +513,10 @@ class VRRPInterfaceManager(BaseManager):
             output_config = {}
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect VRRP configurations per device
-            for device_info in vrrp_config_data.get("vrrp_config"):
+            for device_info in vrrp_config_data.get("vrrp_config") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = {"interfaces": []}

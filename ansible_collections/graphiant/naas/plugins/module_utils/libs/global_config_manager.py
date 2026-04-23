@@ -53,7 +53,7 @@ class GlobalConfigManager(BaseManager):
         Raises:
             ConfigurationError: If configuration processing fails
         """
-        result = {"changed": False, "failed": False, "details": {}}
+        result: Dict[str, Any] = {"changed": False, "failed": False, "details": {}}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -178,7 +178,7 @@ class GlobalConfigManager(BaseManager):
         Raises:
             ConfigurationError: If configuration processing fails
         """
-        result = {"changed": False, "failed": False, "details": {}}
+        result: Dict[str, Any] = {"changed": False, "failed": False, "details": {}}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -288,7 +288,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             prefix_sets = config_data.get("global_prefix_sets", [])
@@ -297,7 +297,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No prefix sets found in configuration file")
                 return result
 
-            config_payload = {"global_prefix_sets": {}}
+            config_payload: Dict[str, Any] = {"global_prefix_sets": {}}
 
             for prefix_config in prefix_sets:
                 self.config_utils.global_prefix_set(config_payload, action="add", **prefix_config)
@@ -321,7 +321,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             prefix_sets = config_data.get("global_prefix_sets", [])
@@ -374,7 +374,7 @@ class GlobalConfigManager(BaseManager):
             )
             for prefix_config in to_delete:
                 name = prefix_config.get("name", "unknown")
-                single_payload = {"global_prefix_sets": {}}
+                single_payload: Dict[str, Any] = {"global_prefix_sets": {}}
                 self.config_utils.global_prefix_set(single_payload, action="delete", **prefix_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -409,7 +409,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             routing_policies = config_data.get("routing_policies", [])
@@ -418,7 +418,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No BGP filters found in configuration file")
                 return result
 
-            config_payload = {"routing_policies": {}}
+            config_payload: Dict[str, Any] = {"routing_policies": {}}
 
             for policy_config in routing_policies:
                 self.config_utils.global_bgp_filter(config_payload, action="add", **policy_config)
@@ -442,7 +442,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             routing_policies = config_data.get("routing_policies", [])
@@ -494,7 +494,7 @@ class GlobalConfigManager(BaseManager):
             )
             for policy_config in to_delete:
                 name = policy_config.get("name", "unknown")
-                single_payload = {"routing_policies": {}}
+                single_payload: Dict[str, Any] = {"routing_policies": {}}
                 self.config_utils.global_bgp_filter(single_payload, action="delete", **policy_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -529,7 +529,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             graphiant_policies = config_data.get("graphiant_routing_policies", [])
@@ -538,7 +538,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No Graphiant filters found in configuration file")
                 return result
 
-            config_payload = {"routing_policies": {}}
+            config_payload: Dict[str, Any] = {"routing_policies": {}}
 
             for policy_config in graphiant_policies:
                 self.config_utils.global_graphiant_filter(config_payload, action="add", **policy_config)
@@ -560,7 +560,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             graphiant_policies = config_data.get("graphiant_routing_policies", [])
@@ -611,7 +611,7 @@ class GlobalConfigManager(BaseManager):
             )
             for policy_config in to_delete:
                 name = policy_config.get("name", "unknown")
-                single_payload = {"routing_policies": {}}
+                single_payload: Dict[str, Any] = {"routing_policies": {}}
                 self.config_utils.global_graphiant_filter(single_payload, action="delete", **policy_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -646,7 +646,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             snmp_services = config_data.get("snmps", [])
@@ -655,7 +655,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No SNMP services found in configuration file")
                 return result
 
-            config_payload = {"snmps": {}}
+            config_payload: Dict[str, Any] = {"snmps": {}}
 
             for snmp_config in snmp_services:
                 self.config_utils.global_snmp(config_payload, action="add", **snmp_config)
@@ -679,7 +679,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             snmp_services = config_data.get("snmps", [])
@@ -731,7 +731,7 @@ class GlobalConfigManager(BaseManager):
             )
             for snmp_config in to_delete:
                 name = snmp_config.get("name", "unknown")
-                single_payload = {"snmps": {}}
+                single_payload: Dict[str, Any] = {"snmps": {}}
                 self.config_utils.global_snmp(single_payload, action="delete", **snmp_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -766,7 +766,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             syslog_services = config_data.get("syslog_servers", [])
@@ -775,7 +775,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No syslog services found in configuration file")
                 return result
 
-            config_payload = {"syslog_servers": {}}
+            config_payload: Dict[str, Any] = {"syslog_servers": {}}
 
             for syslog_config in syslog_services:
                 self.config_utils.global_syslog(config_payload, action="add", **syslog_config)
@@ -799,7 +799,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             syslog_services = config_data.get("syslog_servers", [])
@@ -852,7 +852,7 @@ class GlobalConfigManager(BaseManager):
             )
             for syslog_config in to_delete:
                 name = syslog_config.get("name", "unknown")
-                single_payload = {"syslog_servers": {}}
+                single_payload: Dict[str, Any] = {"syslog_servers": {}}
                 self.config_utils.global_syslog(single_payload, action="delete", **syslog_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -887,7 +887,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             ntps = config_data.get("ntps", [])
@@ -896,7 +896,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No NTP objects found in configuration file")
                 return result
 
-            config_payload = {"ntps": {}}
+            config_payload: Dict[str, Any] = {"ntps": {}}
 
             for ntp_config in ntps:
                 self.config_utils.global_ntp(config_payload, action="add", **ntp_config)
@@ -920,7 +920,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             ntps = config_data.get("ntps", [])
@@ -972,7 +972,7 @@ class GlobalConfigManager(BaseManager):
             )
             for ntp_config in to_delete:
                 name = ntp_config.get("name", "unknown")
-                single_payload = {"ntps": {}}
+                single_payload: Dict[str, Any] = {"ntps": {}}
                 self.config_utils.global_ntp(single_payload, action="delete", **ntp_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -1007,7 +1007,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             ipfix_services = config_data.get("ipfix_exporters", [])
@@ -1016,7 +1016,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No IPFIX services found in configuration file")
                 return result
 
-            config_payload = {"ipfix_exporters": {}}
+            config_payload: Dict[str, Any] = {"ipfix_exporters": {}}
 
             for ipfix_config in ipfix_services:
                 self.config_utils.global_ipfix(config_payload, action="add", **ipfix_config)
@@ -1040,7 +1040,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             ipfix_services = config_data.get("ipfix_exporters", [])
@@ -1092,7 +1092,7 @@ class GlobalConfigManager(BaseManager):
             )
             for ipfix_config in to_delete:
                 name = ipfix_config.get("name", "unknown")
-                single_payload = {"ipfix_exporters": {}}
+                single_payload: Dict[str, Any] = {"ipfix_exporters": {}}
                 self.config_utils.global_ipfix(single_payload, action="delete", **ipfix_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -1127,7 +1127,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' and 'failed' (bool).
         """
-        result = {"changed": False, "failed": False}
+        result: Dict[str, Any] = {"changed": False, "failed": False}
         try:
             config_data = self.render_config_file(config_yaml_file)
             vpn_profiles = config_data.get("vpn_profiles", [])
@@ -1136,7 +1136,7 @@ class GlobalConfigManager(BaseManager):
                 LOG.info("No VPN profiles found in configuration file")
                 return result
 
-            config_payload = {"vpn_profiles": {}}
+            config_payload: Dict[str, Any] = {"vpn_profiles": {}}
 
             for vpn_config in vpn_profiles:
                 self.config_utils.global_vpn_profile(config_payload, action="add", **vpn_config)
@@ -1160,7 +1160,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list)
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
         try:
             config_data = self.render_config_file(config_yaml_file)
             vpn_profiles = config_data.get("vpn_profiles", [])
@@ -1212,7 +1212,7 @@ class GlobalConfigManager(BaseManager):
             )
             for vpn_config in to_delete:
                 name = vpn_config.get("name", "unknown")
-                single_payload = {"vpn_profiles": {}}
+                single_payload: Dict[str, Any] = {"vpn_profiles": {}}
                 self.config_utils.global_vpn_profile(single_payload, action="delete", **vpn_config)
                 try:
                     self.gsdk.patch_global_config(**single_payload)
@@ -1242,7 +1242,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result = {"changed": False, "failed": False, "created": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "failed": False, "created": [], "skipped": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -1285,7 +1285,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list).
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -1363,7 +1363,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result = {"changed": False, "failed": False, "created": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "failed": False, "created": [], "skipped": []}
 
         try:
             LOG.info("Configuring global site lists from %s", config_yaml_file)
@@ -1424,7 +1424,7 @@ class GlobalConfigManager(BaseManager):
                     continue
 
                 # Use template approach for consistency with other global config methods
-                config_payload = {"site_lists": {}}
+                config_payload: Dict[str, Any] = {"site_lists": {}}
                 self.config_utils.global_site_list(
                     config_payload,
                     action="add",
@@ -1464,7 +1464,7 @@ class GlobalConfigManager(BaseManager):
         Returns:
             dict: Result with 'changed', 'deleted', 'skipped', 'failed' (bool), and 'failed_objects' (list).
         """
-        result = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
+        result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": [], "failed": False, "failed_objects": []}
 
         try:
             LOG.info("Deconfiguring global site lists from %s", config_yaml_file)

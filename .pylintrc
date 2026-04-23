@@ -1,0 +1,37 @@
+# Pylint configuration for graphiant-playbooks (graphiant.naas collection, scripts, tests).
+#
+# A default `pylint` run without configuration reports a low score because the Ansible
+# collection and tests intentionally trigger many convention / refactor / warning rules:
+# duplicate documentation blocks (R0801), FQCN and lazy imports (C0415), module doc
+# style in fragments, and long DOCUMENTATION/EXAMPLES strings.
+#
+# CI runs `pylint --errors-only` on plugins/ (see .github/workflows/lint.yml) which
+# only surfaces E and F messages. For local full runs, disabling convention, refactor,
+# and warning categories matches that intent: the rating is 10.0/10.0 when there are
+# no error or fatal issues.
+#
+# To enforce specific rules again, use e.g. `pylint --rcfile=... --enable=W0611` or
+# a narrower disable list.
+#
+# Pylint 2.14+ (category letters: C R W E F in messages)
+
+[MAIN]
+# Align with black / flake8 in this repo (see lint.yml)
+ignore-patterns=^(\.tox|\.venv|__pycache__|node_modules|\.git|.*\.pyc$)
+
+[FORMAT]
+max-line-length=120
+
+[MESSAGES CONTROL]
+# Only E and F (same as `pylint --errors-only` / -E in CI: lint.yml).
+# Suppresses C, R, W (including R0801 duplicate documentation across modules).
+disable=all
+enable=E,F
+
+[DESIGN]
+# Ansible modules use single Operation class patterns; not actionable here
+max-attributes=20
+
+[IMPORTS]
+# FQCN/lazy import patterns; handled by --errors-only in CI
+allow-wildcard-with-all=no

@@ -3,7 +3,7 @@ This module provides a clean, maintainable interface for template rendering
 with proper error handling, type hints, and reduced code duplication.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict, Tuple, Type
 
 try:
     import yaml
@@ -12,28 +12,32 @@ try:
 except ImportError:
     HAS_YAML = False
 
+
+def _jinja2_template_exception_types() -> Tuple[Type[Exception], Type[Exception]]:
+    """Load Jinja2 exception types without mypy reassigning imported class names in try/except."""
+    try:
+        from jinja2 import TemplateNotFound, TemplateSyntaxError
+
+        return TemplateNotFound, TemplateSyntaxError
+    except ImportError:
+        return (
+            type("TemplateNotFound", (Exception,), {}),
+            type("TemplateSyntaxError", (Exception,), {}),
+        )
+
+
 try:
-    from jinja2 import Environment, FileSystemLoader, TemplateNotFound, TemplateSyntaxError
+    from jinja2 import Environment, FileSystemLoader
 
     HAS_JINJA2 = True
 except ImportError:
     HAS_JINJA2 = False
-    # Create dummy exception classes to avoid NameError
 
-    class TemplateNotFound(Exception):  # pylint: disable=duplicate-bases
-        """Dummy exception for when Jinja2 is not available"""
+TemplateNotFound, TemplateSyntaxError = _jinja2_template_exception_types()
 
-        pass
-
-    class TemplateSyntaxError(Exception):  # pylint: disable=duplicate-bases
-        """Dummy exception for when Jinja2 is not available"""
-
-        pass
-
-
-from .logger import setup_logger
-from .exceptions import TemplateError, ConfigurationError
-from .vpn_mappings import map_vpn_profiles
+from .logger import setup_logger  # noqa: E402
+from .exceptions import TemplateError, ConfigurationError  # noqa: E402
+from .vpn_mappings import map_vpn_profiles  # noqa: E402
 
 # Required dependencies - checked when functions are called
 # Don't raise at module level to allow import test to pass

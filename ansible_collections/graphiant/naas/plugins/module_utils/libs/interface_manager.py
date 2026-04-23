@@ -5,6 +5,10 @@ This module handles interface and circuit configuration management,
 including both regular interfaces and sub-interfaces.
 """
 
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Tuple
+
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
@@ -215,10 +219,10 @@ class InterfaceManager(BaseManager):
 
     def configure(
         self,
-        config_yaml_file: str = None,
-        circuit_config_file: str = None,
+        config_yaml_file=None,
+        circuit_config_file=None,
         *,
-        interface_config_file: str = None,
+        interface_config_file=None,
     ) -> dict:
         """
         Configure interfaces and circuits for multiple devices concurrently.
@@ -253,7 +257,7 @@ class InterfaceManager(BaseManager):
                 "configure(): pass either config_yaml_file or interface_config_file=, not two different paths"
             )
 
-        result = {"changed": False, "configured_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": []}
 
         try:
             # Load interface configurations
@@ -270,10 +274,10 @@ class InterfaceManager(BaseManager):
                 return result
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect interface configurations per device
-            for device_info in interface_config_data.get("interfaces"):
+            for device_info in interface_config_data.get("interfaces") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -281,7 +285,7 @@ class InterfaceManager(BaseManager):
 
             # Collect circuit configurations per device if provided
             if circuit_config_data and "circuits" in circuit_config_data:
-                for device_info in circuit_config_data.get("circuits"):
+                for device_info in circuit_config_data.get("circuits") or []:
                     for device_name, config_list in device_info.items():
                         if device_name not in device_configs:
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -413,11 +417,11 @@ class InterfaceManager(BaseManager):
 
     def deconfigure(
         self,
-        config_yaml_file: str = None,
-        circuit_config_file: str = None,
+        config_yaml_file=None,
+        circuit_config_file=None,
         circuits_only: bool = False,
         *,
-        interface_config_file: str = None,
+        interface_config_file=None,
     ) -> dict:
         """
         Deconfigure interfaces and (optionally) circuit static routes for multiple devices concurrently (idempotent).
@@ -462,7 +466,12 @@ class InterfaceManager(BaseManager):
                 "deconfigure(): pass either config_yaml_file or interface_config_file=, not two different paths"
             )
 
-        result = {"changed": False, "deconfigured_devices": [], "deconfigured_interfaces": [], "skipped_interfaces": []}
+        result: Dict[str, Any] = {
+            "changed": False,
+            "deconfigured_devices": [],
+            "deconfigured_interfaces": [],
+            "skipped_interfaces": [],
+        }
 
         try:
             # Load interface configurations
@@ -480,10 +489,10 @@ class InterfaceManager(BaseManager):
                 return result
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect interface configurations per device
-            for device_info in interface_config_data.get("interfaces"):
+            for device_info in interface_config_data.get("interfaces") or []:
                 for device_name, config_list in device_info.items():
                     if device_name not in device_configs:
                         device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -491,7 +500,7 @@ class InterfaceManager(BaseManager):
 
             # Collect circuit configurations per device if provided
             if circuit_config_data and "circuits" in circuit_config_data:
-                for device_info in circuit_config_data.get("circuits"):
+                for device_info in circuit_config_data.get("circuits") or []:
                     for device_name, config_list in device_info.items():
                         if device_name not in device_configs:
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -519,7 +528,7 @@ class InterfaceManager(BaseManager):
 
                     # Only include sections we actually intend to change.
                     # Avoid sending empty {"circuits": {}} which some backends interpret as "delete all circuits".
-                    device_config = {"interfaces": {}}
+                    device_config: Dict[str, Any] = {"interfaces": {}}
 
                     # Collect circuit names referenced in this device's interfaces and subinterfaces
                     referenced_circuits = set()
@@ -858,7 +867,7 @@ class InterfaceManager(BaseManager):
             LOG.error("Full traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Interface and circuit deconfiguration failed: {str(e)}")
 
-    def configure_interfaces(self, interface_config_file: str, circuit_config_file: str = None) -> dict:
+    def configure_interfaces(self, interface_config_file: str, circuit_config_file=None) -> dict:
         """
         Configure all interfaces and circuits for multiple devices concurrently.
         This method calls the configure method to handle all configurations in a single API call per device.
@@ -877,7 +886,7 @@ class InterfaceManager(BaseManager):
         return self.configure(interface_config_file, circuit_config_file)
 
     def deconfigure_interfaces(
-        self, interface_config_file: str, circuit_config_file: str = None, circuits_only: bool = False
+        self, interface_config_file: str, circuit_config_file=None, circuits_only: bool = False
     ) -> dict:
         """
         Deconfigure all interfaces and circuits for multiple devices concurrently.
@@ -1003,7 +1012,7 @@ class InterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "configured_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": []}
 
         try:
             config_data = self.render_config_file(interface_config_file)
@@ -1014,7 +1023,7 @@ class InterfaceManager(BaseManager):
                 LOG.warning("No interfaces configuration found in %s", interface_config_file)
                 return result
 
-            for device_info in config_data.get("interfaces"):
+            for device_info in config_data.get("interfaces") or []:
                 for device_name, config_list in device_info.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
@@ -1024,7 +1033,7 @@ class InterfaceManager(BaseManager):
                                 f"{self.gsdk.enterprise_info['company_name']}. "
                                 f"Please check device name and enterprise credentials."
                             )
-                        device_config = {"interfaces": {}}
+                        device_config: Dict[str, Any] = {"interfaces": {}}
 
                         lan_interfaces_configured = 0
                         for config in config_list:
@@ -1113,7 +1122,7 @@ class InterfaceManager(BaseManager):
             if output_config:
                 # Build stage1 (segment-only) payloads for devices where an interface is moved to a new LAN.
                 # API rejects moving segment and changing other interface config in the same request.
-                _EMPTY_SEGMENT = {
+                _EMPTY_SEGMENT: Dict[str, Any] = {
                     "networks": [],
                     "bgpRedistribution": {},
                     "bgpNeighbors": {},
@@ -1123,13 +1132,14 @@ class InterfaceManager(BaseManager):
                     "bgpAggregations": {},
                     "ipfixExporters": {},
                 }
-                stage1_config = {}
+                stage1_config: Dict[str, Any] = {}
                 for device_id, entry in output_config.items():
                     device_config = entry["edge"]
                     gcs_info = device_infos.get(device_id)
                     if not gcs_info:
                         continue
-                    segment_changes = []  # list of (interface_name, vlan_or_none, new_lan)
+                    # list of (interface_name, vlan or None, new_lan)
+                    segment_changes: List[Tuple[str, Optional[int], Any]] = []
                     for ifname, ifdata in device_config.get("interfaces", {}).items():
                         inner = ifdata.get("interface", {})
                         # Main interface LAN: detect segment change whenever config has 'lan'
@@ -1151,7 +1161,7 @@ class InterfaceManager(BaseManager):
                                     segment_changes.append((ifname, int(vlan_str), intended_lan))
                     if not segment_changes:
                         continue
-                    stage1_edge = {"interfaces": {}, "segments": {}}
+                    stage1_edge: Dict[str, Any] = {"interfaces": {}, "segments": {}}
                     for ifname, vlan, new_lan in segment_changes:
                         stage1_edge["segments"][new_lan] = _EMPTY_SEGMENT.copy()
                         if vlan is None:
@@ -1207,7 +1217,12 @@ class InterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "deconfigured_devices": [], "deconfigured_interfaces": [], "skipped_interfaces": []}
+        result: Dict[str, Any] = {
+            "changed": False,
+            "deconfigured_devices": [],
+            "deconfigured_interfaces": [],
+            "skipped_interfaces": [],
+        }
 
         try:
             config_data = self.render_config_file(interface_config_file)
@@ -1218,7 +1233,7 @@ class InterfaceManager(BaseManager):
                 LOG.warning("No interfaces configuration found in %s", interface_config_file)
                 return result
 
-            for device_info in config_data.get("interfaces"):
+            for device_info in config_data.get("interfaces") or []:
                 for device_name, config_list in device_info.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
@@ -1232,7 +1247,7 @@ class InterfaceManager(BaseManager):
                         # Get device info for idempotency check
                         gcs_device_info = self.gsdk.get_device_info(device_id)
 
-                        device_config = {"interfaces": {}}
+                        device_config: Dict[str, Any] = {"interfaces": {}}
 
                         lan_interfaces_deconfigured = 0
                         for config in config_list:
@@ -1437,7 +1452,7 @@ class InterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "configured_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": []}
 
         try:
             # Load circuit configurations
@@ -1447,11 +1462,11 @@ class InterfaceManager(BaseManager):
             output_config = {}
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect interface configurations per device
             if "interfaces" in interface_config_data:
-                for device_info in interface_config_data.get("interfaces"):
+                for device_info in interface_config_data.get("interfaces") or []:
                     for device_name, config_list in device_info.items():
                         if device_name not in device_configs:
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -1459,7 +1474,7 @@ class InterfaceManager(BaseManager):
 
             # Collect circuit configurations per device
             if "circuits" in circuit_config_data:
-                for device_info in circuit_config_data.get("circuits"):
+                for device_info in circuit_config_data.get("circuits") or []:
                     for device_name, config_list in device_info.items():
                         if device_name not in device_configs:
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -1637,7 +1652,7 @@ class InterfaceManager(BaseManager):
             raise ConfigurationError(f"WAN circuits and interfaces configuration failed: {str(e)}")
 
     def deconfigure_wan_circuits_interfaces(
-        self, interface_config_file: str, circuit_config_file: str = None, circuits_only: bool = False
+        self, interface_config_file: str, circuit_config_file=None, circuits_only: bool = False
     ) -> dict:
         """
         Deconfigure WAN interfaces and/or circuit static routes for multiple devices concurrently (idempotent).
@@ -1668,7 +1683,7 @@ class InterfaceManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {
+        result: Dict[str, Any] = {
             "changed": False,
             "deconfigured_devices": [],
             "deconfigured_interfaces": [],
@@ -1696,11 +1711,11 @@ class InterfaceManager(BaseManager):
             default_lan = f"default-{self.gsdk.get_enterprise_id()}"
 
             # Collect all device configurations first
-            device_configs = {}
+            device_configs: Dict[str, Any] = {}
 
             # Collect interface configurations per device
             if "interfaces" in interface_config_data:
-                for device_info in interface_config_data.get("interfaces"):
+                for device_info in interface_config_data.get("interfaces") or []:
                     for device_name, config_list in device_info.items():
                         if device_name not in device_configs:
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -1708,7 +1723,7 @@ class InterfaceManager(BaseManager):
 
             # Collect circuit configurations per device if provided
             if circuit_config_data and "circuits" in circuit_config_data:
-                for device_info in circuit_config_data.get("circuits"):
+                for device_info in circuit_config_data.get("circuits") or []:
                     for device_name, config_list in device_info.items():
                         if device_name not in device_configs:
                             device_configs[device_name] = {"interfaces": [], "circuits": []}
@@ -1745,8 +1760,8 @@ class InterfaceManager(BaseManager):
                     LOG.info("Referenced circuits: %s", list(referenced_circuits))
 
                     # Build separate payloads for circuits vs interfaces to enforce ordering.
-                    device_circuit_config = {}
-                    device_interface_config = {}
+                    device_circuit_config: Dict[str, Any] = {}
+                    device_interface_config: Dict[str, Any] = {}
 
                     # Process circuits for this device (static route deconfiguration)
                     circuits_deconfigured = 0

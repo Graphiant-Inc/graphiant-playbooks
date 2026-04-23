@@ -5,6 +5,8 @@ This module handles BGP peering configuration management,
 including policy attachment and detachment.
 """
 
+from typing import Any, Dict
+
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
@@ -46,7 +48,7 @@ class BGPManager(BaseManager):
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return result
 
-            for device_config in config_data.get("bgp_peering"):
+            for device_config in config_data.get("bgp_peering") or []:
                 for device_name, config in device_config.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
@@ -56,7 +58,7 @@ class BGPManager(BaseManager):
                                 f"{self.gsdk.enterprise_info['company_name']}. "
                                 f"Please check device name and enterprise credentials."
                             )
-                        config_payload = {}
+                        config_payload: Dict[str, Any] = {}
                         self.config_utils.device_bgp_peering(config_payload, **config)
 
                         final_config_payload[device_id] = {"device_id": device_id, "edge": config_payload}
@@ -110,7 +112,7 @@ class BGPManager(BaseManager):
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return result
 
-            for device_config in config_data.get("bgp_peering"):
+            for device_config in config_data.get("bgp_peering") or []:
                 for device_name, config in device_config.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
@@ -120,7 +122,7 @@ class BGPManager(BaseManager):
                                 f"{self.gsdk.enterprise_info['company_name']}. "
                                 f"Please check device name and enterprise credentials."
                             )
-                        config_payload = {}
+                        config_payload: Dict[str, Any] = {}
                         self.config_utils.device_bgp_peering(config_payload, action="delete", **config)
 
                         final_config_payload[device_id] = {"device_id": device_id, "edge": config_payload}
@@ -167,7 +169,7 @@ class BGPManager(BaseManager):
                 LOG.warning("No BGP peering configuration found in %s", config_yaml_file)
                 return
 
-            for device_config in config_data.get("bgp_peering"):
+            for device_config in config_data.get("bgp_peering") or []:
                 for device_name, config in device_config.items():
                     try:
                         device_id = self.gsdk.get_device_id(device_name)
@@ -177,7 +179,7 @@ class BGPManager(BaseManager):
                                 f"{self.gsdk.enterprise_info['company_name']}. "
                                 f"Please check device name and enterprise credentials."
                             )
-                        config_payload = {}
+                        config_payload: Dict[str, Any] = {}
                         self.config_utils.device_bgp_peering(config_payload, action="unlink", **config)
 
                         final_config_payload[device_id] = {"device_id": device_id, "edge": config_payload}

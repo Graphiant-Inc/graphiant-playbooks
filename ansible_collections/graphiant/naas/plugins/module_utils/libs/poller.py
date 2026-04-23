@@ -3,24 +3,17 @@ import sys
 import time
 import traceback
 
-try:
-    from future.utils import raise_
-
-    HAS_FUTURE = True
-except ImportError:
-    HAS_FUTURE = False
-    # Fallback if future is not available
-
-    def raise_(exc_type, exc_value, exc_traceback):
-        raise exc_value.with_traceback(exc_traceback)
-
-
 from .logger import setup_logger
 
 # Required dependencies - checked when functions are called
 # Don't raise at module level to allow import test to pass
 
 LOG = setup_logger()
+
+
+def raise_(exc_type, exc_value, exc_traceback):
+    """Re-raise with traceback (Python 3)."""
+    raise exc_value.with_traceback(exc_traceback)
 
 
 def poller(timeout=60, wait=0.1, retries=None):

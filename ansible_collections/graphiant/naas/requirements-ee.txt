@@ -6,7 +6,6 @@
 # Base Packages (runtime only)
 PyYAML
 Jinja2
-future
 tabulate
 
 # Graphiant SDK Package (runtime dependency)

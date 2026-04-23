@@ -22,9 +22,9 @@ COLLECTION_MODULES_DIR = COLLECTION_ROOT / "plugins" / "modules"
 REPO_ROOT = Path(__file__).parent.parent
 
 
-def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int, str]]:
+def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int, str, str]]:
     """Find references to modules in DOCUMENTATION text that don't use M() with FQCN."""
-    issues = []
+    issues: List[Tuple[int, str, str]] = []
 
     lines = text.split("\n")
     in_documentation = False
@@ -96,7 +96,7 @@ def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int
 
 def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str, str]]]:
     """Check all modules for proper M() FQCN usage in DOCUMENTATION sections."""
-    issues = {}
+    issues: Dict[str, List[Tuple[int, str, str]]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         print(f"❌ Error: Collection modules directory not found: {COLLECTION_MODULES_DIR}")
@@ -138,7 +138,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
 
 def check_builtin_modules_fqcn() -> Dict[str, List[Tuple[int, str]]]:
     """Check that all builtin modules use ansible.builtin.* FQCN."""
-    issues = {}
+    issues: Dict[str, List[Tuple[int, str]]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -175,7 +175,7 @@ def check_builtin_modules_fqcn() -> Dict[str, List[Tuple[int, str]]]:
 
 def check_semantic_markup() -> Dict[str, List[Tuple[int, str, str]]]:
     """Check semantic markup usage (V/O/M/C/I/RV)."""
-    issues = {}
+    issues: Dict[str, List[Tuple[int, str, str]]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -221,7 +221,7 @@ def check_semantic_markup() -> Dict[str, List[Tuple[int, str, str]]]:
 
 def check_check_mode_attributes() -> Dict[str, List[str]]:
     """Check that all modules have check_mode support information in attributes."""
-    issues = {}
+    issues: Dict[str, List[str]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -287,7 +287,7 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
 
 def check_check_mode_behavior() -> Dict[str, List[str]]:
     """Check check mode behavior compliance - should not always return changed=True."""
-    issues = {}
+    issues: Dict[str, List[str]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -339,7 +339,7 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
 
 def check_module_naming() -> Dict[str, List[str]]:
     """Check module naming conventions (_info, _facts)."""
-    issues = {}
+    issues: Dict[str, List[str]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -394,7 +394,7 @@ def check_module_naming() -> Dict[str, List[str]]:
 
 def check_python_version() -> Dict[str, List[str]]:
     """Check Python version requirements."""
-    issues = {}
+    issues: Dict[str, List[str]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -426,7 +426,7 @@ def check_python_version() -> Dict[str, List[str]]:
 
 def check_license_headers() -> Dict[str, List[str]]:
     """Check that all modules have GPLv3 license headers."""
-    issues = {}
+    issues: Dict[str, List[str]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
@@ -451,7 +451,7 @@ def check_license_headers() -> Dict[str, List[str]]:
 
 def check_version_added() -> Dict[str, List[str]]:
     """Check that all modules have version_added."""
-    issues = {}
+    issues: Dict[str, List[str]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues

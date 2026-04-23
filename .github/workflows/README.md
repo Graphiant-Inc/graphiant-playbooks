@@ -21,8 +21,8 @@ Detailed linting workflow that runs multiple linting checks in parallel:
 ### `test.yml` - Testing
 Runs all tests for the collection:
 - **`test` job** - Matrix job testing against `stable-2.17` … `stable-2.20` and `devel`:
-  - Python unit tests
-  - Full collection validation
+  - **`ansible-test units --local --python 3.12`**: [unit tests](https://docs.ansible.com/ansible/latest/dev_guide/testing_units.html) (pytest) under `tests/unit/`, no live API
+  - Optional live `tests/test.py` when Graphiant credentials are set; collection validation
 - **`e2e-integration-test` job** - Separate job (not in matrix):
   - E2E integration test (hello_test.yml playbook) - runs when GRAPHIANT credentials are configured
 
@@ -98,7 +98,7 @@ pip install black flake8 pylint
 
 black ansible_collections/graphiant/naas/plugins/ -l 120 --check
 flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
-export PYTHONPATH="$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins"
+export PYTHONPATH="$(pwd)"
 pylint --errors-only ansible_collections/graphiant/naas/plugins/
 ```
 
@@ -119,6 +119,10 @@ ansible-galaxy collection install . --force
 export PYTHONPATH=$(pwd)/plugins/module_utils
 python tests/test.py
 python ../../scripts/validate_collection.py --full
+
+# Offline unit tests (pytest via ansible-test)
+pip install -r requirements-ee.txt -r tests/unit/requirements.txt
+ansible-test units --local --python 3.12
 
 # E2E Integration Test (requires GRAPHIANT credentials and ansible-core)
 pip install ansible-core~=2.19

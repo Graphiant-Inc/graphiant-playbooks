@@ -203,6 +203,7 @@ graphiant-playbooks/
 │   ├── build.yml                                    # Build workflow
 │   ├── release.yml                                  # Release workflow (auto-tag/release)
 │   └── README.md                                    # GitHub documentation
+├── mypy.ini                                          # Mypy config (collection `plugins/` + `scripts/`)
 ├── SECURITY.md                                       # Security policy
 ├── CONTRIBUTING.md                                   # Contribution guidelines
 ├── CODE_OF_CONDUCT.md                               # Code of conduct
@@ -214,6 +215,7 @@ graphiant-playbooks/
 We welcome contributions! See [CONTRIBUTING.md](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/CONTRIBUTING.md) for:
 - Development setup
 - Code standards
+- **Lint, Pylint, and mypy** (including [mypy.ini](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/mypy.ini) and **Python 3.7+** type-hint rules for the collection)
 - Testing requirements
 - Pull request process
 - Branch protection requirements
