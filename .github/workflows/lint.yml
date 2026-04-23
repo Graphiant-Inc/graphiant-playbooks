@@ -18,6 +18,7 @@ on:
     paths:
       - 'ansible_collections/graphiant/naas/**'
       - '.github/workflows/lint.yml'
+      - 'mypy.ini'
   push:
     branches:
       - main
@@ -25,6 +26,7 @@ on:
     paths:
       - 'ansible_collections/graphiant/naas/**'
       - '.github/workflows/lint.yml'
+      - 'mypy.ini'
   schedule:
     # Run weekly on Monday at 2 AM UTC
     - cron: '0 2 * * 1'
@@ -60,7 +62,7 @@ jobs:
         run: djlint templates -e yaml
 
   python-lint:
-    name: Python (black, flake8, pylint)
+    name: Python (black, flake8, pylint, mypy)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -77,7 +79,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
-          pip install black flake8 pylint
+          pip install black flake8 pylint mypy
+          # Stubs for mypy (import-untyped for yaml, tabulate)
+          pip install types-PyYAML types-tabulate
           # Pylint must resolve ansible.module_utils.* (E0401 import-error without ansible-core)
           pip install "ansible-core>=2.17"
 
@@ -89,8 +93,14 @@ jobs:
 
       - name: Pylint (error checking only)
         run: |
-          export PYTHONPATH="$PYTHONPATH:${{ github.workspace }}/ansible_collections/graphiant/naas/plugins"
+          # Repo root (not …/plugins only) so FQCN imports like ansible_collections.graphiant.naas… resolve
+          export PYTHONPATH="${{ github.workspace }}"
           pylint --errors-only ansible_collections/graphiant/naas/plugins/
+
+      - name: Mypy
+        run: |
+          export PYTHONPATH=.
+          mypy --config-file mypy.ini
 
   ansible-lint:
     name: Ansible Lint (ansible-core ${{ matrix.ansible }})

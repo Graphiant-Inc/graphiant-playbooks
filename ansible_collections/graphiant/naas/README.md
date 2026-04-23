@@ -509,6 +509,14 @@ cd ansible_collections/graphiant/naas
 python -m unittest tests.test
 ```
 
+**Offline unit tests** (no Graphiant API) use `ansible-test units` and mock dependencies. They run in the **`test` workflow job** in the [Test Collection](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/.github/workflows/test.yml) workflow (step **Run ansible-test units**) and improve code coverage for `plugins/module_utils` without live credentials:
+
+```bash
+cd ansible_collections/graphiant/naas
+pip install -r requirements-ee.txt -r tests/unit/requirements.txt
+ansible-test units --local --python 3.12
+```
+
 **Note:** The `test.ini` configuration file has been removed. All tests now use environment variables for credential management, which is more secure and aligns with CI/CD best practices.
 
 ## Configuration Files

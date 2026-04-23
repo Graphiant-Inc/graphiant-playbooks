@@ -128,6 +128,7 @@ skipped_devices:
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
 from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils import (  # noqa: E402
+    ansible_module_log,
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
@@ -141,7 +142,16 @@ from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator i
 def execute_with_logging(module, func, *args, **kwargs):
     success_msg = kwargs.pop("success_msg", "Operation completed successfully")
     no_change_msg = kwargs.pop("no_change_msg", "No changes needed")
-    result = func(*args, **kwargs)
+    try:
+        result = func(*args, **kwargs)
+    except Exception as e:
+        if module.params.get("detailed_logs"):
+            name = getattr(func, "__name__", str(func))
+            ansible_module_log(
+                module,
+                f"graphiant_ntp: manager {name!s} failed: {type(e).__name__}: {e!s}",
+            )
+        raise
     if isinstance(result, dict) and "changed" in result:
         changed = bool(result.get("changed"))
         configured = result.get("configured_devices") or []
@@ -179,9 +189,22 @@ def main():
         operation = "configure" if state == "present" else "deconfigure"
 
     try:
+        if params.get("detailed_logs"):
+            ansible_module_log(
+                module,
+                (
+                    f"graphiant_ntp: start operation={operation!r} ntp_config_file={cfg_file!r} "
+                    f"check_mode={module.check_mode!r}"
+                ),
+            )
         # In check_mode, connection runs all logic but gsdk skips API writes and logs payloads only.
         connection = get_graphiant_connection(params, check_mode=module.check_mode)
         graphiant_config = connection.graphiant_config
+        if params.get("detailed_logs"):
+            ansible_module_log(
+                module,
+                "graphiant_ntp: GraphiantConfig obtained; dispatching to NTP manager",
+            )
 
         # Execute the requested operation
         changed = False
@@ -214,7 +237,14 @@ def main():
                 msg=f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure.",
                 operation=operation,
             )
+            return
 
+        if params.get("detailed_logs"):
+            preview = result_msg if len(result_msg) <= 200 else (result_msg[:200] + "…")
+            ansible_module_log(
+                module,
+                f"graphiant_ntp: success changed={changed!r} result_msg_preview={preview!r}",
+            )
         module.exit_json(
             changed=changed,
             msg=result_msg,
@@ -226,6 +256,18 @@ def main():
         )
 
     except Exception as e:
+        if module.params.get("detailed_logs"):
+            import traceback
+
+            ansible_module_log(
+                module,
+                f"graphiant_ntp: {type(e).__name__}: {e!s}\n{traceback.format_exc()}",
+            )
+        else:
+            ansible_module_log(
+                module,
+                f"graphiant_ntp: failed {type(e).__name__}: {e!s}",
+            )
         error_msg = handle_graphiant_exception(e, operation)
         module.fail_json(msg=error_msg, operation=operation)
 

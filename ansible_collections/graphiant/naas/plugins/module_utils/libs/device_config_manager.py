@@ -16,27 +16,28 @@ Key Features:
 - Supports all config file Jinja2 templating
 """
 
+from __future__ import annotations
+
 import json
 import os
-from typing import Dict, Any, Optional
-
-try:
-    from jinja2 import Template, TemplateError as Jinja2TemplateError
-
-    HAS_JINJA2 = True
-except ImportError:
-    HAS_JINJA2 = False
-    Template = None  # type: ignore
-
-    class Jinja2TemplateError(Exception):
-        """Placeholder for Jinja2 TemplateError when Jinja2 is not installed."""
-
-        pass
+from typing import Any, Dict, NoReturn, Optional
 
 
-from .base_manager import BaseManager
-from .logger import setup_logger
-from .exceptions import ConfigurationError, DeviceNotFoundError
+def _load_device_config_jinja2():
+    """Load Jinja2 Template + error class without reassigning imported names in try/except (mypy)."""
+    try:
+        from jinja2 import Template, TemplateError as Jinja2TemplateError
+
+        return Template, Jinja2TemplateError, True
+    except ImportError:
+        return None, type("Jinja2TemplateError", (Exception,), {}), False
+
+
+Template, Jinja2TemplateError, HAS_JINJA2 = _load_device_config_jinja2()
+
+from .base_manager import BaseManager  # noqa: E402
+from .logger import setup_logger  # noqa: E402
+from .exceptions import ConfigurationError, DeviceNotFoundError  # noqa: E402
 
 LOG = setup_logger()
 
@@ -68,7 +69,7 @@ class DeviceConfigManager(BaseManager):
     the final payload from simplified config data.
     """
 
-    def configure(self, config_yaml_file: str, template_file: str = None) -> dict:
+    def configure(self, config_yaml_file: str, template_file=None) -> dict:
         """
         Configure devices by pushing configuration payloads.
 
@@ -88,7 +89,7 @@ class DeviceConfigManager(BaseManager):
             ConfigurationError: If configuration processing fails
             DeviceNotFoundError: If any device cannot be found
         """
-        result = {"changed": False, "configured_devices": [], "skipped_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": [], "skipped_devices": []}
 
         LOG.info("Configuring devices from %s", config_yaml_file)
         if template_file:
@@ -160,7 +161,7 @@ class DeviceConfigManager(BaseManager):
             LOG.error("Traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Device configuration failed: {str(e)}")
 
-    def show_validated_payload(self, config_yaml_file: str, template_file: str = None) -> Dict[str, Any]:
+    def show_validated_payload(self, config_yaml_file: str, template_file=None) -> Dict[str, Any]:
         """
         Show validated device configuration payload using SDK models (dry-run mode).
 
@@ -250,7 +251,7 @@ class DeviceConfigManager(BaseManager):
             LOG.error("Traceback: %s", traceback.format_exc())
             raise ConfigurationError(f"Device configuration validation failed: {str(e)}")
 
-    def deconfigure(self, config_yaml_file: str) -> None:
+    def deconfigure(self, config_yaml_file: str) -> NoReturn:
         """
         Deconfigure is not supported for device config.
 
@@ -270,7 +271,7 @@ class DeviceConfigManager(BaseManager):
             "with the desired configuration payload."
         )
 
-    def _load_device_configs(self, config_file: str, template_file: str = None) -> Dict[str, Any]:
+    def _load_device_configs(self, config_file: str, template_file=None) -> Dict[str, Any]:
         """
         Load and process device configurations from YAML file.
 

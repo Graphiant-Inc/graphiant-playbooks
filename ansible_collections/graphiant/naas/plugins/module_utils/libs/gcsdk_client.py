@@ -1,53 +1,80 @@
 import json
 import time
+from typing import Optional, Tuple, Type
+
+
+def _gcsdk_exception_types() -> Tuple[
+    Type[Exception],
+    Type[Exception],
+    Type[Exception],
+    Type[Exception],
+    Type[Exception],
+    Type[Exception],
+]:
+    """Load SDK exception classes without reassigning imported class names in try/except (mypy)."""
+    try:
+        from graphiant_sdk.exceptions import (
+            ApiException,
+            BadRequestException,
+            ForbiddenException,
+            NotFoundException,
+            ServiceException,
+            UnauthorizedException,
+        )
+
+        return (
+            ApiException,
+            BadRequestException,
+            UnauthorizedException,
+            ForbiddenException,
+            NotFoundException,
+            ServiceException,
+        )
+    except ImportError:
+        return (
+            type("ApiException", (Exception,), {}),
+            type("BadRequestException", (Exception,), {}),
+            type("UnauthorizedException", (Exception,), {}),
+            type("ForbiddenException", (Exception,), {}),
+            type("NotFoundException", (Exception,), {}),
+            type("ServiceException", (Exception,), {}),
+        )
+
 
 try:
     import graphiant_sdk
-    from graphiant_sdk.exceptions import (
-        ApiException,
-        BadRequestException,
-        UnauthorizedException,
-        ForbiddenException,
-        NotFoundException,
-        ServiceException,
-    )
 
     HAS_GRAPHIANT_SDK = True
 except ImportError:
     HAS_GRAPHIANT_SDK = False
-    # Create dummy exceptions for type hints
 
-    class ApiException(Exception):
-        pass
-
-    class BadRequestException(Exception):
-        pass
-
-    class UnauthorizedException(Exception):
-        pass
-
-    class ForbiddenException(Exception):
-        pass
-
-    class NotFoundException(Exception):
-        pass
-
-    class ServiceException(Exception):
-        pass
+(
+    ApiException,
+    BadRequestException,
+    UnauthorizedException,
+    ForbiddenException,
+    NotFoundException,
+    ServiceException,
+) = _gcsdk_exception_types()
 
 
-try:
-    from pydantic import ValidationError
-except ImportError:
-    # Fallback for older pydantic versions
-    ValidationError = None
+def _pydantic_validation_error_type() -> Type[Exception]:
+    try:
+        from pydantic import ValidationError
+
+        return ValidationError
+    except ImportError:
+        return type("PydanticValidationError", (Exception,), {})
+
+
+PydanticValidationError = _pydantic_validation_error_type()
 
 # Required dependencies - checked when class is instantiated
 # Don't raise at module level to allow import test to pass
 
-from .logger import setup_logger
-from .poller import poller
-from .exceptions import APIError
+from .logger import setup_logger  # noqa: E402
+from .poller import poller  # noqa: E402
+from .exceptions import APIError  # noqa: E402
 
 LOG = setup_logger()
 
@@ -191,7 +218,7 @@ class GraphiantPortalClient:
                 # Check if it's a Pydantic validation error (enum mismatch)
                 error_str = str(e)
                 is_validation_error = (
-                    (ValidationError and isinstance(e, ValidationError))
+                    isinstance(e, PydanticValidationError)
                     or "validation error" in error_str.lower()
                     or "must be one of enum values" in error_str
                 )
@@ -252,11 +279,11 @@ class GraphiantPortalClient:
         self,
         method_name: str,
         api_url: str,
-        path_params: dict = None,
-        query_params: dict = None,
-        request_body: dict = None,
-        exception: Exception = None,
-    ):
+        path_params: Optional[dict] = None,
+        query_params: Optional[dict] = None,
+        request_body: Optional[dict] = None,
+        exception: Optional[Exception] = None,
+    ) -> None:
         """
         Helper method to log API errors with comprehensive parameter information.
 

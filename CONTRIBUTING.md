@@ -60,6 +60,8 @@ Thank you for your interest in contributing!
    # Install development tools needed for linting
    source venv/bin/activate
    pip install black flake8 pylint djlint ansible-lint pre-commit
+   # Pylint needs ansible-core to resolve ansible.module_utils.* (same as python-lint in lint.yml)
+   pip install "ansible-core>=2.17"
 
    # Python code formatting check with black (runs in CI)
    black ansible_collections/graphiant/naas/plugins/ -l 120 --check
@@ -72,8 +74,12 @@ Thank you for your interest in contributing!
    flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
 
    # Python linting with pylint (runs in CI)
-   export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/
+   # Repository root on PYTHONPATH so FQCN imports (ansible_collections.graphiant.naas… and ansible.module_utils) resolve
+   export PYTHONPATH=$(pwd)
    pylint --errors-only ansible_collections/graphiant/naas/plugins/
+   # Optional: use the repository `.pylintrc` so a full run reports only E/F messages
+   # (10.00/10 when there are no errors) — same scope in practice as `--errors-only` above
+   # pylint --rcfile=.pylintrc ansible_collections/graphiant/naas/plugins/ ansible_collections/graphiant/naas/tests/unit/
 
    # Ansible playbook linting (runs in CI, requires collection to be installed first)
    ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
@@ -82,9 +88,14 @@ Thank you for your interest in contributing!
    # YAML/Jinja template linting (runs in CI)
    djlint ansible_collections/graphiant/naas/configs -e yaml
    djlint ansible_collections/graphiant/naas/templates -e yaml
+
+   # Static type checking (runs in CI; same as python-lint “Mypy” step)
+   pip install mypy types-PyYAML types-tabulate
+   export PYTHONPATH=.
+   mypy --config-file mypy.ini
    ```
 
-5. **Run E2E integration test (hello_test.yml):**
+6. **Run E2E integration test (hello_test.yml):**
    ```bash
    # Set credentials
    export GRAPHIANT_HOST="https://api.graphiant.com"
@@ -98,7 +109,7 @@ Thank you for your interest in contributing!
    ansible-playbook ~/.ansible/collections/ansible_collections/graphiant/naas/playbooks/hello_test.yml
    ```
 
-6. **Run pre-commit hooks (if installed):**
+7. **Run pre-commit hooks (if installed):**
    ```bash
    # Install pre-commit hooks (one-time setup)
    pre-commit install
@@ -108,7 +119,7 @@ Thank you for your interest in contributing!
    ```
    > **Note:** Pre-commit hooks (see `.pre-commit-config.yaml`) include `flake8` and `pylint --errors-only` on `plugins/`, plus the Ansible Inclusion Checklist check (FQCN and semantic markup). Run `black` locally or rely on the `python-lint` CI job for formatting checks.
 
-7. **Commit with clear messages:**
+8. **Commit with clear messages:**
    ```bash
    git commit -m "Add: description of changes"
    ```
@@ -117,7 +128,7 @@ Thank you for your interest in contributing!
    > - ✅ Collection structure validation: `python scripts/validate_collection.py`
    > - ✅ All tests pass locally
 
-8. **Push and create a pull request**
+9. **Push and create a pull request**
    
    > **Before raising a PR, verify:**
    > - ✅ All checks in `ANSIBLE_INCLUSION_CHECKLIST.md` are reviewed
@@ -137,13 +148,25 @@ The project uses multiple linting tools to ensure code quality:
 | `ansible-lint` | Ansible playbook best practices | `playbooks/` | Yes (lint stage) |
 | `djlint` | Jinja2/YAML template linting | `configs/`, `templates/` | Yes (lint stage) |
 | `ansible-test sanity` | Ansible collection sanity tests | Collection | Yes (lint and test/run stages) |
+| `mypy` | Static type checking | `plugins/` (see `mypy.ini`) and `scripts/` | Yes (`python-lint` job) |
 | `pre-commit` | Local git hooks (`flake8`, `pylint`, inclusion checklist; see `.pre-commit-config.yaml`) | Plugins tree (per config) | Optional locally; not a GitHub Actions job |
 
 Configuration files:
+- `mypy.ini` (repository root) - mypy options; check `files` / `exclude` before adding modules
 - `.ansible-lint` - Ansible lint rules
 - `.pre-commit-config.yaml` (repository root) - optional local hooks aligned with Python lint targets
 
-**Note:** The **`python-lint`** job in `lint.yml` runs `black --check`, `flake8`, and `pylint --errors-only` on the collection `plugins/` tree. CI also runs `ansible-lint`, `djlint`, `antsibull-docs` / changelog lint, `ansible-test sanity`, the inclusion checklist script, and (when configured) E2E integration tests.
+**Note:** The **`python-lint`** job in `lint.yml` runs `black --check`, `flake8`, `pylint --errors-only`, and `mypy` on the collection `plugins/` tree and `scripts/` (per `mypy.ini`). CI also runs `ansible-lint`, `djlint`, `antsibull-docs` / changelog lint, `ansible-test sanity`, the inclusion checklist script, and (when configured) E2E integration tests.
+
+### Unit tests (`ansible-test units`)
+
+Offline pytest unit tests live under `ansible_collections/graphiant/naas/tests/unit/` and are run in the **`test` job** in [`.github/workflows/test.yml`](.github/workflows/test.yml) (the **Run ansible-test units** step; no Graphiant API required). They improve coverage of `plugins/module_utils` and `plugins/modules` beyond sanity import/compile metrics. Layout mirrors `plugins/`, for example `tests/unit/plugins/module_utils/`, `tests/unit/plugins/module_utils/libs/`, and `tests/unit/plugins/modules/` (mocked `AnsibleModule` and `get_graphiant_connection` where needed).
+
+```bash
+cd ansible_collections/graphiant/naas
+pip install -r requirements-ee.txt -r tests/unit/requirements.txt
+ansible-test units --local --python 3.12
+```
 
 ### ansible-test Sanity Configuration
 
@@ -160,7 +183,18 @@ This approach is cleaner and more maintainable than maintaining version-specific
 ### Python Code
 - Follow PEP 8 style guidelines
 - Include docstrings for functions and classes
-- Use type hints where appropriate
+- Use type hints where appropriate (see **Python type hints and supported runtimes** below)
+
+### Python type hints and supported runtimes
+
+The collection supports **Python 3.7+** (per the repo badge and `ansible-test` import checks). That affects how you write annotations in `plugins/module_utils` and `plugins/modules`:
+
+- **Do not use PEP 604** union syntax (`str | None`, `int | str`) in the collection: it is only valid from **Python 3.10+** and fails `ansible-test` **import** sanity on 3.7–3.9 with `TypeError: unsupported operand type(s) for |`.
+- Prefer **`typing.Optional`**, **`typing.Union`**, and **capital** names from `typing` (`Dict`, `List`, `Set`, `Tuple`, …) instead of **PEP 585** built-in generics (`dict[str, …]`, `list[…]`, `set[…]`, `tuple[…]`) if the code must run on **3.7 / 3.8** (built-in subscripting for those is 3.9+).
+- Optional `from __future__ import annotations` can help in some cases, but **ansible-test** may still load modules in a way that evaluates annotations; when in doubt, keep signatures compatible with 3.7+ or omit a parameter’s annotation and document the type in the docstring.
+- **Abstract** bases: use an empty body of `pass` (or a short `raise NotImplementedError`) for `@abstractmethod` stubs, not a bare `...`, to satisfy Pylint’s `unnecessary-ellipsis` in CI.
+
+**Mypy** (see `mypy.ini`) is run from the **repository root** with `PYTHONPATH=.` and checks `ansible_collections/graphiant/naas/plugins` and `scripts/`. Install stub packages for untyped third-party imports used in the tree, e.g. `types-PyYAML` and `types-tabulate` (as in the `python-lint` workflow). After changing types or adding dependencies, run `mypy --config-file mypy.ini` locally before pushing.
 
 ### Ansible Modules
 - Include `DOCUMENTATION`, `EXAMPLES`, and `RETURN` strings

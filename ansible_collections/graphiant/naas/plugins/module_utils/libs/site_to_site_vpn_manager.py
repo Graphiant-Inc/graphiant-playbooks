@@ -59,23 +59,23 @@ class SiteToSiteVpnManager(BaseManager):
             result[str(name)] = d
         return result
 
-    def configure(self, config_yaml_file: str) -> None:
+    def configure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Create Site-to-Site VPN (implements abstract method from BaseManager).
 
         Args:
             config_yaml_file: Path to the YAML file containing Site-to-Site VPN configurations
         """
-        self.create_site_to_site_vpn(config_yaml_file)
+        return self.create_site_to_site_vpn(config_yaml_file)
 
-    def deconfigure(self, config_yaml_file: str) -> None:
+    def deconfigure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Delete Site-to-Site VPN (implements abstract method from BaseManager).
 
         Args:
             config_yaml_file: Path to the YAML file containing Site-to-Site VPN configurations
         """
-        self.delete_site_to_site_vpn(config_yaml_file)
+        return self.delete_site_to_site_vpn(config_yaml_file)
 
     def _inject_vault_secrets(
         self, vpn_config: Dict[str, Any], vault_keys: Dict[str, Any], vault_md5_passwords: Dict[str, Any]

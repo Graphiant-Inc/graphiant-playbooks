@@ -59,7 +59,10 @@ class NtpManager(BaseManager):
 
         existing_ntp_obj = device_dict.get("ntp")
         try:
-            existing_ntp_dict = existing_ntp_obj.to_dict() if hasattr(existing_ntp_obj, "to_dict") else existing_ntp_obj
+            if existing_ntp_obj is not None and hasattr(existing_ntp_obj, "to_dict"):
+                existing_ntp_dict: Any = existing_ntp_obj.to_dict()
+            else:
+                existing_ntp_dict = existing_ntp_obj
         except Exception:
             existing_ntp_dict = existing_ntp_obj
 
@@ -168,7 +171,7 @@ class NtpManager(BaseManager):
                 yield device_id, device_name, payload
 
     def apply_ntp(self, config_yaml_file: str, operation: str) -> dict:
-        result = {"changed": False, "configured_devices": [], "skipped_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": [], "skipped_devices": []}
 
         output_config: Dict[int, Dict[str, Any]] = {}
         configured_devices: List[str] = []

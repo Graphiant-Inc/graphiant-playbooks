@@ -383,7 +383,7 @@ class StaticRoutesManager(BaseManager):
                 yield device_id, device_name, payload
 
     def apply_static_routes(self, config_yaml_file: str, operation: str) -> dict:
-        result = {"changed": False, "configured_devices": [], "skipped_devices": []}
+        result: Dict[str, Any] = {"changed": False, "configured_devices": [], "skipped_devices": []}
 
         output_config: Dict[int, Dict[str, Any]] = {}
         configured_devices: List[str] = []

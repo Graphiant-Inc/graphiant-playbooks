@@ -13,7 +13,7 @@ Deconfigure workflow consistency (with global_config_manager, interface_manager)
   with explicit lists (aligned with global_config and interface_manager).
 """
 
-from typing import Dict, Any, Union
+from typing import Any, Dict, Optional, Union, cast
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError, SiteNotFoundError, ValidationError
@@ -126,7 +126,7 @@ class SiteManager(BaseManager):
             ConfigurationError: If configuration processing fails
             ValidationError: If configuration data is invalid
         """
-        result = {"changed": False, "created": [], "deleted": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "created": [], "deleted": [], "skipped": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -135,13 +135,13 @@ class SiteManager(BaseManager):
                 LOG.info("No sites configuration found in %s, skipping site %s", config_yaml_file, operation)
                 return result
 
-            site_names = [s.get("name") for s in config_data.get("sites") if s.get("name")]
+            site_names = [s.get("name") for s in (config_data.get("sites") or []) if s.get("name")]
             if operation == "delete":
                 LOG.info("Attempting to delete sites: %s", site_names)
             elif operation == "create":
                 LOG.info("Attempting to create sites: %s", site_names)
 
-            for site_config in config_data.get("sites"):
+            for site_config in config_data.get("sites") or []:
                 try:
                     site_name = site_config.get("name")
                     if not site_name:
@@ -296,7 +296,7 @@ class SiteManager(BaseManager):
             SiteNotFoundError: If any site cannot be found
             ValidationError: If configuration data is invalid
         """
-        result = {"changed": False, "attached": [], "detached": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "attached": [], "detached": [], "skipped": []}
 
         try:
             config_data = self.render_config_file(config_yaml_file)
@@ -308,13 +308,13 @@ class SiteManager(BaseManager):
                 return result
 
             default_operation = "Attach" if operation.lower().startswith("attach") else "Detach"
-            attachment_site_names = [list(sc.keys())[0] for sc in config_data.get("site_attachments") if sc]
+            attachment_site_names = [list(sc.keys())[0] for sc in (config_data.get("site_attachments") or []) if sc]
             if operation.lower().startswith("detach"):
                 LOG.info("Attempting to detach objects from sites: %s", attachment_site_names)
             else:
                 LOG.info("Attempting to attach objects to sites: %s", attachment_site_names)
 
-            for site_config in config_data.get("site_attachments"):
+            for site_config in config_data.get("site_attachments") or []:
                 try:
                     # Get the site name from the first (and only) key in the site config
                     site_name = list(site_config.keys())[0]
@@ -443,14 +443,16 @@ class SiteManager(BaseManager):
             syslog_config: Syslog configuration (string or dict)
             default_operation: The operation to perform (Attach/Detach)
         """
+        syslog_name: Optional[str]
         if isinstance(syslog_config, str):
             # Backward compatibility: simple string format
             syslog_name = syslog_config
             site_payload["site"]["syslogServerOpsV2"][syslog_name] = {"operation": default_operation}
         else:
             # New format: object with interface specification
-            syslog_name = syslog_config.get("name")
-            interface = syslog_config.get("interface")
+            syslog_d = cast(Dict[str, Any], syslog_config)
+            syslog_name = syslog_d.get("name")
+            interface = syslog_d.get("interface")
 
             if not syslog_name:
                 raise ValidationError("Syslog configuration must include 'name' field")
@@ -471,14 +473,16 @@ class SiteManager(BaseManager):
             ipfix_config: IPFIX configuration (string or dict)
             default_operation: The operation to perform (Attach/Detach)
         """
+        ipfix_name: Optional[str]
         if isinstance(ipfix_config, str):
             # Backward compatibility: simple string format
             ipfix_name = ipfix_config
             site_payload["site"]["ipfixExporterOpsV2"][ipfix_name] = {"operation": default_operation}
         else:
             # New format: object with interface specification
-            ipfix_name = ipfix_config.get("name")
-            interface = ipfix_config.get("interface")
+            ipfix_d = cast(Dict[str, Any], ipfix_config)
+            ipfix_name = ipfix_d.get("name")
+            interface = ipfix_d.get("interface")
 
             if not ipfix_name:
                 raise ValidationError("IPFIX configuration must include 'name' field")

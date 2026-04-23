@@ -1,6 +1,7 @@
 import os
 from concurrent.futures import wait
 from concurrent.futures.thread import ThreadPoolExecutor
+from typing import Optional
 
 try:
     import yaml
@@ -78,7 +79,7 @@ class PortalUtils(object):
         )
         self.gsdk.set_bearer_token()
 
-    def _find_collection_root(self) -> str:
+    def _find_collection_root(self) -> Optional[str]:
         """
         Find the collection root directory (project root).
 
