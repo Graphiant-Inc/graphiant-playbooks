@@ -58,6 +58,7 @@ def check_structure(base_path):
         "plugins/modules/graphiant_data_exchange.py",
         "plugins/modules/graphiant_data_exchange_info.py",  # Info module for query operations
         "plugins/modules/graphiant_device_config.py",
+        "plugins/modules/graphiant_device_system.py",
         "plugins/modules/graphiant_ntp.py",
         "plugins/module_utils/graphiant_utils.py",
         "plugins/module_utils/logging_decorator.py",

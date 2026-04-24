@@ -6,5 +6,5 @@ syslog_servers:
       port: 443
       transport: tcp
       severity: alert
-      lanSegment: lan-7-test
+      lanSegment: lan-7-test # will be resolved to vrfId if exists
       serverStatus: true

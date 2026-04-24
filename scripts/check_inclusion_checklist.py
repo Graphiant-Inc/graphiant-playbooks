@@ -108,6 +108,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
         "graphiant_data_exchange",
         "graphiant_data_exchange_info",
         "graphiant_device_config",
+        "graphiant_device_system",
         "graphiant_global_config",
         "graphiant_interfaces",
         "graphiant_sites",
@@ -115,6 +116,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
         "graphiant_lag_interfaces",
         "graphiant_site_to_site_vpn",
         "graphiant_static_routes",
+        "graphiant_ntp",
     ]
 
     for module_file in module_files:

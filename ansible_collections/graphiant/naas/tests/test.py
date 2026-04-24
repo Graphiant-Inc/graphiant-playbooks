@@ -1068,6 +1068,30 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure device-level NTP result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Deconfigure device-level NTP idempotency failed"
 
+    def test_configure_device_system(self):
+        """
+        Configure device system settings (edge/core name, regionName, site) from YAML.
+
+        Uses ``sample_device_system.yaml``, which may also define a top-level ``sites`` list.
+        ``configure_sites`` runs first so referenced sites exist before device system updates.
+
+        There is no deconfigure workflow for this feature—only apply desired values via
+        ``configure``.
+
+        Second run should be idempotent (changed=False) when the portal already matches the file.
+        If any device has no site in the portal and the YAML omits site for that device, the
+        manager aborts the batch and raises; fix site in the portal or YAML before relying on
+        this test against a live environment.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        pre_req_result = graphiant_config.sites.configure_sites("sample_device_system.yaml")
+        LOG.info("Configure Sites pre-requisite result: %s", pre_req_result)
+        result = graphiant_config.device_system.configure("sample_device_system.yaml")
+        LOG.info("Configure device system settings result: %s", result)
+        result2 = graphiant_config.device_system.configure("sample_device_system.yaml")
+        LOG.info("Configure device system settings (idempotency check): %s", result2)
+        assert result2.get("changed") is False, "Configure device system idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -1141,6 +1165,9 @@ if __name__ == '__main__':
     # Global Configuration Management (VPN Profiles)
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
+
+    # Device system settings (name, region, site) — configure only;
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_system'))
 
     # Device Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lan_interfaces'))

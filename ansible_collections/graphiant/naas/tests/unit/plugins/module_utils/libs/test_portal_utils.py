@@ -98,7 +98,7 @@ def test_render_config_file_not_found(
     monkeypatch.setenv("GRAPHIANT_CONFIGS_PATH", str(cdir))
     monkeypatch.setenv("GRAPHIANT_TEMPLATES_PATH", str(tdir))
     p = PortalUtils("https://h", "u", "p")
-    with pytest.raises(ConfigurationError, match="File not found"):
+    with pytest.raises(ConfigurationError, match=r"(?i)config file not found|file not found"):
         p.render_config_file("missing.yaml")
 
 

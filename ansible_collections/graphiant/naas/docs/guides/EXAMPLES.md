@@ -28,6 +28,8 @@ All modules support `state` parameter:
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
 
+`graphiant_device_system` only supports `present` (configure); `absent` is not valid.
+
 ### Config File Path Resolution
 
 Config file paths are resolved in the following order:
@@ -43,6 +45,65 @@ Config file paths are resolved in the following order:
 Similarly, template paths use `GRAPHIANT_TEMPLATES_PATH` environment variable.
 
 Check `logs/log_<date>.log` for the actual path used during execution.
+
+
+## Device system settings (name, region, site)
+
+### Module: graphiant.naas.graphiant_device_system
+
+`graphiant_device_system` sets the edge, gateway, or core system fields on `PUT /v1/devices/{id}/config` (`name`, `regionName`, `site`). **Configure-only**: `state: present` only—no deconfigure (see **Quick Start**). Missing `site` in both the portal and YAML **fails** the task and leaves other devices in the run untouched.
+
+With `--check`, nothing is pushed; state is still read and would-be payloads are logged under `[check_mode]`. With `--diff`, pending branch edits surface as Ansible `diff` (`before` / `after`) and `details.diff_plan`.
+
+Use `configs/sample_device_system.yaml`; optional top-level `sites` creates sites devices reference by name.
+
+### Playbook
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml
+ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --diff
+```
+
+### Module task
+
+```yaml
+- name: Configure device system settings from YAML
+  graphiant.naas.graphiant_device_system:
+    <<: *graphiant_client_params
+    operation: configure
+    system_config_file: "{{ config_file }}"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure']
+
+- name: Display configure result (from YAML)
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['configure']
+```
+
+Apply device system settings from module parameters instead of a config file. 
+
+```yaml
+- name: Apply device system settings from module parameters
+  graphiant.naas.graphiant_device_system:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-3-sdktest"
+    name: "edge-3-sdktest"
+    regionName: "us-east-2 (Atlanta)"
+    site:
+      name: "New York-sdktest"
+    detailed_logs: true
+    state: present
+```
 
 ## Interface Management
 
@@ -1077,10 +1138,10 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.y
     state: absent
 ```
 
-## NTP (edge.ntpGlobalObject)
+## Edge NTP Configuration
 
-NTP objects are managed under `edge.ntpGlobalObject` and are pushed directly to devices
-using the device config API (similar to static routes). This is **different from** global NTP objects
+NTP configuration is pushed directly to devices using the device config API (similar to static routes).
+This is **different from** global NTP objects
 managed by `graphiant_global_config` (portal-wide objects under `/v1/global/config`).
 
 See `configs/sample_device_ntp.yaml`.
@@ -1096,7 +1157,7 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml
 ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure
 ```
 
-### Configure NTP objects
+### Configure NTP Module task
 
 ```yaml
 - name: Configure device-level NTP objects
@@ -1445,6 +1506,7 @@ Sample configuration files are in the `configs/` directory:
 
 | File | Description |
 |------|-------------|
+| `sample_device_system.yaml` | Device system configuration (hostname, region and site name) |
 | `sample_interface_config.yaml` | Interface configurations |
 | `sample_circuit_config.yaml` | Circuit configurations |
 | `sample_bgp_peering.yaml` | BGP peering settings |
@@ -1456,7 +1518,7 @@ Sample configuration files are in the `configs/` directory:
 | `sample_global_vpn_profiles.yaml` | VPN profile definitions |
 | `sample_sites.yaml` | Site definitions |
 | `sample_site_attachments.yaml` | Site attachment configurations |
-| `sample_device_ntp.yaml` | NTP objects under `edge.ntpGlobalObject` |
+| `sample_device_ntp.yaml` | Device NTP configuration  |
 | `sample_static_route.yaml` | Static routes under edge segments |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
@@ -1469,6 +1531,7 @@ For Python library usage, see `tests/test.py` which demonstrates:
 - BGP configuration
 - Global object management
 - Site operations
+- Device system settings
 - Data Exchange workflows
 
 ```python

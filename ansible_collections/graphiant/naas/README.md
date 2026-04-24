@@ -41,7 +41,7 @@ This collection provides Ansible modules to automate:
 
 | Component | Requirement |
 |-----------|-------------|
-| **Collection version** | 26.3.0 (current stable) |
+| **Collection version** | 26.4.0 (current stable) |
 | **ansible-core** | >= 2.17.0 (tested with 2.17, 2.18, 2.19, 2.20) |
 | **Python** | >= 3.7 |
 | **Graphiant SDK** | >= 26.3.0 |
@@ -56,6 +56,7 @@ This collection provides Ansible modules to automate:
 
 | Name | Description |
 |------|-------------|
+| `graphiant_device_system` | Configure device (Edge, Gateway or Core) hostname, region, and site |
 | `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) |
 | `graphiant_static_routes` | Manage static routes (per-segment configure/deconfigure/validate) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
@@ -294,6 +295,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `credential_examples.yml` | Credential management examples |
 | `device_config_management.yml` | Push raw device configurations (Edge/Gateway/Core) |
 | `ntp_management.yml` | NTP configuration (global and device) |
+| `device_system_management.yml` | Device name, region, and site configuration |
 | `test_collection.yml` | Collection validation and testing |
 
 #### Data Exchange Workflows
@@ -325,6 +327,7 @@ View module documentation with `ansible-doc`:
 ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_static_routes
 ansible-doc graphiant.naas.graphiant_ntp
+ansible-doc graphiant.naas.graphiant_device_system
 ansible-doc graphiant.naas.graphiant_vrrp
 ansible-doc graphiant.naas.graphiant_lag_interfaces
 ansible-doc graphiant.naas.graphiant_bgp
@@ -386,22 +389,27 @@ All modules support `state` parameter:
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
 
+`graphiant_device_system` accepts only `present` / configure; it does not support `absent`.
+
 ### Check Mode
 
-Check mode (run with `ansible-playbook ... --check` or set `check_mode: true` on a task) lets you preview what would change without applying it. Support varies by module:
+Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run without committing mutating API calls where the module supports it. Declared support is under `attributes.check_mode` in `ansible-doc graphiant.naas.<module_name>`.
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_data_exchange_info` | No API writes; payloads that would be pushed are logged with `[check_mode]` so you can see exactly what would be applied. |
-| **Partial** | `graphiant_bgp`, `graphiant_device_config` | Check mode runs but may report `changed: true` because the module does not compare current state in check mode (API limits). For `graphiant_device_config`, `show_validated_payload` returns `changed: false`; `configure` assumes changes. |
-| **None** | `graphiant_data_exchange` | Not supported; Data Exchange workflows are multi-step and state-changing and cannot be safely simulated. Use `graphiant_data_exchange_info` for read-only queries. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
+| **Partial** | `graphiant_bgp`, `graphiant_device_config` | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`. See each module's `attributes.check_mode` details. |
 
-**Example: run a playbook in check mode (dry run)**
+**Full-mode nuances:** `graphiant_device_system` reads device state in check mode and sets `changed` from whether an apply would be needed (unless the task fails the no-site rule). `graphiant_data_exchange_info` is always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
+
+**Diff mode (`--diff`):** Only `graphiant_device_system` documents `diff_mode` in this collection; use `--check --diff` or `--diff` on that module to see `before`/`after` and `details.diff_plan` when an edge/core branch would change.
+
+**Example: run playbooks in check mode (dry run)**
 
 ```bash
-# Preview interface and BGP changes without applying
-ansible-playbook playbooks/interface_management.yml --check
-ansible-playbook playbooks/complete_network_setup.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
 ```
 
 **Example: single task in check mode**
@@ -418,18 +426,18 @@ ansible-playbook playbooks/complete_network_setup.yml --check
 # With detailed_logs and ANSIBLE_STDOUT_CALLBACK=debug you will see [check_mode] payloads in output
 ```
 
-**Example: read-only module (full check mode support)**
+**Example: read-only query (check mode safe)**
 
 ```yaml
-- name: Query Data Exchange service health (check mode is a no-op, no API writes)
+- name: Query Data Exchange service health (module is read-only)
   graphiant.naas.graphiant_data_exchange_info:
     <<: *graphiant_client_params
-    query_type: "service_health"
-    service_id: "{{ service_id }}"
+    query: service_health
+    service_name: "{{ data_exchange_service_name }}"
   check_mode: true
 ```
 
-For per-module details, see the `attributes.check_mode` section in `ansible-doc graphiant.naas.<module_name>`.
+For the authoritative wording on each module, see `ansible-doc graphiant.naas.<module_name>` (especially `attributes.check_mode`).
 
 ### Idempotency
 

@@ -5,6 +5,11 @@
 
 ancestor: null
 releases:
+  "26.4.0":
+    release_date: "2026-04-21"
+    changes:
+      minor_changes:
+        - "New ``graphiant_device_system`` module and ``device_system_management.yml`` playbook to set device ``name``, ``regionName``, and ``site`` fields; sample ``sample_device_system.yaml``"
   "26.3.0":
     release_date: "2026-03-30"
     changes:

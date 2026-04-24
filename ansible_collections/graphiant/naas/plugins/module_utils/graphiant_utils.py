@@ -296,7 +296,11 @@ def handle_graphiant_exception(exception: Exception, operation: str) -> str:
         return f"Error during {operation}: {str(exception)}"
 
     if isinstance(exception, ConfigurationError):
-        return f"Configuration error during {operation}: {str(exception)}"
+        msg = str(exception)
+        # Already a full sentence from portal/config loading (e.g. missing file path)
+        if msg.startswith("Config file not found:"):
+            return msg
+        return f"Configuration error during {operation}: {msg}"
     elif isinstance(exception, APIError):
         return f"API error during {operation}: {str(exception)}"
     elif isinstance(exception, DeviceNotFoundError):

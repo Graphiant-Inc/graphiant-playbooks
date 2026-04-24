@@ -239,7 +239,15 @@ class PortalUtils(object):
             return config_data
 
         except FileNotFoundError:
-            error_msg = f"File not found: {input_file_path}"
+            if os.path.isabs(yaml_file):
+                error_msg = f"Config file not found: {input_file_path} (this absolute path does not exist)."
+            else:
+                error_msg = (
+                    f"Config file not found: {input_file_path} "
+                    f"(requested as {yaml_file!r}, resolved under the collection config directory; "
+                    f"see environment variable GRAPHIANT_CONFIGS_PATH if needed). "
+                    f"Check spelling, path, and file extension (.yaml vs .yml)."
+                )
             LOG.error(error_msg)
             raise ConfigurationError(error_msg)
         except yaml.YAMLError as e:

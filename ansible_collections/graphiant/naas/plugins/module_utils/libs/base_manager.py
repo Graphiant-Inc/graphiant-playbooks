@@ -71,6 +71,9 @@ class BaseManager(ABC):
             if config_data is None:
                 raise ConfigurationError(f"Failed to load configuration file: {yaml_file}")
             return config_data
+        except ConfigurationError:
+            # Preserve concise messages (e.g. file not found) from ConfigUtils/portal_utils
+            raise
         except Exception as e:
             LOG.error("Error rendering configuration file %s: %s", yaml_file, str(e))
             LOG.error("Exception type: %s", type(e).__name__)

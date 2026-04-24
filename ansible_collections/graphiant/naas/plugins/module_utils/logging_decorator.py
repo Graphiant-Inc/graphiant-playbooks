@@ -64,9 +64,14 @@ def capture_library_logs(func):
             # If detailed logging is disabled, just run the function normally
             return func(module, *args, **kwargs)
 
-        # Note: For best output formatting with detailed_logs, set:
+        # Note: ansible-playbook with detailed_logs: true embeds newlines in result_msg.
+        # For best output formatting with detailed_logs, set ANSIBLE_STDOUT_CALLBACK=debug:
         # export ANSIBLE_STDOUT_CALLBACK=debug
         # This ensures clean output without literal \n characters
+
+        # The debug task should pass msg as a multiline string (e.g. msg: |), not a list of
+        # strings, or the callback may show literal \n in a one-line list repr. Callback
+        # (default vs ANSIBLE_STDOUT_CALLBACK=debug) does not change that list behavior.
 
         # Set up logging capture
         log_capture = io.StringIO()
@@ -108,6 +113,8 @@ def capture_library_logs(func):
             return result
 
         except Exception as e:
+            if "Config file not found" in str(e):
+                raise
             # Capture logs even when exception occurs
             captured_logs = log_capture.getvalue()
             if captured_logs:
