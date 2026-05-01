@@ -44,7 +44,7 @@ This collection provides Ansible modules to automate:
 | **Collection version** | 26.4.0 (current stable) |
 | **ansible-core** | >= 2.17.0 (tested with 2.17, 2.18, 2.19, 2.20) |
 | **Python** | >= 3.7 |
-| **Graphiant SDK** | >= 26.3.0 |
+| **Graphiant SDK** | >= 26.4.0 |
 
 > **Note:** All dependency versions are managed centrally in `_version.py`. See [Version Management Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/VERSION_MANAGEMENT.md) for details.
 
@@ -589,7 +589,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 26.3.0
+python scripts/bump_version.py 26.4.0
 ```
 
 After bumping version, remember to:

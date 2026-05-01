@@ -6,10 +6,14 @@
 ancestor: null
 releases:
   "26.4.0":
-    release_date: "2026-04-21"
+    release_date: "2026-05-01"
     changes:
       minor_changes:
+        - "Collection version bumped to 26.4.0"
+        - "Minimum ``graphiant-sdk`` raised to ``>= 26.4.0`` (see ``_version.py`` ``DEPENDENCIES``); Ansible module ``requirements`` entries updated accordingly"
         - "New ``graphiant_device_system`` module and ``device_system_management.yml`` playbook to set device ``name``, ``regionName``, and ``site`` fields; sample ``sample_device_system.yaml``"
+        - "Documentation: version and dependency examples refreshed in ``docs/guides/VERSION_MANAGEMENT.md``, ``docs/guides/RELEASE.md``, repository ``README.md``, ``ANSIBLE_INCLUSION_CHECKLIST.md``, and ``scripts/bump_version.py``"
+        - "``SECURITY.md``: supported release lines updated for ``26.4.x`` and ``26.3.x``"
   "26.3.0":
     release_date: "2026-03-30"
     changes:

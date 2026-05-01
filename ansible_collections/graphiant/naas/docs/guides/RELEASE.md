@@ -23,7 +23,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 The current collection version is defined in `_version.py`:
 ```python
-__version__ = "26.3.0"
+__version__ = "26.4.0"
 ```
 
 ## Release Process
@@ -72,7 +72,7 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # For a specific version
-python scripts/bump_version.py 26.3.0
+python scripts/bump_version.py 26.4.0
 ```
 
 The script automatically updates:
@@ -87,7 +87,7 @@ If you need to update dependency versions, you can do so in two ways:
 
 **Option A: Update during version bump**
 ```bash
-python scripts/bump_version.py patch --update-deps graphiant-sdk=26.3.0
+python scripts/bump_version.py patch --update-deps graphiant-sdk=26.4.0
 ```
 
 **Option B: Update manually**
@@ -263,7 +263,7 @@ When updating dependencies:
 1. Update `_version.py`:
 ```python
 DEPENDENCIES = {
-    "graphiant-sdk": "26.3.0",  # Use >= 26.3.0
+    "graphiant-sdk": "26.4.0",  # Use >= 26.4.0
     # ... other dependencies
 }
 ```
@@ -323,10 +323,10 @@ python scripts/bump_version.py minor
 python scripts/bump_version.py major
 
 # Set specific version
-python scripts/bump_version.py 26.3.0
+python scripts/bump_version.py 26.4.0
 
 # Update dependency during bump
-python scripts/bump_version.py patch --update-deps graphiant-sdk=26.3.0
+python scripts/bump_version.py patch --update-deps graphiant-sdk=26.4.0
 
 # Build collection
 python scripts/build_collection.py

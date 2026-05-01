@@ -61,7 +61,7 @@ Pass `username` / `password` (or your vault equivalents) into playbooks and role
 
 | Component | Description | Documentation |
 |-----------|-------------|---------------|
-| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.3.0); bundled in the Ansible community package | [📖 Collection README](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) · [📖 Ansible docs (graphiant.naas)](https://docs.ansible.com/projects/ansible/latest/collections/graphiant/naas/index.html#plugins-in-graphiant-naas) |
+| **Ansible Collection** | Ansible modules for Graphiant NaaS automation (v26.4.0); bundled in the Ansible community package | [📖 Collection README](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/README.md) · [📖 Ansible docs (graphiant.naas)](https://docs.ansible.com/projects/ansible/latest/collections/graphiant/naas/index.html#plugins-in-graphiant-naas) |
 | **Terraform Modules** | Infrastructure as Code for cloud connectivity | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/terraform/README.md) |
 | **CI/CD Pipelines** | Automated testing, linting, building, and releasing | [📖 GitHub](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/.github/workflows/README.md) |
 | **Docker Support** | Containerized execution environment | [📖 Documentation](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/Docker.md) |

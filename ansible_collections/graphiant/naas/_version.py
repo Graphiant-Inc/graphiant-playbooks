@@ -6,7 +6,7 @@ All version references throughout the repository should use values from this fil
 """
 
 # Collection version (semantic versioning: MAJOR.MINOR.PATCH)
-__version__ = "26.3.0"
+__version__ = "26.4.0"
 COLLECTION_VERSION = __version__
 
 # Dependency versions
@@ -16,8 +16,8 @@ DEPENDENCIES = {
     "Jinja2": "3.1.6",
     "tabulate": "0.9.0",
 
-    # Graphiant SDK (use version >= 26.3.0)
-    "graphiant-sdk": "26.3.0",
+    # Graphiant SDK (use version >= 26.4.0)
+    "graphiant-sdk": "26.4.0",
 
     # Ansible
     "ansible-core": ">=2.17.0",
@@ -43,4 +43,4 @@ REQUIRES_PYTHON = ">=3.7"
 
 # Module version_added (should match collection version, but use major.minor format)
 # Ansible requires version_added to be major.minor, not patch level
-MODULE_VERSION_ADDED = "26.3.0"  # Derived from COLLECTION_VERSION (MAJOR.MINOR)
+MODULE_VERSION_ADDED = "26.4.0"  # Derived from COLLECTION_VERSION (MAJOR.MINOR)
