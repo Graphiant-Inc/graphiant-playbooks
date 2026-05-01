@@ -32,6 +32,12 @@ variable "template_path" {
   default     = "templates/template-aws-vpc.yml"
 }
 
+variable "vpc_name" {
+  description = "Name tag for the created VPC (CloudFormation: VPCName) (only used for create action)"
+  type        = string
+  default     = "graphiant-vpc"
+}
+
 variable "vpc_address_range" {
   description = "CIDR block for VPC (CloudFormation: VPCAddressRange) (only used for create action)"
   type        = string

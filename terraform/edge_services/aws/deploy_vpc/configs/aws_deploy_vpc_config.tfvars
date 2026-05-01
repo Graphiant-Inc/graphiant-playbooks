@@ -4,9 +4,6 @@
 # action: Terraform action to perform ('create' or 'delete')
 action = "create"
 
-# mode: Deployment mode ('production' or 'devtest'(Internal Use Only))
-mode = "production"
-
 # template_path: Path to the CloudFormation template file
 template_path = "templates/template-aws-vpc.yml"
 
@@ -21,3 +18,6 @@ vpc_address_range = "10.0.0.0/16"
 
 # stack_name: Unique CloudFormation stack identifier in AWS
 stack_name = "graphiant-vpc"
+
+# vpc_name: Name tag for the VPC (CloudFormation: VPCName; shown in AWS console)
+vpc_name = "graphiant-vpc"

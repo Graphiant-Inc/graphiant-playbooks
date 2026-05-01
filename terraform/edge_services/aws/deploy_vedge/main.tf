@@ -17,6 +17,7 @@ locals {
   aws_vedge_devtest_new_vpc = {
     AvailabilityZone = var.availability_zone
     VPCAddressRange = var.vpc_address_range
+    VPCName = var.vpc_name
     ImageId = var.image_id
     InstanceType = var.instance_type
     InstanceName = var.instance_name
@@ -30,6 +31,7 @@ locals {
   aws_vedge_production_new_vpc = {
     AvailabilityZone = var.availability_zone
     VPCAddressRange = var.vpc_address_range
+    VPCName = var.vpc_name
     ImageId = var.image_id
     InstanceType = var.instance_type
     InstanceName = var.instance_name

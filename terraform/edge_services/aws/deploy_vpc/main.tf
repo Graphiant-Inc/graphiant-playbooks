@@ -15,6 +15,7 @@ provider "aws" {
 
 locals {
   params = {
+    VPCName          = var.vpc_name
     VPCAddressRange  = var.vpc_address_range
     AvailabilityZone = var.availability_zone
   }

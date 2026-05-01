@@ -10,6 +10,10 @@ Metadata:
           - ImageId
 
 Parameters:
+  VPCName:
+    Description: Name tag applied to the created VPC (shown in AWS console)
+    Type: String
+    Default: graphiant-vedge-vpc
   AvailabilityZone:
     Description: Availability zone to create network resources in
     Type: AWS::EC2::AvailabilityZone::Name
@@ -91,6 +95,8 @@ Resources:
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
       Tags:
+        - Key: Name
+          Value: !Ref VPCName
         - Key: "Vendor"
           Value: "Graphiant"
 
@@ -388,3 +394,29 @@ Resources:
           Value: LanDefault
         - Key: "Vendor"
           Value: "Graphiant"
+
+Outputs:
+  VpcName:
+    Description: Name tag applied to the VPC
+    Value: !Ref VPCName
+  VPCId:
+    Description: VPC ID created by this stack
+    Value: !Ref VPC
+  RouteTableId:
+    Description: Route table ID created by this stack
+    Value: !Ref RouteTable
+  InternetGatewayId:
+    Description: Internet gateway ID created by this stack
+    Value: !Ref InternetGateway
+  SubnetMgmtId:
+    Description: Subnet ID for mgmt subnet
+    Value: !Ref SubnetMgmt
+  SubnetWanId:
+    Description: Subnet ID for WAN subnet
+    Value: !Ref SubnetWan
+  SubnetLanId:
+    Description: Subnet ID for LAN subnet
+    Value: !Ref SubnetLan
+  vEdgeInstanceId:
+    Description: vEdge instance ID created by this stack
+    Value: !Ref vEdgeInstance

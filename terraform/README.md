@@ -9,6 +9,7 @@ Production-ready Terraform modules for deploying cloud networking infrastructure
 ## Description
 
 This Terraform configuration provides modules to automate:
+- Graphiant Virtual Edge on AWS
 - Azure ExpressRoute circuit and gateway setup
 - AWS Direct Connect gateway and virtual interface configuration
 - GCP InterConnect VLAN attachments and BGP peering
@@ -17,7 +18,7 @@ This Terraform configuration provides modules to automate:
 
 ## Terraform Version Compatibility
 
-This configuration requires **Terraform >= 1.3.0**.
+This configuration requires **Terraform >= 1.14.0**.
 
 Provider versions are specified in each module's `terraform {}` block and are installed automatically via `terraform init`.
 
@@ -35,12 +36,14 @@ Provider versions are specified in each module's `terraform {}` block and are in
 terraform/
 ├── edge_services/                 # Cloud edge service modules
 │   └── aws/                       # AWS edge modules
-│       ├── deploy_vedge/          # Deploy Graphiant vEdge
+│       ├── deploy_vedge/          # Deploy Graphiant vEdge (see Edge Services)
+│       │   ├── configs/           # aws_deploy_vedge_config.tfvars, devtest tfvars
 │       │   ├── main.tf
 │       │   ├── variables.tf
 │       │   ├── outputs.tf
 │       │   └── templates/
-│       └── deploy_vpc/            # Deploy AWS VPC (for edge connectivity)
+│       └── deploy_vpc/            # Deploy AWS VPC (optional before existing-vEdge)
+│           ├── configs/           # aws_deploy_vpc_config.tfvars
 │           ├── main.tf
 │           ├── variables.tf
 │           ├── outputs.tf
@@ -60,10 +63,7 @@ terraform/
 │       ├── variables.tf         # Variable definitions
 │       └── outputs.tf           # Output values
 │
-└── configs/
-    ├── edge_services/            # Edge service configuration files
-    │   ├── aws_deploy_vedge_config.tfvars
-    │   └── aws_deploy_vpc_config.tfvars
+└── configs/                       # Gateway service tfvars (edge tfvars live under each module’s configs/)
     └── gateway_services/        # Configuration files
         ├── azure_config.tfvars  # Azure variable configuration
         ├── aws_config.tfvars    # AWS variable configuration
@@ -74,27 +74,21 @@ terraform/
 
 ### Install Terraform (Required for all providers)
 
-**macOS:**
+For supported install methods, current commands, and all operating systems, refer to the official HashiCorp documentation: **[Install Terraform](https://developer.hashicorp.com/terraform/install)**.
+
+**macOS** (example; if this differs from the docs, follow the link above):
+
 ```bash
-brew install terraform
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
 ```
 
-**Windows:**
-```bash
-choco install terraform
-```
-
-**Linux:**
-```bash
-curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-sudo apt-get update && sudo apt-get install terraform
-```
+**Windows** and **Linux**: use the official install guide above for package managers, binaries, and supported distributions.
 
 ### Verify Terraform Installation
 
 ```bash
-terraform version  # Should be >= 1.3.0
+terraform version  # Should be >= 1.14.0
 ```
 
 ---
@@ -148,62 +142,80 @@ terraform output cloud_router_id
 
 ---
 
-# Edge Services 
+# Edge Services
 
-# AWS
+# AWS — Graphiant Virtual Edge
 
-These modules deploy Graphiant edge components in AWS by launching AWS CloudFormation stacks.
+The **Graphiant Virtual Edge** AWS Marketplace listing ([product page](https://aws.amazon.com/marketplace/pp/prodview-xngq36gyfhpv2)) describes a CloudFormation-driven deployment: it provisions a vEdge EC2 instance with networking for **local management**, **customer workload (LAN)**, and **Graphiant WAN**. Default security groups deny inbound access to the edge; open only what you need (see onboarding below).
 
-**Workflow**
-- **Create/update**: set `action = "create"` (default)
-- **Delete**: set `action = "delete"` (uses the AWS CLI to delete the CloudFormation stack)
+**AWS CloudFormation (CFT)** templates are YAML/JSON documents that declare AWS resources; deploying a template creates a **stack** (the running resources).
 
-## AWS Deploy VPC (`edge_services/aws/deploy_vpc`)
+These Terraform wrappers (`deploy_vpc`, `deploy_vedge`) create and destroy stacks via `aws_cloudformation_stack`. **Delete** runs `aws cloudformation delete-stack` through Terraform (`action = "delete"`); the AWS CLI must be available and authenticated.
 
-1. Update the config file: `terraform/configs/edge_services/aws_deploy_vpc_config.tfvars`
-2. Deploy:
+**Terraform workflow**
 
-```bash
-cd terraform/edge_services/aws/deploy_vpc
-terraform init
-terraform plan -var-file="../../../configs/edge_services/aws_deploy_vpc_config.tfvars" -out=tfplan
-terraform apply tfplan
-```
+- **Create / update** (default): `action = "create"` — Terraform manages the stack (create and in-place updates when parameters change).
+- **Delete**: `action = "delete"` — removes the stack resource and triggers stack deletion.
 
-3. Destroy:
+### Prerequisites
+
+Configure the **AWS CLI** for the target account and region, then verify:
 
 ```bash
-cd terraform/edge_services/aws/deploy_vpc
-terraform apply -var-file="../../../configs/edge_services/aws_deploy_vpc_config.tfvars" -var="action=delete"
+aws --version
+aws sts get-caller-identity
 ```
 
-## AWS Deploy vEdge (`edge_services/aws/deploy_vedge`)
+### Onboarding and local management UI
 
-1. Update the config file: `terraform/configs/edge_services/aws_deploy_vedge_config.tfvars`
-   - Choose a CloudFormation template via `template_path`:
-     - `templates/template-aws-vedge-production-new-vpc.yml`
-     - `templates/template-aws-vedge-production-existing-vpc.yml`
-     - Dev/test templates are for internal use
-2. Deploy:
+- Prefer onboarding with the **Graphiant Portal token** (`token` in tfvars) when you use token-based onboarding.
+- If you are **not** using the token flow, onboard using the **onboarding URL** from the **serial console** or from the VM **local web UI**.
+- To use the local web UI at `https://<management-public-address>`, add an **inbound rule allowing HTTPS (TCP 443)** on the **management** security group attached to the Graphiant local management interface.
+- After the edge is onboarded, **lock down** the local web server using edge configuration as appropriate for your security policy.
+
+### Deploy vEdge with a new VPC
+
+1. Edit `edge_services/aws/deploy_vedge/configs/aws_deploy_vedge_config.tfvars`: set `action = "create"`, `template_path = "templates/template-aws-vedge-production-new-vpc.yml"`, region, `stack_name`, `image_id`, instance sizing, `vpc_*`, `availability_zone`, and `token` as needed.
+2. From the module directory:
 
 ```bash
 cd terraform/edge_services/aws/deploy_vedge
 terraform init
-terraform plan -var-file="../../../configs/edge_services/aws_deploy_vedge_config.tfvars" -out=tfplan
-terraform apply tfplan
+terraform plan -var-file="configs/aws_deploy_vedge_config.tfvars" -out=tfplan_vedge_new_vpc
+terraform apply "tfplan_vedge_new_vpc"
 ```
 
-3. Destroy:
+3. Use **`terraform output`** (including `graphiant_stack_outputs`) for VPC ID, subnet IDs, instance ID, and related IDs once the CloudFormation template publishes outputs.
+
+### Deploy VPC-only stack, then deploy vEdge into an existing VPC
+
+1. Deploy the standalone VPC stack when you want subnets and routing separate from the vEdge stack:
 
 ```bash
-cd terraform/edge_services/aws/deploy_vedge
-terraform apply -var-file="../../../configs/edge_services/aws_deploy_vedge_config.tfvars" -var="action=delete"
+cd terraform/edge_services/aws/deploy_vpc
+terraform init
+terraform plan -var-file="configs/aws_deploy_vpc_config.tfvars" -out=tfplan_new_vpc
+terraform apply "tfplan_new_vpc"
 ```
 
-## Notes
+2. Map **`graphiant_stack_outputs`** from the VPC stack (or EC2 describe APIs) to **`customer_vpc`**, **`customer_vpc_route_table`**, **`subnet_mgmt`**, **`subnet_wan`**, and **`subnet_lan`** in `configs/aws_deploy_vedge_config.tfvars`. Set `template_path = "templates/template-aws-vedge-production-existing-vpc.yml"`.
+3. Plan and apply from `deploy_vedge` with the same `terraform plan` / `terraform apply` pattern as above (use a distinct plan filename such as `tfplan_vedge_existing_vpc`).
 
-- These modules create CloudFormation stacks and may shell out to `aws cloudformation delete-stack` for deletion.
-- Ensure your AWS credentials and region are configured so the AWS CLI can delete the stack successfully.
+### Destroy vEdge or VPC stacks
+
+While **`action = "create"`** remains in the tfvars file, run delete by overriding **`action`** only:
+
+```bash
+# From deploy_vedge or deploy_vpc — use the matching -var-file
+terraform apply -var-file="configs/aws_deploy_vedge_config.tfvars" -var="action=delete"
+terraform apply -var-file="configs/aws_deploy_vpc_config.tfvars" -var="action=delete"
+```
+
+Destroying the **vEdge** stack removes the instance and its interfaces/security groups; destroying the **VPC** stack removes the standalone VPC and its networking (only after dependent workloads are gone). Order teardown so nothing still references the VPC.
+
+### Dev/test templates (internal use only)
+
+For engineering or lab use, **`configs/aws_deploy_vedge_devtest_config.tfvars`** pairs with **`templates/template-aws-vedge-devtest-new-vpc.yml`** or **`templates/template-aws-vedge-devtest-existing-vpc.yml`** (SSH allow-lists, test onboarding endpoints, optional cloud-init subnet). Switching between dev/test and production **modes** may require a clean Terraform working state; if plans show unexpected drift, reset local state only when you intend to abandon tracked stacks.
 
 ---
 

@@ -3,9 +3,9 @@ output "action_performed" {
   value       = var.action
 }
 
-output "mode" {
-  description = "The mode that was performed (production or devtest)"
-  value       = var.mode
+output "cloudformation_template_path" {
+  description = "Path to the CloudFormation template file used for the stack"
+  value       = var.template_path
 }
 
 output "stack_name" {

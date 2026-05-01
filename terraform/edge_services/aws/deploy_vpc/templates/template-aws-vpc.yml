@@ -10,6 +10,10 @@ Parameters:
     Description: The block of addresses that the deployed VPC owns
     Type: String
     Default: 10.0.0.0/16
+  VPCName:
+    Description: Name tag applied to the created VPC (shown in AWS console)
+    Type: String
+    Default: graphiant-vpc
 
 Resources:
   LaunchTemplate:
@@ -25,6 +29,9 @@ Resources:
       CidrBlock: !Ref VPCAddressRange
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: !Ref VPCName
 
   RouteTable:
     Type: AWS::EC2::RouteTable
@@ -127,6 +134,9 @@ Resources:
       VpcId: !Ref VPC
 
 Outputs:
+  VpcName:
+    Description: Name tag applied to the VPC (CloudFormation parameter VPCName)
+    Value: !Ref VPCName
   VpcId:
     Description: VPC ID created by this stack
     Value: !Ref VPC

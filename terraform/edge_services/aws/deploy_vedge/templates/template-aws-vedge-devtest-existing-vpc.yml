@@ -132,12 +132,12 @@ Resources:
       VpcId: !Ref CustomerVPC
       SecurityGroupIngress:
         - IpProtocol: "tcp"
-          FromPort: 80
-          ToPort: 80
+          FromPort: 443
+          ToPort: 443
           CidrIp: !Ref AllowedCidr
         - IpProtocol: "tcp"
-          FromPort: 80
-          ToPort: 80
+          FromPort: 443
+          ToPort: 443
           CidrIpv6: !Ref AllowedCidrV6
         - IpProtocol: "tcp"
           FromPort: 22

@@ -10,6 +10,10 @@ Metadata:
           - ImageId
 
 Parameters:
+  VPCName:
+    Description: Name tag applied to the created VPC (shown in AWS console)
+    Type: String
+    Default: graphiant-vedge-vpc
   AvailabilityZone:
     Description: Availability zone to create network resources in
     Type: AWS::EC2::AvailabilityZone::Name
@@ -75,6 +79,9 @@ Resources:
       CidrBlock: !Ref VPCAddressRange
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: !Ref VPCName
 
   RouteTable:
     Type: AWS::EC2::RouteTable
@@ -193,12 +200,12 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: "tcp"
-          FromPort: 80
-          ToPort: 80
+          FromPort: 443
+          ToPort: 443
           CidrIp: !Ref AllowedCidr
         - IpProtocol: "tcp"
-          FromPort: 80
-          ToPort: 80
+          FromPort: 443
+          ToPort: 443
           CidrIpv6: !Ref AllowedCidrV6
         - IpProtocol: "tcp"
           FromPort: 22
@@ -430,6 +437,9 @@ Resources:
                 ${SSHPublicKey}
 
 Outputs:
+  VpcName:
+    Description: Name tag applied to the VPC
+    Value: !Ref VPCName
   VPCId:
     Description: VPC ID created by this stack
     Value: !Ref VPC

@@ -9,17 +9,6 @@ variable "action" {
   }
 }
 
-variable "mode" {
-  description = "Mode name (production, devtest)"
-  type        = string
-  default     = "production"
-
-  validation {
-    condition     = contains(["production", "devtest"], var.mode)
-    error_message = "Mode must be either 'production' or 'devtest'."
-  }
-}
-
 variable "aws_region" {
   description = "AWS region to deploy the CloudFormation stack into"
   type        = string
@@ -60,6 +49,12 @@ variable "vpc_address_range" {
   description = "CIDR block for VPC (CloudFormation: VPCAddressRange) (only used for create action)"
   type        = string
   default     = "10.0.0.0/16"
+}
+
+variable "vpc_name" {
+  description = "Name tag for the created VPC (CloudFormation: VPCName; new-VPC templates only)"
+  type        = string
+  default     = "graphiant-vedge-vpc"
 }
 
 variable "onboarding_gateway" {
@@ -105,7 +100,7 @@ variable "token" {
 }
 
 variable "customer_vpc" {
-  description = "The VPC to deploy the vEdge instance into (CloudFormation: CustomerVPC) (only used for create action)"
+  description = "Existing VPC ID to deploy the vEdge instance into (CloudFormation: CustomerVPC) (only used for create action)"
   type        = string
   default     = ""
 }
