@@ -17,7 +17,12 @@
 # 2. Create SSH Key pair for the accessing the EC2 Instance
 # 	To Generate SSH Keypair from AWS cloudshell,
 	  # aws ec2 create-key-pair --key-name aws_ec2_ssh_keypair --region us-east-1 --query 'KeyMaterial' --output text > aws_ec2_ssh_keypair_privatekey.pem
-# 3. In case of LAG, Create the Direct Connect LAG manually and asoociate the connections to the LAG before running Terraform.
+# 3. AWS regions and availability zones: 
+#    To find the AWS region Id:	
+#	https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html#available-regions
+#    To find available availability zones for your region:
+#     aws ec2 describe-availability-zones --region us-east-1
+# 4. In case of LAG, Create the Direct Connect LAG manually and asoociate the connections to the LAG before running Terraform.
 #    	Set dx_connection_id below to the LAG ID (dxlag-xxxxx) and dx_connection_vlan to the LAG VLAN.
 
 # -----------------------
