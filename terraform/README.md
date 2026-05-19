@@ -35,19 +35,30 @@ Provider versions are specified in each module's `terraform {}` block and are in
 ```
 terraform/
 ├── edge_services/                 # Cloud edge service modules
-│   └── aws/                       # AWS edge modules
-│       ├── deploy_vedge/          # Deploy Graphiant vEdge (see Edge Services)
-│       │   ├── configs/           # aws_deploy_vedge_config.tfvars, devtest tfvars
+│   ├── aws/                       # AWS edge modules
+│   │   ├── deploy_vedge/          # Deploy Graphiant vEdge (see Edge Services)
+│   │   │   ├── configs/           # aws_deploy_vedge_config.tfvars, devtest tfvars
+│   │   │   ├── main.tf
+│   │   │   ├── variables.tf
+│   │   │   ├── outputs.tf
+│   │   │   └── templates/
+│   │   └── deploy_vpc/            # Deploy AWS VPC (optional before existing-vEdge)
+│   │       ├── configs/           # aws_deploy_vpc_config.tfvars
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       ├── outputs.tf
+│   │       └── templates/
+│   └── azure/                     # Azure edge modules
+│       ├── deploy_vedge/          # Deploy Graphiant vEdge VM
+│       │   ├── configs/           # azure_deploy_vedge_config.tfvars, devtest tfvars
 │       │   ├── main.tf
 │       │   ├── variables.tf
-│       │   ├── outputs.tf
-│       │   └── templates/
-│       └── deploy_vpc/            # Deploy AWS VPC (optional before existing-vEdge)
-│           ├── configs/           # aws_deploy_vpc_config.tfvars
+│       │   └── outputs.tf
+│       └── deploy_vpc/            # Deploy Azure VNet, subnets, route tables
+│           ├── configs/           # azure_deploy_vpc_config.tfvars
 │           ├── main.tf
 │           ├── variables.tf
-│           ├── outputs.tf
-│           └── templates/
+│           └── outputs.tf
 │
 └── gateway_services/              # Cloud gateway service modules
     ├── azure/                    # Azure ExpressRoute modules
@@ -216,6 +227,129 @@ Destroying the **vEdge** stack removes the instance and its interfaces/security 
 ### Dev/test templates (internal use only)
 
 For engineering or lab use, **`configs/aws_deploy_vedge_devtest_config.tfvars`** pairs with **`templates/template-aws-vedge-devtest-new-vpc.yml`** or **`templates/template-aws-vedge-devtest-existing-vpc.yml`** (SSH allow-lists, test onboarding endpoints, optional cloud-init subnet). Switching between dev/test and production **modes** may require a clean Terraform working state; if plans show unexpected drift, reset local state only when you intend to abandon tracked stacks.
+
+---
+
+# Azure — Graphiant Virtual Edge
+
+Two Terraform modules are provided:
+- **`deploy_vpc`** — creates the networking layer only (Resource Group, VNet, subnets, route tables). Use this to pre-provision infrastructure before deploying the vEdge.
+- **`deploy_vedge`** — deploys the Graphiant vEdge VM. It can either create its own VNet and networking (Option A), or deploy into an existing VNet (Option B) — such as one created by `deploy_vpc` or already present in your Azure subscription.
+
+Two deployment modes are supported:
+- **Production** — 3 NICs (mgmt, wan, lan), Marketplace image or Shared Image Gallery Image, no SSH access (onboard via token)
+- **Devtest** (internal) — 4 NICs (+cloud-init for SSH), Shared Image Gallery image, SSH + password access
+
+### Prerequisites
+
+Install and authenticate the Azure CLI:
+
+```bash
+az version
+az login
+az account set --subscription "your-subscription-id"
+az account show
+```
+
+### Find available image versions
+
+```bash
+# Marketplace (production) — list all versions, latest is last
+az vm image list --publisher graphiantinc1622651764677 --offer graphiant-edge-vm --sku graphiant-edge-vm --all --query "[].version" -o tsv | sort -V
+
+# Shared Image Gallery (devtest, internal)
+az sig image-version list --gallery-name gnosimages --gallery-image-definition GNOS-dev --resource-group gnos-images --subscription 3aad0757-65c3-4f82-82c1-9bb05af8134c -o table
+```
+
+### Option A: Deploy vEdge with a new VNet
+
+Everything (RG, VNet, subnets, route tables, NSGs, VM) is created in one step.
+
+1. Edit `edge_services/azure/deploy_vedge/configs/azure_deploy_vedge_config.tfvars`:
+   - `mode` — deployment mode (`production` or `devtest`)
+   - `resource_group_name` — name for the new Azure resource group
+   - `azure_region` — Azure region to deploy into (e.g. `eastus`)
+   - `vm_name` — name for the vEdge virtual machine
+   - `vm_size` — VM size (`Standard_DS3_v2`, `Standard_DS4_v2`, `Standard_F8s_v2`)
+   - `image_version` — Marketplace image version (or `source_image_id` for Shared Image Gallery)
+   - `ssh_public_key` — SSH public key (required by Azure)
+   - `token` — Graphiant Portal onboarding token
+   - `vnet_name` — name for the new virtual network
+   - `vnet_address_space` — VNet CIDR block (e.g. `10.1.0.0/16`)
+   - `subnet_mgmt_prefix`, `subnet_wan_prefix`, `subnet_lan_prefix` — subnet CIDRs within the VNet
+
+2. Deploy:
+
+```bash
+cd terraform/edge_services/azure/deploy_vedge
+terraform init
+terraform plan -var-file="configs/azure_deploy_vedge_config.tfvars" -out=tfplan
+terraform apply tfplan
+```
+
+### Option B: Deploy vEdge into an existing VNet
+
+Use this when you already have a VNet, subnets, and route tables — either created by `deploy_vpc` or pre-existing in your Azure subscription.
+
+1. Edit `edge_services/azure/deploy_vedge/configs/azure_deploy_vedge_config.tfvars`:
+   - `mode` — deployment mode (`production` or `devtest`)
+   - `resource_group_id` — existing resource group ID from Azure Portal
+   - `vm_name` — name for the vEdge virtual machine
+   - `vm_size` — VM size (`Standard_DS3_v2`, `Standard_DS4_v2`, `Standard_F8s_v2`)
+   - `image_version` — Marketplace image version (or `source_image_id` for Shared Image Gallery)
+   - `ssh_public_key` — SSH public key (required by Azure)
+   - `token` — Graphiant Portal onboarding token
+   - `vnet_id` — existing VNet ID
+   - `subnet_mgmt_id` — existing mgmt subnet ID
+   - `subnet_wan_id` — existing WAN subnet ID
+   - `subnet_lan_id` — existing LAN subnet ID
+   - `route_table_wan_id` — existing WAN route table ID (optional)
+   - `route_table_lan_id` — existing LAN route table ID (optional)
+
+2. Deploy the vEdge:
+
+```bash
+cd terraform/edge_services/azure/deploy_vedge
+terraform init
+terraform plan -var-file="configs/azure_deploy_vedge_config.tfvars" -out=tfplan
+terraform apply tfplan
+```
+
+### Post-deployment: Configure the vEdge in Graphiant Portal
+
+After the vEdge VM is deployed and onboarded:
+
+1. Go to the **Graphiant Portal**
+2. Navigate to **Configure** -> **Devices** -> select the vEdge
+3. Update the following:
+   - **Site Name** — assign the vEdge to a site
+   - **Edge LAN Segment** — select the LAN segment for customer workload traffic
+   - **IP Address** — set to the `lan_private_ip` output from Terraform (`terraform output lan_private_ip`)
+
+### Optional: Test VM on LAN subnet
+
+A Debian 12 test VM can be deployed on the LAN subnet to verify connectivity. It has a private IP only (no public IP) and a default route via the vEdge LAN interface.
+
+```hcl
+deploy_test_vm         = true
+test_vm_name           = "graphiant-vedge-test-vm"
+test_vm_size           = "Standard_B1s"
+test_vm_admin_username = "azureuser"
+test_vm_admin_password = "<password>"  # 12-123 chars, must meet 3 of 4: lowercase, uppercase, digit, special char
+```
+
+### Destroy
+
+```bash
+# Destroy vEdge
+cd terraform/edge_services/azure/deploy_vedge
+terraform destroy -var-file="configs/azure_deploy_vedge_config.tfvars"
+
+```
+
+### Dev/test mode (internal use only)
+
+Use `configs/azure_deploy_vedge_devtest_config.tfvars` with `mode = "devtest"`.
 
 ---
 
