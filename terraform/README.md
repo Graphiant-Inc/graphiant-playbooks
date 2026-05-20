@@ -9,12 +9,15 @@ Production-ready Terraform modules for deploying cloud networking infrastructure
 ## Description
 
 This Terraform configuration provides modules to automate:
-- Graphiant Virtual Edge on AWS
-- Azure ExpressRoute circuit and gateway setup
-- AWS Direct Connect gateway and virtual interface configuration
-- GCP InterConnect VLAN attachments and BGP peering
-- Cloud networking infrastructure (VPCs, subnets, routers)
-- BGP peering configuration for all cloud providers
+
+**Edge Services** — Deploy Graphiant Virtual Edge appliances in the cloud:
+- AWS vEdge deployment and VPC provisioning with subnets, route tables and security groups
+- Azure vEdge deployment and VNet provisioning with subnets, route tables and security groups
+
+**Gateway Services** — Connect cloud networks to the Graphiant backbone:
+- Azure ExpressRoute circuit and VNet configuration
+- AWS Direct Connect gateway and VPC configuration
+- GCP InterConnect VLAN attachments and VPC configuration
 
 ## Terraform Version Compatibility
 
@@ -36,18 +39,16 @@ Provider versions are specified in each module's `terraform {}` block and are in
 terraform/
 ├── edge_services/                 # Cloud edge service modules
 │   ├── aws/                       # AWS edge modules
-│   │   ├── deploy_vedge/          # Deploy Graphiant vEdge (see Edge Services)
+│   │   ├── deploy_vedge/          # Deploy Graphiant vEdge EC2
 │   │   │   ├── configs/           # aws_deploy_vedge_config.tfvars, devtest tfvars
 │   │   │   ├── main.tf
 │   │   │   ├── variables.tf
-│   │   │   ├── outputs.tf
-│   │   │   └── templates/
-│   │   └── deploy_vpc/            # Deploy AWS VPC (optional before existing-vEdge)
+│   │   │   └── outputs.tf
+│   │   └── deploy_vpc/            # Deploy AWS VPC, subnets, route tables
 │   │       ├── configs/           # aws_deploy_vpc_config.tfvars
 │   │       ├── main.tf
 │   │       ├── variables.tf
-│   │       ├── outputs.tf
-│   │       └── templates/
+│   │       └── outputs.tf
 │   └── azure/                     # Azure edge modules
 │       ├── deploy_vedge/          # Deploy Graphiant vEdge VM
 │       │   ├── configs/           # azure_deploy_vedge_config.tfvars, devtest tfvars
@@ -157,18 +158,17 @@ terraform output cloud_router_id
 
 # AWS — Graphiant Virtual Edge
 
-The **Graphiant Virtual Edge** AWS Marketplace listing ([product page](https://aws.amazon.com/marketplace/pp/prodview-xngq36gyfhpv2)) describes a CloudFormation-driven deployment: it provisions a vEdge EC2 instance with networking for **local management**, **customer workload (LAN)**, and **Graphiant WAN**. Default security groups deny inbound access to the edge; open only what you need (see onboarding below).
+Two Terraform modules are provided:
+- **`deploy_vpc`** — creates the networking layer only (VPC, IGW, mgmt/wan/lan subnets, mgmt/wan and lan route tables). Use this to pre-provision infrastructure before deploying the vEdge.
+- **`deploy_vedge`** — deploys the Graphiant vEdge EC2 instance. It can either create a new VPC and networking (Option A), or deploy into an existing VPC (Option B) — such as one created by `deploy_vpc` or already present in your AWS account.
 
-**AWS CloudFormation (CFT)** templates are YAML/JSON documents that declare AWS resources; deploying a template creates a **stack** (the running resources).
-
-These Terraform wrappers (`deploy_vpc`, `deploy_vedge`) create and destroy stacks via `aws_cloudformation_stack`. **Delete** runs `aws cloudformation delete-stack` through Terraform (`action = "delete"`); the AWS CLI must be available and authenticated.
-
-**Terraform workflow**
-
-- **Create / update** (default): `action = "create"` — Terraform manages the stack (create and in-place updates when parameters change).
-- **Delete**: `action = "delete"` — removes the stack resource and triggers stack deletion.
+Two deployment modes are supported:
+- **Production** — Use `edge_services/aws/deploy_vedge/configs/aws_deploy_vedge_config.tfvars`
+- **Devtest** (Only for Internal Usage) - Use `edge_services/aws/deploy_vedge/configs/aws_deploy_vedge_devtest_config.tfvars`
 
 ### Prerequisites
+
+#### Verify AWS CLI:
 
 Configure the **AWS CLI** for the target account and region, then verify:
 
@@ -177,56 +177,175 @@ aws --version
 aws sts get-caller-identity
 ```
 
+#### Pre-requisite Setup:
+
+1. **AWS regions and availability zones:**
+   - To find the AWS region ID: https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html#available-regions
+   - To find available availability zones for your region:
+     ```bash
+     aws ec2 describe-availability-zones --region us-east-1
+     ```
+
+2. **Subscribe to the Graphiant Virtual Edge AWS Marketplace listing** in your account (required for `marketplace_product_id` to resolve):
+   https://aws.amazon.com/marketplace/pp/prodview-xngq36gyfhpv2
+   
+   **To get `marketplace_product_id` :**
+   - Open the Marketplace product page and check AMI details: https://aws.amazon.com/marketplace/launch?ref_=aws_mp_pw&productId=ef19ce00-3544-4c76-af98-2001d39fdfd9
+   - The product ID for Graphiant vEdge is `ef19ce00-3544-4c76-af98-2001d39fdfd9`
+   - The marketplace_product_id for Graphiant vEdge is `prod-tjdlkbawxqsyg`
+
+3. **(Only if you plan to launch a test VM)** Create an EC2 SSH key pair in the target region. From AWS CloudShell:
+   ```bash
+   aws ec2 create-key-pair --key-name aws_ec2_ssh_keypair --region us-east-1 \
+     --query 'KeyMaterial' --output text > aws_ec2_ssh_keypair_privatekey.pem
+   chmod 400 aws_ec2_ssh_keypair_privatekey.pem
+   ```
+   Then set `test_vm_key_name` to the key pair name.
+
+4. **(Optional: Only if you plan to launch a test VM with a specific Debian AMI)** Find the Debian 13 AMI ID for your region and set as `test_vm_ami`:
+   ```bash
+   aws ec2 describe-images --owners 136693071363 \
+     --filters "Name=name,Values=debian-13-amd64-*" "Name=state,Values=available" \
+     --region us-east-1 \
+     --query 'sort_by(Images, &CreationDate)[-1].ImageId' --output text
+   ```
+   If `test_vm_ami` is not set, Terraform will automatically discover the latest Debian 13 AMI for your region.
+
+
 ### Onboarding and local management UI
 
 - Prefer onboarding with the **Graphiant Portal token** (`token` in tfvars) when you use token-based onboarding.
 - If you are **not** using the token flow, onboard using the **onboarding URL** from the **serial console** or from the VM **local web UI**.
-- To use the local web UI at `https://<management-public-address>`, add an **inbound rule allowing HTTPS (TCP 443)** on the **management** security group attached to the Graphiant local management interface.
+- To use the local web UI at `https://<mgmt-public-address>`, add an **inbound rule allowing HTTPS (TCP 443)** on the **mgmt** security group (`<vm_name>-mgmt-sg`) attached to the Graphiant local management interface. Production deployments deny all inbound by default.
 - After the edge is onboarded, **lock down** the local web server using edge configuration as appropriate for your security policy.
 
-### Deploy vEdge with a new VPC
+### Option A: Deploy vEdge with a new VPC
 
-1. Edit `edge_services/aws/deploy_vedge/configs/aws_deploy_vedge_config.tfvars`: set `action = "create"`, `template_path = "templates/template-aws-vedge-production-new-vpc.yml"`, region, `stack_name`, `image_id`, instance sizing, `vpc_*`, `availability_zone`, and `token` as needed.
-2. From the module directory:
+Everything (VPC, IGW, subnets, route tables, SGs, NICs, EIPs, EC2 instance) is created in one step.
+
+1. Edit `edge_services/aws/deploy_vedge/configs/aws_deploy_vedge_config.tfvars`:
+   - `mode` — deployment mode (`production` or `devtest`)
+   - `aws_region` / `availability_zone` — target AWS region and AZ
+   - `project_name` — prefix used for default resource names (IGW, subnets, EIPs, SGs)
+   - `vm_name` — Name tag for the vEdge EC2 instance
+   - `instance_type` — EC2 instance type (see allowed values in `variables.tf`)
+   - **AMI** — set exactly one of:
+     - `image_id` — explicit AMI ID, or
+     - `marketplace_product_id` (+ optional `marketplace_version`, default `"latest"`) — resolves the AMI via the AWS Marketplace SSM public parameter `/aws/service/marketplace/<product_id>/<version>`. Requires your account to be subscribed to the Graphiant Marketplace listing.
+   - `token` — Graphiant Portal onboarding token
+   - `vpc_name` / `vpc_address_range` — VPC name + CIDR for the new VPC
+   - `subnet_mgmt_prefix`, `subnet_wan_prefix`, `subnet_lan_prefix` — subnet CIDRs within the VPC
+   - **Test VM (optional)** — `deploy_test_vm`, `test_vm_name`, `test_vm_instance_type`, `test_vm_key_name`, `test_vm_ami`, `test_vm_ingress_allowed_subnets`, `test_vm_enable_ssh_public_ip`, `test_vm_ssh_allowed_subnets` (see [Optional: Test VM on LAN subnet](#optional-test-vm-on-lan-subnet))
+
+2. Deploy:
 
 ```bash
 cd terraform/edge_services/aws/deploy_vedge
 terraform init
-terraform plan -var-file="configs/aws_deploy_vedge_config.tfvars" -out=tfplan_vedge_new_vpc
-terraform apply "tfplan_vedge_new_vpc"
+terraform plan -var-file="configs/aws_deploy_vedge_config.tfvars" -out=tfplan
+terraform apply tfplan
 ```
 
-3. Use **`terraform output`** (including `graphiant_stack_outputs`) for VPC ID, subnet IDs, instance ID, and related IDs once the CloudFormation template publishes outputs.
+### Option B: Deploy vEdge into an existing VPC
 
-### Deploy VPC-only stack, then deploy vEdge into an existing VPC
+Use this when you already have a VPC, subnets, and route tables pre-existing in your AWS account.
 
-1. Deploy the standalone VPC stack when you want subnets and routing separate from the vEdge stack:
+#### Optional: To provision the new VPC, subnets and route tables first via `deploy_vpc`
 
 ```bash
 cd terraform/edge_services/aws/deploy_vpc
 terraform init
-terraform plan -var-file="configs/aws_deploy_vpc_config.tfvars" -out=tfplan_new_vpc
-terraform apply "tfplan_new_vpc"
+terraform plan -var-file="configs/aws_deploy_vpc_config.tfvars" -out=tfplan
+terraform apply tfplan
+terraform output    # capture vpc_id, subnet_*_id, route_table_*_id
 ```
 
-2. Map **`graphiant_stack_outputs`** from the VPC stack (or EC2 describe APIs) to **`customer_vpc`**, **`customer_vpc_route_table`**, **`subnet_mgmt`**, **`subnet_wan`**, and **`subnet_lan`** in `configs/aws_deploy_vedge_config.tfvars`. Set `template_path = "templates/template-aws-vedge-production-existing-vpc.yml"`.
-3. Plan and apply from `deploy_vedge` with the same `terraform plan` / `terraform apply` pattern as above (use a distinct plan filename such as `tfplan_vedge_existing_vpc`).
+#### Deploy the vEdge into the existing VPC
 
-### Destroy vEdge or VPC stacks
+1. Edit `edge_services/aws/deploy_vedge/configs/aws_deploy_vedge_config.tfvars`:
+   - `mode` — deployment mode (`production` or `devtest`)
+   - `aws_region` / `availability_zone` — same region/AZ as the existing VPC
+   - `project_name` — prefix used for default resource names (EIPs, SGs)
+   - `vm_name` — Name tag for the vEdge EC2 instance
+   - `instance_type` — EC2 instance type (see allowed values in `variables.tf`)
+   - **AMI** — set exactly one of `image_id` or `marketplace_product_id` (+ optional `marketplace_version`) — same as Option A
+   - `token` — Graphiant Portal onboarding token
+   - `vpc_id` — existing VPC ID
+   - `subnet_mgmt_id`, `subnet_wan_id`, `subnet_lan_id` — existing subnet IDs
+   - `subnet_cloud_init_id` — required for **devtest** only
+   - `route_table_lan_id` — existing LAN route table; a `0.0.0.0/0` route via the vEdge LAN ENI will be added to it
+   - `route_table_wan_id` — existing WAN route table (the mgmt+wan subnets you supply must already be associated with an IGW-routed RT)
+   - **Test VM (optional)** — `deploy_test_vm`, `test_vm_name`, `test_vm_instance_type`, `test_vm_key_name`, `test_vm_ami`, `test_vm_ingress_allowed_subnets`, `test_vm_enable_ssh_public_ip`, `test_vm_ssh_allowed_subnets` (see [Optional: Test VM on LAN subnet](#optional-test-vm-on-lan-subnet))
 
-While **`action = "create"`** remains in the tfvars file, run delete by overriding **`action`** only:
+2. Deploy:
 
 ```bash
-# From deploy_vedge or deploy_vpc — use the matching -var-file
-terraform apply -var-file="configs/aws_deploy_vedge_config.tfvars" -var="action=delete"
-terraform apply -var-file="configs/aws_deploy_vpc_config.tfvars" -var="action=delete"
+cd terraform/edge_services/aws/deploy_vedge
+terraform init
+terraform plan -var-file="configs/aws_deploy_vedge_config.tfvars" -out=tfplan
+terraform apply tfplan
 ```
 
-Destroying the **vEdge** stack removes the instance and its interfaces/security groups; destroying the **VPC** stack removes the standalone VPC and its networking (only after dependent workloads are gone). Order teardown so nothing still references the VPC.
+### Post-deployment: Configure the vEdge in Graphiant Portal
 
-### Dev/test templates (internal use only)
+After the vEdge instance is deployed and onboarded:
 
-For engineering or lab use, **`configs/aws_deploy_vedge_devtest_config.tfvars`** pairs with **`templates/template-aws-vedge-devtest-new-vpc.yml`** or **`templates/template-aws-vedge-devtest-existing-vpc.yml`** (SSH allow-lists, test onboarding endpoints, optional cloud-init subnet). Switching between dev/test and production **modes** may require a clean Terraform working state; if plans show unexpected drift, reset local state only when you intend to abandon tracked stacks.
+1. Go to the **Graphiant Portal**
+2. Navigate to **Configure** -> **Devices** -> select the vEdge
+3. Update the following:
+   - **Site Name** — assign the vEdge to a site
+   - **Edge LAN Segment** — select the LAN segment for interface `GigabitEthernet0/7/0` for customer workload traffic
+   - **IP Address** — set to the `lan_private_ip` output from Terraform (`terraform output lan_private_ip`)
+
+### Optional: Test VM on LAN subnet
+
+A Debian 13 test VM can be deployed on the LAN subnet to verify connectivity through the vEdge. The test VM is attached to the LAN subnet with all traffic routed through the vEdge by default. Optionally, you can allocate a public Elastic IP for SSH access from external sources.
+
+**Configuration:**
+
+```hcl
+deploy_test_vm                  = true
+test_vm_name                    = "graphiant-vedge-test-vm"
+test_vm_instance_type           = "t3.micro"
+test_vm_key_name                = "aws_ec2_ssh_keypair"    # EC2 key pair name (must exist in aws_region)
+test_vm_ami                     = ""                       # Leave empty to auto-discover latest Debian 13
+test_vm_ingress_allowed_subnets = ["0.0.0.0/0"]           # CIDR blocks allowed ingress to test VM (all protocols)
+test_vm_enable_ssh_public_ip    = true                     # Allocate Elastic IP for public SSH access
+test_vm_ssh_allowed_subnets     = ["YOUR_LAPTOP_IP/32"]    # List of CIDR blocks allowed SSH (only if public IP enabled; e.g., ["203.0.113.45/32"])
+```
+
+**Security Note:** When `test_vm_enable_ssh_public_ip = true`, it is recommended to restrict both `test_vm_ingress_allowed_subnets` and `test_vm_ssh_allowed_subnets` to trusted CIDR blocks only, rather than `0.0.0.0/0`.
+
+**SSH access examples:**
+
+- **Private IP (within VPC)**: 
+  ```bash
+  ssh -i ~/aws_ec2_ssh_keypair_privatekey.pem admin@<test_vm_private_ip>
+  ```
+  Retrieve with: `terraform output test_vm_private_ip`
+
+- **Public IP (from external sources, if enabled)**: 
+  ```bash
+  ssh -i ~/aws_ec2_ssh_keypair_privatekey.pem admin@<test_vm_public_ip>
+  ```
+  Retrieve with: `terraform output test_vm_public_ip`
+
+### Destroy
+
+```bash
+cd terraform/edge_services/aws/deploy_vedge
+terraform destroy -var-file="configs/aws_deploy_vedge_config.tfvars"
+
+# If deploy_vpc was used:
+cd ../deploy_vpc
+terraform destroy -var-file="configs/aws_deploy_vpc_config.tfvars"
+```
+
+Tear down `deploy_vedge` before `deploy_vpc` so nothing still references the VPC.
+
+### Dev/test mode (internal use only)
+
+Use `configs/aws_deploy_vedge_devtest_config.tfvars` with `mode = "devtest"`. This adds a cloud-init NIC + EIP for SSH access, opens TCP 22/443 on the mgmt SG from `allowed_cidr`/`allowed_cidr_v6`, and seeds a `cloud_init_username` user via cloud-init with `ssh_public_key` and `cloud_init_password`.
 
 ---
 
