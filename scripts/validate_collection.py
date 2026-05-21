@@ -47,6 +47,7 @@ def check_structure(base_path):
 
     # Graphiant collection specific files
     collection_files = [
+        "plugins/modules/graphiant_backbone.py",
         "plugins/modules/graphiant_interfaces.py",
         "plugins/modules/graphiant_lag_interfaces.py",
         "plugins/modules/graphiant_vrrp.py",

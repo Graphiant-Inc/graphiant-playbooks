@@ -1092,6 +1092,132 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Configure device system settings (idempotency check): %s", result2)
         assert result2.get("changed") is False, "Configure device system idempotency failed"
 
+    def test_configure_backbone(self):
+        """
+        Configure full backbone (Core) settings for multiple devices.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.configure("sample_backbone_config.yaml")
+        LOG.info("Configure backbone result: %s", result)
+        result = graphiant_config.backbone.configure("sample_backbone_config.yaml")
+        LOG.info("Configure backbone result (rerun check): %s", result)
+
+    def test_deconfigure_backbone(self):
+        """
+        Orchestrated full deconfigure of backbone (Core) settings.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.deconfigure("sample_backbone_config.yaml")
+        LOG.info("Full deconfigure backbone result: %s", result)
+        result = graphiant_config.backbone.deconfigure("sample_backbone_config.yaml")
+        LOG.info("Full deconfigure backbone result (idempotency check): %s", result)
+        assert result['changed'] is False, "Full deconfigure backbone idempotency failed"
+
+    def test_configure_backbone_core_to_core_interfaces(self):
+        """
+        Configure backbone core-to-core interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.configure_core_to_core_interfaces("sample_backbone_config.yaml")
+        LOG.info("Configure core-to-core interfaces result: %s", result)
+        result = graphiant_config.backbone.configure_core_to_core_interfaces("sample_backbone_config.yaml")
+        LOG.info("Configure core-to-core interfaces result (rerun check): %s", result)
+
+    def test_deconfigure_backbone_core_to_core_interfaces(self):
+        """
+        Deconfigure backbone core-to-core interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.deconfigure_core_to_core_interfaces("sample_backbone_config.yaml")
+        LOG.info("Deconfigure core-to-core interfaces result: %s", result)
+        result = graphiant_config.backbone.deconfigure_core_to_core_interfaces("sample_backbone_config.yaml")
+        LOG.info("Deconfigure core-to-core interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure core-to-core interfaces idempotency failed"
+
+    def test_configure_backbone_wan_circuits(self):
+        """
+        Configure backbone WAN ISP circuit interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.configure_wan_circuits("sample_backbone_config.yaml")
+        LOG.info("Configure backbone WAN circuits result: %s", result)
+        result = graphiant_config.backbone.configure_wan_circuits("sample_backbone_config.yaml")
+        LOG.info("Configure backbone WAN circuits result (rerun check): %s", result)
+
+    def test_configure_backbone_core_to_core_tunnels(self):
+        """
+        Configure backbone core-to-core tunnel interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.configure_core_to_core_tunnel_interfaces("sample_backbone_config.yaml")
+        LOG.info("Configure core-to-core tunnels result: %s", result)
+        result = graphiant_config.backbone.configure_core_to_core_tunnel_interfaces("sample_backbone_config.yaml")
+        LOG.info("Configure core-to-core tunnels result (rerun check): %s", result)
+
+    def test_deconfigure_backbone_core_to_core_tunnels(self):
+        """
+        Deconfigure backbone core-to-core tunnel interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.deconfigure_core_to_core_tunnel_interfaces("sample_backbone_config.yaml")
+        LOG.info("Deconfigure core-to-core tunnels result: %s", result)
+        result = graphiant_config.backbone.deconfigure_core_to_core_tunnel_interfaces("sample_backbone_config.yaml")
+        LOG.info("Deconfigure core-to-core tunnels result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure core-to-core tunnels idempotency failed"
+
+    def test_deconfigure_backbone_wan_circuits(self):
+        """
+        Deconfigure backbone WAN ISP circuit interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.deconfigure_wan_circuits("sample_backbone_config.yaml")
+        LOG.info("Deconfigure backbone WAN circuits result: %s", result)
+        result = graphiant_config.backbone.deconfigure_wan_circuits("sample_backbone_config.yaml")
+        LOG.info("Deconfigure backbone WAN circuits result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure backbone WAN circuits idempotency failed"
+
+    def test_configure_backbone_direct_peer_interfaces(self):
+        """
+        Configure backbone direct-peer interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.configure_direct_peer_interfaces("sample_backbone_direct_peer_config.yaml")
+        LOG.info("Configure direct-peer interfaces result: %s", result)
+        result = graphiant_config.backbone.configure_direct_peer_interfaces("sample_backbone_direct_peer_config.yaml")
+        LOG.info("Configure direct-peer interfaces result (rerun check): %s", result)
+
+    def test_deconfigure_backbone_direct_peer_interfaces(self):
+        """
+        Deconfigure backbone direct-peer interfaces.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.deconfigure_direct_peer_interfaces("sample_backbone_direct_peer_config.yaml")
+        LOG.info("Deconfigure direct-peer interfaces result: %s", result)
+        result = graphiant_config.backbone.deconfigure_direct_peer_interfaces("sample_backbone_direct_peer_config.yaml")
+        LOG.info("Deconfigure direct-peer interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure direct-peer interfaces idempotency failed"
+
+    def test_configure_backbone_syslog_targets(self):
+        """
+        Configure backbone per-VRF syslog targets.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.configure_syslog_targets("sample_backbone_config.yaml")
+        LOG.info("Configure backbone syslog targets result: %s", result)
+        result = graphiant_config.backbone.configure_syslog_targets("sample_backbone_config.yaml")
+        LOG.info("Configure backbone syslog targets result (rerun check): %s", result)
+
+    def test_deconfigure_backbone_syslog_targets(self):
+        """
+        Deconfigure backbone per-VRF syslog targets.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.backbone.deconfigure_syslog_targets("sample_backbone_config.yaml")
+        LOG.info("Deconfigure backbone syslog targets result: %s", result)
+        result = graphiant_config.backbone.deconfigure_syslog_targets("sample_backbone_config.yaml")
+        LOG.info("Deconfigure backbone syslog targets result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure backbone syslog targets idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -1261,5 +1387,20 @@ if __name__ == '__main__':
     # Device Configuration Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_show_validated_payload_for_device_config'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_config'))
+
+    # Backbone (Core) Configuration Management Tests
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_site_info'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_core_to_core_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_core_to_core_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_core_to_core_tunnels'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_core_to_core_tunnels'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_wan_circuits'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_wan_circuits'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_direct_peer_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_direct_peer_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_syslog_targets'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_syslog_targets'))
 
     runner = unittest.TextTestRunner(verbosity=2).run(suite)

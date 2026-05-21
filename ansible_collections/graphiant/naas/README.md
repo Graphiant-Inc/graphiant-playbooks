@@ -17,7 +17,8 @@ You can still install or upgrade the collection explicitly with `ansible-galaxy 
 ## Description
 
 This collection provides Ansible modules to automate:
-- Interface and circuit configuration
+- Interface and circuit configuration on Edge devices
+- Core (backbone) device configuration — interfaces, ISP circuits, direct-peer circuits, site info, and per-VRF syslog targets
 - Static routes management (per-segment configure/deconfigure)
 - VRRP (Virtual Router Redundancy Protocol) configuration
 - LAG (Link Aggregation Group) interface configuration
@@ -57,7 +58,8 @@ This collection provides Ansible modules to automate:
 | Name | Description |
 |------|-------------|
 | `graphiant_device_system` | Configure device (Edge, Gateway or Core) hostname, region, and site |
-| `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) |
+| `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) on Edge devices |
+| `graphiant_backbone` | Manage Graphiant Core (backbone) device interfaces, ISP circuits, direct-peer circuits, site info, and per-VRF syslog targets |
 | `graphiant_static_routes` | Manage static routes (per-segment configure/deconfigure/validate) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
 | `graphiant_lag_interfaces` | Manage LAG interfaces configuration |
@@ -273,6 +275,14 @@ antsibull-changelog lint-changelog-yaml ansible_collections/graphiant/naas/chang
       ansible.builtin.debug:
         msg: "{{ bgp_peering_result.msg }}"
       tags: ['bgp', 'peering']
+
+    - name: Configure full backbone (Core) settings
+      graphiant.naas.graphiant_backbone:
+        <<: *graphiant_client_params
+        config_yaml_file: "sample_backbone_config.yaml"
+        operation: "configure"
+        detailed_logs: true
+      tags: ['backbone']
 ```
 
 ### Example Playbooks
@@ -284,6 +294,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `hello_test.yml` | E2E integration test playbook (used in CI/CD) |
 | `complete_network_setup.yml` | Full network configuration workflow |
 | `interface_management.yml` | Interface and circuit operations |
+| `backbone_management.yml` | Core (backbone) device management operations |
 | `static_routes_management.yml` | Static routes configure/deconfigure/validate |
 | `vrrp_interface_management.yml` | VRRP configuration on interfaces and subinterfaces |
 | `lag_interface_management.yml` | LAG interface configuration |
@@ -337,6 +348,7 @@ ansible-doc graphiant.naas.graphiant_sites
 ansible-doc graphiant.naas.graphiant_data_exchange
 ansible-doc graphiant.naas.graphiant_data_exchange_info
 ansible-doc graphiant.naas.graphiant_device_config
+ansible-doc graphiant.naas.graphiant_backbone
 ```
 
 ## Documentation
@@ -398,7 +410,7 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 | Support | Modules | Behavior |
 |--------|---------|----------|
 | **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
-| **Partial** | `graphiant_bgp`, `graphiant_device_config` | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`. See each module's `attributes.check_mode` details. |
+| **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone` | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
 
 **Full-mode nuances:** `graphiant_device_system` reads device state in check mode and sets `changed` from whether an apply would be needed (unless the task fails the no-site rule). `graphiant_data_exchange_info` is always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
@@ -540,6 +552,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_device_config_payload.yaml` - Raw device configuration payloads (Edge/Gateway Device types)
 - `sample_device_config_core_device_payload.yaml` - Raw device configuration payloads (Core Device type)
 - `sample_device_config_with_template.yaml` - Device config with user-defined template (`device_config_template.yaml`)
+- `sample_backbone_config.yaml` - Core (backbone) device configuration covering interfaces (loopback, core_link, ipsec_tunnel, p2mp_tunnel, isp_circuit, direct_peer, disabled), site info, and per-VRF syslog targets
 - `sample_sites.yaml` - Site configurations
 
 ### Config File Path Resolution

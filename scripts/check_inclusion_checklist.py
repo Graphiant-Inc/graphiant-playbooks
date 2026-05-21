@@ -104,6 +104,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
 
     module_files = list(COLLECTION_MODULES_DIR.glob("graphiant_*.py"))
     module_names = [
+        "graphiant_backbone",
         "graphiant_bgp",
         "graphiant_data_exchange",
         "graphiant_data_exchange_info",

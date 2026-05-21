@@ -303,6 +303,197 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_manageme
   tags: ['interfaces', 'configure']
 ```
 
+## Core (Backbone) Management
+
+Check mode (`--check`) is supported for all backbone operations: no configuration is pushed, and the payloads that would be pushed are logged with a `[check_mode]` prefix so you can see exactly what would be applied.
+
+### Module: graphiant.naas.graphiant_backbone
+
+`graphiant_backbone` manages Graphiant Core (backbone) device configuration via `PUT /v1/devices/{id}/config` on the `core` branch (counterpart to `graphiant_interfaces` on the `edge` branch). A single `config_yaml_file` holds the full Core configuration; each operation slices the appropriate section (interfaces filtered by type / circuit prefix, site block, `vrfs.syslogTargets`, …) and pushes only that slice.
+
+Deconfigure operations are idempotent: parent and VLAN sub-interface existence is checked via `gsdk.get_device_info` before delete payloads are built, and per-VRF `syslogTargets` are checked against `device.segments[*].syslog_targets[*].name`.
+
+| Operation | Purpose |
+|---|---|
+| `configure` / `deconfigure` | Full Core push or orchestrated teardown (WAN circuits → direct-peer → core-to-core tunnels → core-to-core ifaces → syslog targets) |
+| `configure_core_to_core_interfaces` / `deconfigure_core_to_core_interfaces` | Core-to-core links (`loopback`, `core_to_core_link` with optional VLAN sub-interfaces, `disabled`) |
+| `configure_core_to_core_tunnel_interfaces` / `deconfigure_core_to_core_tunnel_interfaces` | Core-to-core IPsec tunnels (`core_to_core_ipsec_tunnel`) |
+| `configure_wan_circuits` / `deconfigure_wan_circuits` | ISP transit interfaces (circuit prefix `isp-`, plus paired `p2mp_tunnel` entries) |
+| `configure_direct_peer_interfaces` / `deconfigure_direct_peer_interfaces` | Direct-peer interfaces (circuit prefix `direct-peer-`) |
+| `configure_syslog_targets` / `deconfigure_syslog_targets` | Per-VRF `syslogTargets` under `core.vrfs.<vrf>` |
+
+Sample configs: `configs/sample_backbone_config.yaml` (full Core config covering all interface flavors + sites + syslog) and `configs/sample_backbone_direct_peer_config.yaml` (direct-peer focused).
+
+#### Full Core configure / deconfigure (orchestrated)
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure
+```
+
+```yaml
+- name: Push full Core (backbone) configuration
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "configure"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['backbone', 'configure']
+
+- name: Deconfigure all backbone resources (orchestrated teardown)
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "deconfigure"
+    detailed_logs: true
+    state: absent
+  register: deconfigure_result
+  tags: ['backbone', 'deconfigure']
+```
+
+#### Core-to-core interfaces (loopback + core_to_core_link with optional VLANs)
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_core_to_core_interfaces
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_core_to_core_interfaces
+```
+
+```yaml
+- name: Configure core-to-core interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "configure_core_to_core_interfaces"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['backbone', 'configure_core_to_core_interfaces']
+
+- name: Deconfigure core-to-core interfaces (reset to enterprise default LAN)
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "deconfigure_core_to_core_interfaces"
+    detailed_logs: true
+    state: absent
+  tags: ['backbone', 'deconfigure_core_to_core_interfaces']
+```
+
+#### Core-to-core IPsec tunnels
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_core_to_core_tunnel_interfaces
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_core_to_core_tunnel_interfaces
+```
+
+```yaml
+- name: Configure core-to-core IPsec tunnel interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "configure_core_to_core_tunnel_interfaces"
+    detailed_logs: true
+    state: present
+  tags: ['backbone', 'configure_core_to_core_tunnel_interfaces']
+
+- name: Deconfigure core-to-core IPsec tunnel interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "deconfigure_core_to_core_tunnel_interfaces"
+    detailed_logs: true
+    state: absent
+  tags: ['backbone', 'deconfigure_core_to_core_tunnel_interfaces']
+```
+
+The `tunnel_underlay` interface is pre-pushed into an ISP VRF before the tunnel is inserted; without this the SDK rejects the request with `interface_tunnel: provided local interface is the incorrect type or not in an ISP VRF`.
+
+#### WAN ISP circuits
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_wan_circuits
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_wan_circuits
+```
+
+```yaml
+- name: Configure backbone WAN ISP circuit interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "configure_wan_circuits"
+    detailed_logs: true
+    state: present
+  tags: ['backbone', 'configure_wan_circuits']
+
+- name: Deconfigure backbone WAN ISP circuit interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "deconfigure_wan_circuits"
+    detailed_logs: true
+    state: absent
+  tags: ['backbone', 'deconfigure_wan_circuits']
+```
+
+`p2mp_tunnel` interfaces paired with an ISP circuit are lifecycle-coupled to the circuit: the SDK auto-deletes the tunnel when the circuit is deconfigured, so p2mp tunnels are configured alongside the WAN circuit and never explicitly deconfigured.
+
+#### Direct-peer interfaces
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_direct_peer_interfaces
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_direct_peer_interfaces
+```
+
+```yaml
+- name: Configure backbone direct-peer interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_direct_peer_config.yaml"
+    operation: "configure_direct_peer_interfaces"
+    detailed_logs: true
+    state: present
+  tags: ['backbone', 'configure_direct_peer_interfaces']
+
+- name: Deconfigure backbone direct-peer interfaces
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_direct_peer_config.yaml"
+    operation: "deconfigure_direct_peer_interfaces"
+    detailed_logs: true
+    state: absent
+  tags: ['backbone', 'deconfigure_direct_peer_interfaces']
+```
+
+#### Per-VRF syslog targets
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_syslog_targets
+ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_syslog_targets
+```
+
+```yaml
+- name: Configure per-VRF backbone syslog targets
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "configure_syslog_targets"
+    detailed_logs: true
+    state: present
+  tags: ['backbone', 'configure_syslog_targets']
+
+- name: Deconfigure per-VRF backbone syslog targets
+  graphiant.naas.graphiant_backbone:
+    <<: *graphiant_client_params
+    config_yaml_file: "sample_backbone_config.yaml"
+    operation: "deconfigure_syslog_targets"
+    detailed_logs: true
+    state: absent
+  tags: ['backbone', 'deconfigure_syslog_targets']
+```
+
 ### Module: graphiant.naas.graphiant_vrrp
 
 #### Configure VRRP on interfaces

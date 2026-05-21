@@ -6,6 +6,7 @@ Graphiant network configurations using composition and proper separation of conc
 from typing import Optional, Dict
 from .config_utils import ConfigUtils
 from .interface_manager import InterfaceManager
+from .backbone_manager import BackboneManager
 from .bgp_manager import BGPManager
 from .global_config_manager import GlobalConfigManager
 from .site_manager import SiteManager
@@ -72,6 +73,7 @@ class GraphiantConfig:
 
             # Initialize specialized managers
             self.interfaces = InterfaceManager(self.config_utils)
+            self.backbone = BackboneManager(self.config_utils)
             self.bgp = BGPManager(self.config_utils)
             self.global_config = GlobalConfigManager(self.config_utils)
             self.sites = SiteManager(self.config_utils)
@@ -99,6 +101,7 @@ class GraphiantConfig:
         """
         return {
             "interfaces": hasattr(self, "interfaces") and self.interfaces is not None,
+            "backbone": hasattr(self, "backbone") and self.backbone is not None,
             "bgp": hasattr(self, "bgp") and self.bgp is not None,
             "global_config": hasattr(self, "global_config") and self.global_config is not None,
             "sites": hasattr(self, "sites") and self.sites is not None,

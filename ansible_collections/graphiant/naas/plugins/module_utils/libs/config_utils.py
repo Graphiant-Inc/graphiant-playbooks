@@ -175,6 +175,34 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process device interface %s: %s", kwargs.get("name"), str(e))
             raise ConfigurationError(f"Device interface processing failed: {str(e)}")
 
+    def device_backbone_interface(self, config_payload, action="add", **kwargs):
+        """
+        Update the device interfaces section of a Graphiant Core (backbone) payload.
+
+        Args:
+            config_payload (dict): Dictionary to be updated with backbone interface data.
+                Expected to already contain an "interfaces" key.
+            action (str, optional): Action to perform, either "add", "default_lan", or "delete".
+            **kwargs: Additional parameters passed to the template renderer
+                (name, interface_type, lan, circuit, ipv4, ipv6, gateway, ospf, ...).
+
+        Raises:
+            ConfigurationError: If required parameters are missing.
+        """
+        self._validate_required_params(kwargs, ["name"])
+        LOG.info("Device backbone interface: %s %s", action.upper(), kwargs.get("name"))
+
+        try:
+            result = self.template.render_backbone_interface(action=action, **kwargs)
+            if "interfaces" in result:
+                config_payload.setdefault("interfaces", {})
+                config_payload["interfaces"].update(result["interfaces"])
+            else:
+                LOG.warning("No interfaces found in backbone template result for %s", kwargs.get("name"))
+        except Exception as e:
+            LOG.error("Failed to process backbone interface %s: %s", kwargs.get("name"), str(e))
+            raise ConfigurationError(f"Device backbone interface processing failed: {str(e)}")
+
     def lag_interfaces(self, config_payload, action="add", **kwargs):
         """
         Update the device interfaces section with LAG configuration.
