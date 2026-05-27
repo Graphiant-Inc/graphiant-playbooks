@@ -56,6 +56,7 @@ class ConfigTemplates:
     # Template mapping for different configuration types
     TEMPLATE_MAPPING = {
         "interface": "interface_template.yaml",
+        "backbone_interface": "backbone_interface_template.yaml",
         "lag_interfaces": "lag_interfaces_template.yaml",
         "circuit": "circuit_template.yaml",
         "global_prefix_set": "global_prefix_set_template.yaml",
@@ -167,6 +168,10 @@ class ConfigTemplates:
     def render_interface(self, **kwargs) -> Dict[str, Any]:
         """Render interface template."""
         return self.render_by_type("interface", **kwargs)
+
+    def render_backbone_interface(self, **kwargs) -> Dict[str, Any]:
+        """Render backbone (Core device) interface template."""
+        return self.render_by_type("backbone_interface", **kwargs)
 
     def render_circuit(self, **kwargs) -> Dict[str, Any]:
         """Render circuit template."""

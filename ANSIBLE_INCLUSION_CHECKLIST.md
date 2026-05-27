@@ -1,8 +1,8 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2026-03-31  
-**Collection Version:** 26.4.0  
+**Review Date:** 2026-05-27  
+**Collection Version:** 26.5.0  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
@@ -16,7 +16,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `26.4.0` (meets requirement: >= 1.0.0)
+  - Collection version: `26.5.0` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -49,7 +49,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `26.4.0` is specified in `galaxy.yml`
+  - Version `26.5.0` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -60,7 +60,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `26.4.0` (follows semantic versioning)
+  - Current version: `26.5.0` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py`
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -83,6 +83,7 @@
   - All modules have `EXAMPLES` sections
   - All modules have `RETURN` sections
   - Modules verified:
+    - `graphiant_backbone.py` ✅
     - `graphiant_bgp.py` ✅
     - `graphiant_data_exchange.py` ✅
     - `graphiant_data_exchange_info.py` ✅
@@ -108,13 +109,14 @@
   - Return values use `RV()` markup (e.g., `RV(msg)`)
   - File/input names use `I()` markup (e.g., `I(config_file)`)
   - Code/commands use `C()` markup (e.g., `C(/v1/devices/{device_id}/config)`)
-  - All 9 modules verified ✅
+  - All 10 modules verified ✅
 
 ### 2.3.2 Check Mode Support Information
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** All modules must have check mode support information in the `attributes` field
 - **Verification:**
-  - All 9 modules have `attributes:` section with `check_mode:` information:
+  - All 10 modules have `attributes:` section with `check_mode:` information:
+    - `graphiant_backbone.py`: `support: full` ✅ (payloads logged with `[check_mode]` prefix; no writes performed)
     - `graphiant_bgp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
     - `graphiant_data_exchange.py`: `support: none` (with explanation) ✅
     - `graphiant_data_exchange_info.py`: `support: full` ✅ (read-only _info module)
@@ -160,6 +162,7 @@
     - Query operations properly separated into `graphiant_data_exchange_info` module ✅
     - All state-changing modules only handle create/update/delete operations ✅
   - **Check mode support:** ✅ **PASSING**
+    - `graphiant_backbone`: `supports_check_mode=True`, `support: full` ✅ (payloads logged, no writes)
     - `graphiant_interfaces`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_bgp`: `supports_check_mode=True`, `support: partial` ✅
     - `graphiant_global_config`: `supports_check_mode=True`, `support: partial` ✅
@@ -237,7 +240,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must have at least one module
 - **Verification:**
-  - Module count: 9 modules
+  - Module count: 10 modules
   - State-changing modules:
     1. `graphiant_interfaces` - Manage interfaces and circuits
     2. `graphiant_bgp` - Manage BGP peering and routing policies
@@ -247,8 +250,9 @@
     6. `graphiant_device_config` - Push raw device configurations
     7. `graphiant_vrrp` - Manage VRRP configuration
     8. `graphiant_lag_interfaces` - Manage LAG (Link Aggregation Group) configuration
+    9. `graphiant_backbone` - Manage Graphiant Core (backbone) device configuration
   - Information-gathering modules:
-    9. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
+    10. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
 
 ### 3.3 Changelog
 - [x] **Status:** ✅ **PASSING**
@@ -266,8 +270,9 @@
 - **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
   - All modules use `version_added` in major.minor format (collection version) ✅
-  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.4.0"`)
+  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.4.0"`; bumped by `scripts/bump_version.py` at release-cut)
   - Modules verified:
+    - `graphiant_backbone.py`: `version_added: "26.5.0"` ✅ (added in 26.5.0)
     - `graphiant_bgp.py`: `version_added: "26.1.0"` ✅
     - `graphiant_data_exchange.py`: `version_added: "26.1.0"` ✅
     - `graphiant_data_exchange_info.py`: `version_added: "26.1.0"` ✅
@@ -309,7 +314,7 @@
 - **Verification:**
   - All module files include GPLv3 license header after shebang
   - Format: `# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)`
-  - All 9 modules verified ✅
+  - All 10 modules verified ✅
   - Collection license: GPLv3+ (consistent across all files) ✅
 
 ### 3.9 Public Plugins, Roles, and Playbooks
@@ -463,6 +468,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 
 | Module | Type | Check Mode | Python | version_added | License Header |
 |--------|------|------------|--------|---------------|----------------|
+| `graphiant_backbone` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
 | `graphiant_interfaces` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
 | `graphiant_bgp` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
 | `graphiant_global_config` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
@@ -536,7 +542,7 @@ These are not blocking requirements but are recommended for better collection qu
 All critical action items have been completed:
 
 - [x] ✅ Code of Conduct - `CODE_OF_CONDUCT.md` exists
-- [x] ✅ version_added - All modules use major.minor format (`"26.1.0"`, `"26.2.0"`, `"26.3.0"`, `"26.4.0"`, or `"25.12.0"` for VRRP/LAG)
+- [x] ✅ version_added - All modules use major.minor format (`"25.11.0"`, `"25.12.0"`, `"26.1.0"`, `"26.2.0"`, `"26.3.0"`, `"26.4.0"`, or `"26.5.0"` for the new `graphiant_backbone`)
 - [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19, 2.20
 - [x] ✅ Scheduled CI runs - Nightly runs at 2 AM UTC
 - [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
@@ -567,7 +573,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 26.4.0  
-**Review Date:** 2026-03-31  
+**Collection Version:** 26.5.0  
+**Review Date:** 2026-05-27  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7
