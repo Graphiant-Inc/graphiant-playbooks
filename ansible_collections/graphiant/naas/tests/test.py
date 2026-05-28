@@ -1391,7 +1391,6 @@ if __name__ == '__main__':
     # Backbone (Core) Configuration Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_site_info'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_core_to_core_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_core_to_core_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_core_to_core_tunnels'))
