@@ -1,7 +1,7 @@
 """
 Shared helpers for device ``PUT /v1/devices/{id}/config`` managers.
 
-Used by ``device_system_manager``, ``edge_services_manager``, and intended for future
+Used by ``device_system_manager``, ``edge_services_manager``, ``traffic_policy_manager``, and intended for future
 managers (e.g. ``ntp_manager``, ``static_routes_manager``) that need idempotency,
 ``diff_plan``, check mode, and the list-of-single-key-dicts YAML pattern.
 """

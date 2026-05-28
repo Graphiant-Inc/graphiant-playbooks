@@ -11,7 +11,7 @@ circuits:
       upload_bandwidth: 100
       download_bandwidth: 500
       circuit_type: "circuitType_internet"
-      label: "internet_dia_1"
+      label: "internet_dia_2"
       qos_profile: "gold25"
       qos_profile_type: "balanced"
       dia: true
