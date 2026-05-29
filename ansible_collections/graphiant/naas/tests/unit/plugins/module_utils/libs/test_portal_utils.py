@@ -171,7 +171,10 @@ def test_render_config_file_import_error_no_jinja2(
         p.render_config_file("a.yaml")
 
 
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.yaml.safe_load", side_effect=yaml.YAMLError("plain"))
+@patch(
+    "ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.yaml.safe_load",
+    side_effect=yaml.YAMLError("plain"),
+)
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient", autospec=True)
 def test_render_config_file_yaml_error_no_problemmark(
     m_client: MagicMock, m_safe, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

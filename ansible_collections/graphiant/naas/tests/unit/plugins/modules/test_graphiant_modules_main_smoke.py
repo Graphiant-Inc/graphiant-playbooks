@@ -231,7 +231,10 @@ def test_graphiant_interfaces_configure_lan(m_am, m_gc) -> None:
     m.exit_json.assert_called_once()
 
 
-@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_lag_interfaces.graphiant_utils.get_graphiant_connection")
+@patch(
+    "ansible_collections.graphiant.naas.plugins.modules.graphiant_lag_interfaces."
+    "graphiant_utils.get_graphiant_connection"
+)
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_lag_interfaces.AnsibleModule")
 def test_graphiant_lag_configure(m_am, m_gc) -> None:
     from ansible_collections.graphiant.naas.plugins.modules import graphiant_lag_interfaces

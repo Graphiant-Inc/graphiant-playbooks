@@ -18,6 +18,7 @@ from .site_to_site_vpn_manager import SiteToSiteVpnManager
 from .static_routes_manager import StaticRoutesManager
 from .ntp_manager import NtpManager
 from .device_system_manager import DeviceSystemManager
+from .edge_services_manager import EdgeServicesManager
 from .logger import setup_logger
 from .exceptions import GraphiantPlaybookError
 
@@ -85,6 +86,7 @@ class GraphiantConfig:
             self.static_routes = StaticRoutesManager(self.config_utils)
             self.ntp = NtpManager(self.config_utils)
             self.device_system = DeviceSystemManager(self.config_utils)
+            self.edge_services = EdgeServicesManager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -114,4 +116,5 @@ class GraphiantConfig:
             "static_routes": hasattr(self, "static_routes") and self.static_routes is not None,
             "ntp": hasattr(self, "ntp") and self.ntp is not None,
             "device_system": hasattr(self, "device_system") and self.device_system is not None,
+            "edge_services": hasattr(self, "edge_services") and self.edge_services is not None,
         }

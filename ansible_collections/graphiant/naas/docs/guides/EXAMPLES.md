@@ -28,7 +28,7 @@ All modules support `state` parameter:
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
 
-`graphiant_device_system` only supports `present` (configure); `absent` is not valid.
+`graphiant_device_system` and `graphiant_edge_services` only support `present` (configure); `absent` is not valid.
 
 ### Config File Path Resolution
 
@@ -68,6 +68,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_mana
 
 ### Module task
 
+Apply device system settings from a config file.
+
 ```yaml
 - name: Configure device system settings from YAML
   graphiant.naas.graphiant_device_system:
@@ -104,6 +106,246 @@ Apply device system settings from module parameters instead of a config file.
     detailed_logs: true
     state: present
 ```
+
+## Edge services (DHCP, DNS, LLDP, LWS password)
+
+### Module: graphiant.naas.graphiant_edge_services
+
+`graphiant_edge_services` configures edge service on the Edge/Gateway devices using `PUT /v1/devices/{id}/config`:
+
+- **LAN segment DHCP subnets** — pools, ranges, static leases; use `state: absent` to remove a subnet
+- **LAN interface LLDP** — enable or disable per interface (LAN only)
+- **Device local web server password** — from the config YAML file, Ansible Vault (`vault_devices_lws_password`), or module parameters
+- **Edge DNS mode** — `DNSModeStatic`, `DNSModeCloudflare`, or `DNSModeDynamic`
+
+Configure-only (`state: present`); core devices are rejected.
+
+Other edge-related settings use different modules: **syslog**, **IPFIX**, and **SNMP** (and global NTP objects) via `graphiant_global_config`; **device-level NTP** via `graphiant_ntp`. Any unstructured device JSON can be pushed with `graphiant_device_config`.
+
+**Prerequisite:** LAN segments and interfaces must exist first (e.g. `interface_management.yml --tag lan`).
+
+With `--check`, nothing is pushed; would-be payloads are logged under `[check_mode]`. With `--diff`, pending updates appear in Ansible `diff` and `details.diff_plan`. LWS plaintext is never shown in diffs—only `localWebServerPasswordConfigured`.
+
+Use `configs/sample_edge_services.yaml`. DHCP subnet API keys combine interface name and `ipPrefix` with a hyphen. LLDP applies to **LAN interfaces only**; the task **fails** if `lldp` references a WAN/circuit interface or an interface that does not exist on the device.
+
+**Local web server password** — precedence: YAML `localWebServerPassword` → `vault_devices_lws_password` → module params. Load vault with `include_vars` and pass `vault_devices_lws_password` to the module ([CREDENTIAL_MANAGEMENT_GUIDE.md](CREDENTIAL_MANAGEMENT_GUIDE.md)); do not reference playbook variables in the config file (Jinja render has no playbook context). Self-contained Jinja (`{% set %}`, loops) is fine — see `configs/de_workflows_configs/`.
+
+- **Default (no force):** password is pushed only when the device has none; if the portal already has a hash, LWS is skipped (DNS/LLDP/DHCP still apply).
+- **Vault (recommended):** keys = portal hostnames (e.g. `edge-3-sdktest` in `vault_secrets.yml` and YAML).
+- **`localWebServerPasswordForce: true`:** always push when a password is available; task **fails** if no password from YAML, vault, or module params. Clear force after a successful rotate—the portal stores a hash, so force re-pushes every run.
+
+Use `no_log: true` on tasks that pass passwords.
+
+#### Vault setup
+
+Required when you configure local web server passwords via Ansible Vault (`vault_devices_lws_password` in `vault_secrets.yml`). Use the `configure` playbook tag and pass `--vault-password-file` on every run (including `--check`). For DNS, LLDP, and DHCP only—or LWS via plaintext in the config YAML or module params—vault is not required; use `configure_without_vault` instead.
+
+```bash
+cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example ansible_collections/graphiant/naas/configs/vault_secrets.yml
+# Edit vault_devices_lws_password (keys = portal device hostnames), then:
+export ANSIBLE_VAULT_PASSPHRASE="*************"
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+```
+
+### Playbook
+
+Tags: `configure` (YAML + vault for LWS), `configure_without_vault` (YAML only, no vault load), `configure_params_examples`, `configure_params_lws`, `info`.
+
+**With vault** (`configure`) — **required** for LWS passwords supplied via Ansible Vault. Loads `vault_secrets.yml`, passes `vault_devices_lws_password` to the module, and requires `--vault-password-file` (e.g. when YAML sets `localWebServerPasswordForce: true` and the password is in vault, not in the config file):
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure -e config_file=sample_edge_services.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure -e config_file=sample_edge_services.yaml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+```
+
+**Without vault** (`configure_without_vault`) — use when LWS is **not** sourced from Ansible Vault. Skips vault `include_vars`; `vault_devices_lws_password` stays empty. Suitable for DNS, LLDP, and DHCP only. For LWS without vault, set `localWebServerPassword` literally in YAML or pass it as a module parameter; omit `localWebServerPasswordForce` or set it to `false` (force without YAML, vault, or module params **fails**):
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml
+```
+
+**Module-parameter examples** (`configure_params_lws` requires vault when the password comes from `vault_devices_lws_password`):
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_params_examples
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_params_lws -e edge_lws_device=edge-3-sdktest --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+```
+
+### Module task
+
+From YAML **with vault** (`configure` tag — vault loaded by playbook):
+
+```yaml
+- name: Configure edge services from YAML
+  graphiant.naas.graphiant_edge_services:
+    <<: *graphiant_client_params
+    operation: configure
+    edge_services_config_file: "{{ config_file }}"
+    vault_devices_lws_password: "{{ vault_devices_lws_password | default({}) }}"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure']
+
+- name: Display configure result (from YAML)
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['configure']
+```
+
+From YAML **without vault** (`configure_without_vault` tag — omit `vault_devices_lws_password` or pass `{}`; LWS only via `localWebServerPassword` in the config file):
+
+```yaml
+- name: Configure edge services from YAML (no vault)
+  graphiant.naas.graphiant_edge_services:
+    <<: *graphiant_client_params
+    operation: configure
+    edge_services_config_file: "{{ config_file }}"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure_without_vault']
+```
+
+For a **single device**, use module parameters (camelCase API names; snake_case aliases such as `dhcp_subnets` accepted):
+
+```yaml
+- name: Apply edge services from module parameters
+  graphiant.naas.graphiant_edge_services:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-2-sdktest"
+    dns:
+      mode: DNSModeStatic
+      static:
+        primaryIpv4: "8.8.8.8"
+        secondaryIpv4: "8.8.4.4"
+    lldp:
+      GigabitEthernet4/0/0: true
+      GigabitEthernet8/0/0: true
+    dhcpSubnets:
+      - segment: lan-1-test
+        interface: GigabitEthernet8/0/0
+        ipPrefix: "10.2.11.0/24"
+        state: present
+        subnet:
+          name: Edge-2-lan-1-test-DHCP
+          ipGateway: "10.2.11.1"
+          ipRangesV2:
+            ipRange:
+              - start: "10.2.11.100"
+                end: "10.2.11.200"
+          domainName: example.com
+          domainNameServer:
+            primary: "8.8.8.8"
+            secondary: "8.8.4.4"
+    detailed_logs: true
+    state: present
+```
+
+#### DHCP subnets (`dhcpSubnets`)
+
+Each entry targets one pool on a LAN segment. `segment` must match the device LAN segment name; `interface` and `ipPrefix` must match an existing LAN interface/subinterface and its prefix (from `interface_management.yml --tags lan`). The API key is `{interface}-{ipPrefix}`. Use `state: absent` to remove a pool.
+
+**YAML** (`configs/sample_edge_services.yaml`):
+
+```yaml
+edge_services:
+  - edge-1-sdktest:
+      dhcpSubnets:
+        - segment: lan-1-test
+          interface: GigabitEthernet7/0/0
+          ipPrefix: "10.1.11.0/24"
+          state: present
+          subnet:
+            name: Edge-1-lan-1-test-DHCP
+            ipGateway: "10.1.11.1"
+            ipRangesV2:
+              ipRange:
+                - start: "10.1.11.100"
+                  end: "10.1.11.200"
+            domainName: example.com
+            domainNameServer:
+              primary: "8.8.8.8"
+              secondary: "8.8.4.4"
+        - segment: lan-7-test
+          interface: GigabitEthernet7/0/0.18
+          ipPrefix: "10.1.17.0/24"
+          state: present
+          subnet:
+            name: Edge-1-lan-7-test-DHCP
+            ipGateway: "10.1.17.1"
+            ipRangesV2:
+              ipRange:
+                - start: "10.1.17.100"
+                  end: "10.1.17.200"
+  - edge-3-sdktest:
+      dhcpSubnets:
+        - segment: lan-7-test
+          interface: GigabitEthernet8/0/0.28
+          ipPrefix: "10.3.177.0/24"
+          state: absent   # removes GigabitEthernet8/0/0.28-10.3.177.0/24
+```
+
+**Module params** — add a pool:
+
+```yaml
+- name: Add DHCP pool on edge-2
+  graphiant.naas.graphiant_edge_services:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-2-sdktest"
+    dhcpSubnets:
+      - segment: lan-1-test
+        interface: GigabitEthernet8/0/0
+        ipPrefix: "10.2.11.0/24"
+        state: present
+        subnet:
+          name: Edge-2-lan-1-test-DHCP
+          ipGateway: "10.2.11.1"
+          ipRangesV2:
+            ipRange:
+              - start: "10.2.11.100"
+                end: "10.2.11.200"
+    state: present
+```
+
+**Module params** — remove a pool (`state: absent`; `subnet` not required):
+
+```yaml
+- name: Remove DHCP pool on edge-3
+  graphiant.naas.graphiant_edge_services:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-3-sdktest"
+    dhcpSubnets:
+      - segment: lan-7-test
+        interface: GigabitEthernet8/0/0.28
+        ipPrefix: "10.3.177.0/24"
+        state: absent
+    state: present
+```
+
+LWS via module params or vault (omit `localWebServerPasswordForce` for first-time set; use `true` only to rotate):
+
+```yaml
+- name: Set local web server password (single device)
+  graphiant.naas.graphiant_edge_services:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-3-sdktest"
+    localWebServerPasswordForce: true  # remove or set false after successful rotate
+    vault_devices_lws_password: "{{ vault_devices_lws_password | default({}) }}"
+    state: present
+  no_log: true
+```
+
+There is no `deconfigure` operation or `state: absent` for the module as a whole. To revert settings, use module parameters per device: set `dns.mode` to `DNSModeDynamic`, set listed `lldp` interfaces to `false`, and use `dhcpSubnets` with `state: absent` for each pool (see `tests/test.py` `test_deconfigure_edge_services`).
 
 ## Interface Management
 
@@ -201,7 +443,7 @@ The operation `deconfigure_wan_circuits_interfaces` is a two-step process:
 2. **Stage 2:** WAN interfaces are deconfigured (set to default LAN). When a WAN interface is deconfigured, the associated circuit is automatically removed.
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag static_routes
+ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag deconfigure
 ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_wan --check
 ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_wan
 ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_wan --check
@@ -1360,7 +1602,6 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml
     ntp_config_file: "sample_device_ntp.yaml"
     detailed_logs: true
   register: ntp_configure_result
-  no_log: true
 
 - name: Display result message (includes detailed logs)
   ansible.builtin.debug:
@@ -1381,7 +1622,6 @@ Deconfigure deletes only the objects listed in the YAML (per device) by setting 
     ntp_config_file: "sample_device_ntp.yaml"
     detailed_logs: true
   register: ntp_deconfigure_result
-  no_log: true
 
 - name: Display result message (includes detailed logs)
   ansible.builtin.debug:
@@ -1405,7 +1645,6 @@ See `configs/sample_static_route.yaml`.
     static_routes_config_file: "sample_static_route.yaml"
     detailed_logs: true
   register: static_routes_configure_result
-  no_log: true
 
 - name: Display result message (includes detailed logs)
   ansible.builtin.debug:
@@ -1426,7 +1665,6 @@ Deconfigure deletes only the prefixes listed in the YAML (per segment).
     static_routes_config_file: "sample_static_route.yaml"
     detailed_logs: true
   register: static_routes_deconfigure_result
-  no_log: true
 
 - name: Display result message (includes detailed logs)
   ansible.builtin.debug:

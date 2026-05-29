@@ -15,6 +15,8 @@ releases:
         - "New ``backbone_interface_template.yaml`` Jinja2 template covering Core ``interface_type`` flavors: ``loopback``, ``core_to_core_link`` (with VLAN sub-interfaces + ``ospf`` block rendered to ``coreNeighbor``), ``core_to_core_ipsec_tunnel``, ``p2mp_tunnel``, ``isp_circuit``, ``direct_peer``, ``disabled``"
         - "Deconfigure workflows are idempotent: parent and VLAN sub-interface existence checked via ``gsdk.get_device_info`` before issuing deletes; per-VRF ``syslogTargets`` existence checked against ``device.segments[*].syslog_targets[*].name``"
         - "``BackboneManager`` registered on ``GraphiantConfig.backbone``; payloads build the ``core`` branch (counterpart to ``graphiant_interfaces`` on ``edge``). ``ConfigTemplates.render_backbone_interface()`` and ``ConfigUtils.device_backbone_interface()`` render the new template"
+        - "New ``graphiant_edge_services`` module and ``edge_services_management.yml`` playbook for Edge/Gateway DHCP subnets, DNS mode, LLDP, and local web server password; sample ``sample_edge_services.yaml``"
+
   "26.4.0":
     release_date: "2026-05-01"
     changes:

@@ -228,9 +228,7 @@ details:
   returned: always
 """
 
-import json  # noqa: E402
-
-from typing import Any, Dict, List  # noqa: E402
+from typing import Any, Dict  # noqa: E402
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
 
@@ -239,22 +237,12 @@ from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils imp
     get_graphiant_connection,
     handle_graphiant_exception,
 )
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
+    ansible_diff_from_plan,
+)
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs,
 )
-
-
-def _ansible_diff_from_plan(diff_plan: List[Dict[str, Any]]) -> Dict[str, str]:
-    """Build Ansible ``diff`` dict (string before/after) from manager ``diff_plan``."""
-    before_chunks: List[str] = []
-    after_chunks: List[str] = []
-    for item in diff_plan:
-        dev = item.get("device", "")
-        branch = item.get("branch", "")
-        header = f"=== {dev} ({branch}) ===\n"
-        before_chunks.append(header + json.dumps(item.get("before") or {}, sort_keys=True, indent=2))
-        after_chunks.append(header + json.dumps(item.get("after") or {}, sort_keys=True, indent=2))
-    return {"before": "\n\n".join(before_chunks) + "\n", "after": "\n\n".join(after_chunks) + "\n"}
 
 
 @capture_library_logs
@@ -396,7 +384,7 @@ def main():
                 exit_payload["system_config_file"] = cfg_file
             diff_plan = details.get("diff_plan") or []
             if getattr(module, "_diff", False) and diff_plan:
-                exit_payload["diff"] = _ansible_diff_from_plan(diff_plan)
+                exit_payload["diff"] = ansible_diff_from_plan(diff_plan)
             module.exit_json(**exit_payload)
             return
 

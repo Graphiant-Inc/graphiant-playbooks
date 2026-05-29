@@ -6,6 +6,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (
+    ansible_diff_from_plan,
+)
 from ansible_collections.graphiant.naas.plugins.modules import graphiant_device_system
 
 
@@ -19,7 +22,7 @@ def test_ansible_diff_from_plan_builds_before_after_strings() -> None:
             "after": {"name": "edge-3-sdktest", "regionName": "us-east-2 (Atlanta)", "site": {"name": "NY"}},
         }
     ]
-    d = graphiant_device_system._ansible_diff_from_plan(diff_plan)
+    d = ansible_diff_from_plan(diff_plan)
     assert "before" in d and "after" in d
     assert "edge-3-sdktest" in d["before"] and "edge" in d["before"]
     assert "us-east-1" in d["before"] and "us-east-2" in d["after"]
