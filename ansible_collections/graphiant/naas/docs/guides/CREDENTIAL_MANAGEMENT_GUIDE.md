@@ -131,9 +131,30 @@ vault_site_to_site_vpn_keys:
   vpn-name-1: "your-preshared-key-1"
   vpn-name-2: "your-preshared-key-2"
 
-# Run with vault
-ansible-playbook playbook.yml --ask-vault-pass
+# BGP MD5 Passwords (only for VPNs that use routing.bgp)
+vault_bgp_md5_passwords:
+  vpn-name-bgp: "your-bgp-md5-password"
+
+# Edge local web server passwords (keys = portal device hostnames)
+vault_devices_lws_password:
+  edge-3-sdktest: "YourLwsPass1"
 ```
+
+```bash
+# Run with vault
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure --ask-vault-pass
+# Without vault (DNS/LLDP/DHCP only, or literal localWebServerPassword in YAML):
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml
+```
+
+#### Edge services local web server passwords
+
+Use `vault_devices_lws_password` in the same `vault_secrets.yml` as VPN keys. Playbook: `edge_services_management.yml`.
+
+- **`configure` tag** — loads vault and passes `vault_devices_lws_password` (required when YAML has `localWebServerPasswordForce: true` without a plaintext password).
+- **`configure_without_vault` tag** — skips vault load; use for DNS/LLDP/DHCP only, or set `localWebServerPassword` literally in YAML.
+
+Keys must match portal hostnames in `sample_edge_services.yaml`. Without `localWebServerPasswordForce`, the password applies only on first set (skipped if already configured). Clear force after apply so later runs stay idempotent.
 
 ### Recommendations
 

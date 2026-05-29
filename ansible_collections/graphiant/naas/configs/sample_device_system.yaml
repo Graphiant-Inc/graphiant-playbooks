@@ -3,6 +3,9 @@
 # PUT /v1/devices/{device_id}/config — see V1DevicesDeviceIdConfigPutRequest
 #
 # device_system: list of single-key dicts (portal device name → settings)
+# IMPORTANT: Each list entry key must be the device's current hostname in the portal
+# (used for get_device_id). It is not the desired "name" after a rename — if you change
+# hostname via the API or portal, update this key to match or lookups will fail.
 # Per device:
 #   device_type: optional edge | core — if omitted, inferred from GET /v1/devices/{id} role
 #                (core → core branch, cpe → edge branch). Must match inference when set.

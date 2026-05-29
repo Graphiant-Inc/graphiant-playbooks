@@ -46,6 +46,7 @@ ansible-doc graphiant.naas.graphiant_data_exchange
 ansible-doc graphiant.naas.graphiant_static_routes
 ansible-doc graphiant.naas.graphiant_ntp
 ansible-doc graphiant.naas.graphiant_backbone
+ansible-doc graphiant.naas.graphiant_edge_services
 ```
 
 ## Building Documentation Site

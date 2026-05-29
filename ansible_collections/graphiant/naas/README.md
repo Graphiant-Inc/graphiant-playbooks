@@ -28,6 +28,7 @@ This collection provides Ansible modules to automate:
 - Site management and object attachments
 - Data Exchange workflows
 - Raw device configuration deployment (Edge, Gateway, and Core devices)
+- Edge services (DHCP subnets, DNS mode, LLDP, local web server password) on Edge/Gateway devices
 - NTP Service Configuration
 
 ### Key Features
@@ -58,6 +59,7 @@ This collection provides Ansible modules to automate:
 | Name | Description |
 |------|-------------|
 | `graphiant_device_system` | Configure device (Edge, Gateway or Core) hostname, region, and site |
+| `graphiant_edge_services` | Configure Edge/Gateway services (DHCP, DNS, LLDP, local web server password) |
 | `graphiant_interfaces` | Manage interfaces and circuits (LAN/WAN) on Edge devices |
 | `graphiant_backbone` | Manage Graphiant Core (backbone) device interfaces, ISP circuits, direct-peer circuits, site info, and per-VRF syslog targets |
 | `graphiant_static_routes` | Manage static routes (per-segment configure/deconfigure/validate) |
@@ -169,7 +171,7 @@ black ansible_collections/graphiant/naas/plugins/ -l 120 --check --diff
 black ansible_collections/graphiant/naas/plugins/ -l 120
 
 # Python linting with flake8 (runs in CI)
-flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
+flake8 ansible_collections/graphiant/naas/ --max-line-length=120
 
 # Python linting with pylint (runs in CI)
 export PYTHONPATH=$PYTHONPATH:$(pwd)/ansible_collections/graphiant/naas/plugins/
@@ -200,6 +202,8 @@ antsibull-changelog lint-changelog-yaml ansible_collections/graphiant/naas/chang
 
 ## Using This Collection
 
+For detailed usage examples and per-module playbook walkthroughs, see the **[Examples Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md)**.
+
 ### Example Playbook
 
 ```yaml
@@ -229,6 +233,22 @@ antsibull-changelog lint-changelog-yaml ansible_collections/graphiant/naas/chang
         msg: "{{ configure_result.msg }}"
       when: configure_result is defined and configure_result.msg is defined
       tags: ['interfaces', 'lan']
+
+    - name: Configure edge services (DHCP, DNS, LLDP)
+      graphiant.naas.graphiant_edge_services:
+        <<: *graphiant_client_params
+        edge_services_config_file: "sample_edge_services.yaml"
+        operation: configure
+        detailed_logs: true
+        state: present
+      register: edge_services_result
+      tags: ['edge_services']
+
+    - name: Display edge services result
+      ansible.builtin.debug:
+        msg: "{{ edge_services_result.msg }}"
+      when: edge_services_result is defined and edge_services_result.msg is defined
+      tags: ['edge_services']
 
     - name: Configure global prefix sets
       graphiant.naas.graphiant_global_config:
@@ -307,6 +327,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `device_config_management.yml` | Push raw device configurations (Edge/Gateway/Core) |
 | `ntp_management.yml` | NTP configuration (global and device) |
 | `device_system_management.yml` | Device name, region, and site configuration |
+| `edge_services_management.yml` | Edge DHCP, DNS, LLDP, local web server password (Vault-supported) |
 | `test_collection.yml` | Collection validation and testing |
 
 #### Data Exchange Workflows
@@ -328,8 +349,6 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 - `graphiant_data_exchange` - Manage services, customers, matches, and invitations
 - `graphiant_data_exchange_info` - Query services summary, customers summary, and service health
 
-See [Examples Guide](https://github.com/Graphiant-Inc/graphiant-playbooks/blob/main/ansible_collections/graphiant/naas/docs/guides/EXAMPLES.md) for detailed usage examples.
-
 ### Module Documentation
 
 View module documentation with `ansible-doc`:
@@ -339,6 +358,7 @@ ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_static_routes
 ansible-doc graphiant.naas.graphiant_ntp
 ansible-doc graphiant.naas.graphiant_device_system
+ansible-doc graphiant.naas.graphiant_edge_services
 ansible-doc graphiant.naas.graphiant_vrrp
 ansible-doc graphiant.naas.graphiant_lag_interfaces
 ansible-doc graphiant.naas.graphiant_bgp
@@ -401,7 +421,7 @@ All modules support `state` parameter:
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
 
-`graphiant_device_system` accepts only `present` / configure; it does not support `absent`.
+`graphiant_device_system` and `graphiant_edge_services` accept only `present` / configure; they do not support `absent`.
 
 ### Check Mode
 
@@ -409,12 +429,12 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
 | **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone` | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
 
-**Full-mode nuances:** `graphiant_device_system` reads device state in check mode and sets `changed` from whether an apply would be needed (unless the task fails the no-site rule). `graphiant_data_exchange_info` is always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
+**Full-mode nuances:** `graphiant_device_system` and `graphiant_edge_services` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` is always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** Only `graphiant_device_system` documents `diff_mode` in this collection; use `--check --diff` or `--diff` on that module to see `before`/`after` and `details.diff_plan` when an edge/core branch would change.
+**Diff mode (`--diff`):** `graphiant_device_system` and `graphiant_edge_services` document `diff_mode`; use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan` when an edge/core branch would change.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -422,6 +442,8 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --check
 ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --check
 ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
+# LWS via vault: use --tags configure and --vault-password-file (see edge_services_management.yml)
 ```
 
 **Example: single task in check mode**

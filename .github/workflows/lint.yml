@@ -89,7 +89,7 @@ jobs:
         run: black ansible_collections/graphiant/naas/plugins/ -l 120 --check
 
       - name: Flake8 (max line length 120)
-        run: flake8 ansible_collections/graphiant/naas/plugins/ --max-line-length=120
+        run: flake8 ansible_collections/graphiant/naas/ --max-line-length=120
 
       - name: Pylint (error checking only)
         run: |

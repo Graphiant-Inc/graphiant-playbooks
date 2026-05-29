@@ -17,7 +17,7 @@ import subprocess
 import unittest
 import yaml
 from libs.graphiant_config import GraphiantConfig
-from libs.exceptions import GraphiantPlaybookError
+from libs.exceptions import ConfigurationError, GraphiantPlaybookError
 from libs.logger import setup_logger
 
 LOG = setup_logger()
@@ -195,7 +195,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             prefix_sets = details.get('prefix_sets', {})
-            assert prefix_sets.get('failed_objects'), "When failed is True, details.prefix_sets.failed_objects must be non-empty"
+            assert prefix_sets.get('failed_objects'), (
+                "When failed is True, details.prefix_sets.failed_objects must be non-empty"
+            )
 
     def test_configure_global_config_bgp_filters(self):
         """
@@ -223,7 +225,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             bgp_filters = details.get('bgp_filters', {})
-            assert bgp_filters.get('failed_objects'), "When failed is True, details.bgp_filters.failed_objects must be non-empty"
+            assert bgp_filters.get('failed_objects'), (
+                "When failed is True, details.bgp_filters.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global BGP filters failed: {result}"
 
     def test_configure_global_config_graphiant_filters(self):
@@ -285,7 +289,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             snmp_services = details.get('snmps', {})
-            assert snmp_services.get('failed_objects'), "When failed is True, details.snmp_services.failed_objects must be non-empty"
+            assert snmp_services.get('failed_objects'), (
+                "When failed is True, details.snmp_services.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global SNMP services failed: {result}"
 
     def test_failure_deconfigure_snmp_service(self):
@@ -301,7 +307,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             snmp_services = details.get('snmps', {})
-            assert snmp_services.get('failed_objects'), "When failed is True, details.snmp_services.failed_objects must be non-empty"
+            assert snmp_services.get('failed_objects'), (
+                "When failed is True, details.snmp_services.failed_objects must be non-empty"
+            )
 
     def test_configure_syslog_service(self):
         """
@@ -329,7 +337,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             syslog_services = details.get('syslog_services', {})
-            assert syslog_services.get('failed_objects'), "When failed is True, details.syslog_services.failed_objects must be non-empty"
+            assert syslog_services.get('failed_objects'), (
+                "When failed is True, details.syslog_services.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global syslog services failed: {result}"
 
     def test_configure_ipfix_service(self):
@@ -358,7 +368,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             ipfix_services = details.get('ipfix_services', {})
-            assert ipfix_services.get('failed_objects'), "When failed is True, details.ipfix_services.failed_objects must be non-empty"
+            assert ipfix_services.get('failed_objects'), (
+                "When failed is True, details.ipfix_services.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global IPFIX services failed: {result}"
 
     def test_configure_vpn_profiles(self):
@@ -387,7 +399,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             vpn_profiles = details.get('vpn_profiles', {})
-            assert vpn_profiles.get('failed_objects'), "When failed is True, details.vpn_profiles.failed_objects must be non-empty"
+            assert vpn_profiles.get('failed_objects'), (
+                "When failed is True, details.vpn_profiles.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global VPN profiles failed: {result}"
 
     def test_failure_deconfigure_vpn_profiles(self):
@@ -403,7 +417,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             vpn_profiles = details.get('vpn_profiles', {})
-            assert vpn_profiles.get('failed_objects'), "When failed is True, details.vpn_profiles.failed_objects must be non-empty"
+            assert vpn_profiles.get('failed_objects'), (
+                "When failed is True, details.vpn_profiles.failed_objects must be non-empty"
+            )
 
     def test_configure_global_lan_segments(self):
         """
@@ -431,7 +447,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             lan = details.get('lan_segments', {})
-            assert lan.get('failed_objects'), "When failed is True, details.lan_segments.failed_objects must be non-empty"
+            assert lan.get('failed_objects'), (
+                "When failed is True, details.lan_segments.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global LAN segments failed: {result}"
 
     def test_get_lan_segments(self):
@@ -455,7 +473,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             lan_segments = details.get('lan_segments', {})
-            assert lan_segments.get('failed_objects'), "When failed is True, details.lan_segments.failed_objects must be non-empty"
+            assert lan_segments.get('failed_objects'), (
+                "When failed is True, details.lan_segments.failed_objects must be non-empty"
+            )
 
     def test_configure_global_site_lists(self):
         """
@@ -482,7 +502,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         if result['failed']:
             details = result.get('details', {})
             site_lists = details.get('site_lists', {})
-            assert site_lists.get('failed_objects'), "When failed is True, details.site_lists.failed_objects must be non-empty"
+            assert site_lists.get('failed_objects'), (
+                "When failed is True, details.site_lists.failed_objects must be non-empty"
+            )
         assert result['failed'] is False, f"Deconfigure Global Site Lists failed: {result}"
 
     def test_get_global_site_lists(self):
@@ -918,7 +940,8 @@ class TestGraphiantPlaybooks(unittest.TestCase):
     def test_create_site_to_site_vpn(self):
         """
         Create Site-to-Site VPN. Copies vault_secrets.yml.example to vault_secrets.yml,
-        encrypts with vault-password-file.sh (uses ANSIBLE_VAULT_PASSPHRASE or 'test-vault-pass' if unset), then creates VPN.
+        encrypts with vault-password-file.sh (uses ANSIBLE_VAULT_PASSPHRASE or 'test-vault-pass'
+        if unset), then creates VPN.
         """
         graphiant_config = graphiant_config_from_read_config()
         config_path = graphiant_config.config_utils.config_path
@@ -1218,6 +1241,172 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure backbone syslog targets result (idempotency check): %s", result)
         assert result['changed'] is False, "Deconfigure backbone syslog targets idempotency failed"
 
+    @staticmethod
+    def _load_edge_services_from_yaml(graphiant_config, config_yaml_file):
+        """Return {device_name: config_dict} from edge_services YAML list (sample_edge_services.yaml)."""
+        cfg = graphiant_config.config_utils.render_config_file(config_yaml_file) or {}
+        raw = cfg.get("edge_services") or []
+        by_name = {}
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            for device_name, device_cfg in entry.items():
+                by_name[device_name] = device_cfg if isinstance(device_cfg, dict) else {}
+        return by_name
+
+    @staticmethod
+    def _edge_services_deconfigure_module_params(device_name, cfg):
+        """Build module_params to revert edge services (no deconfigure op on graphiant_edge_services)."""
+        lldp_cfg = cfg.get("lldp") if isinstance(cfg.get("lldp"), dict) else {}
+        dhcp_cfg = cfg.get("dhcpSubnets") if isinstance(cfg.get("dhcpSubnets"), list) else []
+
+        dhcp_absent = []
+        for entry in dhcp_cfg:
+            if not isinstance(entry, dict):
+                continue
+            segment = entry.get("segment")
+            interface = entry.get("interface")
+            ip_prefix = entry.get("ipPrefix")
+            if not segment or not interface or not ip_prefix:
+                continue
+            dhcp_absent.append(
+                {
+                    "segment": segment,
+                    "interface": interface,
+                    "ipPrefix": ip_prefix,
+                    "state": "absent",
+                }
+            )
+
+        return {
+            "device": device_name,
+            "dns": {"mode": "DNSModeDynamic"},
+            "lldp": {if_name: False for if_name in lldp_cfg},
+            "dhcpSubnets": dhcp_absent,
+        }
+
+    def test_configure_edge_services(self):
+        """
+        Configure edge services using the YAML file as-is.
+        edge-3 localWebServerPasswordForce requires vault_devices_lws_password for that device.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        vault_lws = {"edge-3-sdktest": "ReplaceMe1"}
+        result = graphiant_config.edge_services.configure(
+            "sample_edge_services.yaml",
+            vault_devices_lws_password=vault_lws,
+        )
+        LOG.info("Configure edge services result: %s", result)
+        # edge-3 keeps localWebServerPasswordForce in YAML; clear it on repeat runs so LWS is
+        # not re-pushed (portal stores a hash, so force=true is never idempotent by itself).
+        result2 = graphiant_config.edge_services.configure(
+            "sample_edge_services.yaml",
+            module_params={
+                "device": "edge-3-sdktest",
+                "localWebServerPasswordForce": False,
+            },
+            vault_devices_lws_password=vault_lws,
+        )
+        LOG.info("Configure edge services result (idempotency check): %s", result2)
+        assert result2.get("changed") is False, "Configure edge services idempotency failed"
+
+    def test_configure_edge_services_lws_force_requires_password(self):
+        """localWebServerPasswordForce without password or vault entry must fail."""
+        graphiant_config = graphiant_config_from_read_config()
+        with self.assertRaises(ConfigurationError) as ctx:
+            graphiant_config.edge_services.configure("sample_edge_services.yaml")
+        self.assertIn("localWebServerPasswordForce is true", str(ctx.exception))
+        self.assertIn("edge-3-sdktest", str(ctx.exception))
+
+    def test_deconfigure_edge_services(self):
+        """
+        Revert edge services via module_params (module has no deconfigure operation):
+        dns.mode -> DNSModeDynamic, lldp -> false, dhcpSubnets -> state absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        by_name = self._load_edge_services_from_yaml(graphiant_config, "sample_edge_services.yaml")
+        self.assertTrue(by_name, "sample_edge_services.yaml contains no edge_services entries")
+
+        last_result = None
+        for device_name, cfg in by_name.items():
+            module_params = self._edge_services_deconfigure_module_params(device_name, cfg)
+            result = graphiant_config.edge_services.configure(module_params=module_params)
+            LOG.info("Deconfigure edge services via module_params for %s: %s", device_name, result)
+            last_result = result
+
+        self.assertIsNotNone(last_result, "No edge services entries were processed")
+
+        # Idempotency: rerun the same module_params deconfigure intent for each device.
+        for device_name, cfg in by_name.items():
+            module_params = self._edge_services_deconfigure_module_params(device_name, cfg)
+            result2 = graphiant_config.edge_services.configure(module_params=module_params)
+            LOG.info(
+                "Deconfigure edge services via module_params (idempotency) for %s: %s",
+                device_name,
+                result2,
+            )
+            assert result2.get("changed") is False, (
+                f"Deconfigure edge services idempotency failed for {device_name}"
+            )
+
+    def test_configure_edge_services_lws_vault(self):
+        """
+        Configure edge-3 LWS password via vault_devices_lws_password (Ansible Vault pattern).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        config_path = graphiant_config.config_utils.config_path
+
+        if not os.environ.get("ANSIBLE_VAULT_PASSPHRASE"):
+            os.environ["ANSIBLE_VAULT_PASSPHRASE"] = "test-vault-pass"
+        vault_secrets_path = os.path.join(config_path, "vault_secrets.yml")
+        example_path = os.path.join(config_path, "vault_secrets.yml.example")
+        if not os.path.isfile(example_path):
+            raise FileNotFoundError(f"Vault example not found: {example_path}")
+        shutil.copy(example_path, vault_secrets_path)
+        vault_pass_file = os.path.join(config_path, "vault-password-file.sh")
+        if not os.path.isfile(vault_pass_file):
+            raise FileNotFoundError(f"Vault password script not found: {vault_pass_file}")
+        env = os.environ.copy()
+        env["ANSIBLE_VAULT_PASSWORD_FILE"] = os.path.abspath(vault_pass_file)
+        enc = subprocess.run(
+            ["ansible-vault", "encrypt", vault_secrets_path],
+            capture_output=True, text=True, env=env, cwd=config_path, check=False,
+        )
+        if enc.returncode != 0:
+            err = (enc.stderr and enc.stderr.strip()) or "unknown"
+            raise RuntimeError(f"ansible-vault encrypt failed: {err}")
+
+        view = subprocess.run(
+            ["ansible-vault", "view", vault_secrets_path],
+            capture_output=True, text=True, env=env, cwd=config_path, check=False,
+        )
+        if view.returncode != 0:
+            err = (view.stderr and view.stderr.strip()) or "unknown"
+            raise RuntimeError(f"ansible-vault view failed: {err}")
+        data = yaml.safe_load(view.stdout) or {}
+        vault_lws = data.get("vault_devices_lws_password") or {}
+        if not isinstance(vault_lws, dict):
+            vault_lws = {}
+
+        result = graphiant_config.edge_services.configure(
+            "sample_edge_services.yaml",
+            vault_devices_lws_password=vault_lws,
+        )
+        LOG.info("Configure edge services LWS vault result: %s", result)
+        assert "edge-3-sdktest" in result.get("configured_devices", []), (
+            "Expected edge-3-sdktest LWS update from vault"
+        )
+        result2 = graphiant_config.edge_services.configure(
+            "sample_edge_services.yaml",
+            module_params={
+                "device": "edge-3-sdktest",
+                "localWebServerPasswordForce": False,
+            },
+            vault_devices_lws_password=vault_lws,
+        )
+        LOG.info("Configure edge services LWS vault result (idempotency): %s", result2)
+        assert result2.get("changed") is False, "Configure edge services LWS vault idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -1295,6 +1484,9 @@ if __name__ == '__main__':
     # Device system settings (name, region, site) — configure only;
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_system'))
 
+    # To deconfigure all interfaces
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
+
     # Device Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lan_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lan_interfaces'))
@@ -1319,6 +1511,12 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_delete_lag_subinterfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lag_interfaces'))
 
+    # Edge Services (graphiant_edge_services) — after LAN/WAN interfaces; prereq: interface_management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services_lws_force_requires_password'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services_lws_vault'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_edge_services'))
+
     # Global Configuration Management and BGP Peering
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_bgp_filters'))
@@ -1330,7 +1528,7 @@ if __name__ == '__main__':
 
     # Site-to-Site VPN Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
-    suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))  # Pre-req: Configure interfaces and circuits and VPN Profiles
+    suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))  # Pre-req: interfaces, circuits, VPN profiles
     #    Failure is expected as VPN profiles are in use by Site-to-Site VPNs.
     suite.addTest(TestGraphiantPlaybooks('test_failure_deconfigure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
@@ -1350,8 +1548,9 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_ntp'))
 
     # Data Exchange Tests
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))  # Pre-req: Configure prefix lists.
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_graphiant_filters'))  # Pre-req: Configure Graphiant filters.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))  # Pre-req: prefix lists
+    # Pre-req: Graphiant filters
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_graphiant_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_customers'))
@@ -1370,7 +1569,7 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))
-    suite.addTest(TestGraphiantPlaybooks('test_configure_static_routes'))  # Pre-req: Configure LAN segments, interfaces, circuits, and site-to-site VPNs.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_static_routes'))  # Pre-req: LAN segments, interfaces, VPNs
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_static_routes'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))

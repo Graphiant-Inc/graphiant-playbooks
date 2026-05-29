@@ -36,7 +36,8 @@ intersphinx_mapping = {
     'python3': ('https://docs.python.org/3/', (None, '../python3.inv')),
     'jinja2': ('http://jinja.palletsprojects.com/', (None, '../jinja2.inv')),
     'ansible_devel': ('https://docs.ansible.com/ansible/devel/', (None, '../ansible_devel.inv')),
-    # If you want references to resolve to a released Ansible version (say, `5`), uncomment and replace X by this version:
+    # If you want references to resolve to a released Ansible version (say, `5`),
+    # uncomment and replace X by this version:
     # 'ansibleX': ('https://docs.ansible.com/ansible/X/', (None, '../ansibleX.inv')),
 }
 
