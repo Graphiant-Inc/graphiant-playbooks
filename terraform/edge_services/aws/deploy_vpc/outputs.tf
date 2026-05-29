@@ -1,31 +1,44 @@
-output "action_performed" {
-  description = "The action that was performed (create or delete)"
-  value       = var.action
-}
-
-output "stack_name" {
-  description = "CloudFormation stack name"
-  value       = var.stack_name
-}
-
 output "region" {
-  description = "AWS region"
+  description = "AWS region used for the deployment"
   value       = var.aws_region
 }
 
-# Outputs for graphiant_stack create action
-output "graphiant_stack_id" {
-  description = "graphiant_stack stack ID (only available when action is 'create')"
-  value       = var.action == "create" ? try(aws_cloudformation_stack.graphiant_stack[0].id, null) : null
+output "vpc_id" {
+  description = "VPC ID"
+  value       = aws_vpc.this.id
 }
 
-output "graphiant_stack_outputs" {
-  description = "graphiant_stack stack outputs (only available when action is 'create')"
-  value       = var.action == "create" ? try(aws_cloudformation_stack.graphiant_stack[0].outputs, null) : null
+output "vpc_name" {
+  description = "VPC Name tag"
+  value       = var.vpc_name
 }
 
-# Outputs for graphiant_stack delete action
-output "graphiant_stack_deleted" {
-  description = "Confirmation that stack deletion was prepared (only available when action is 'delete')"
-  value       = var.action == "delete" ? "Stack ${var.stack_name} deletion prepared" : null
+output "internet_gateway_id" {
+  description = "Internet gateway ID (only when create_internet_gateway = true)"
+  value       = var.create_internet_gateway ? try(aws_internet_gateway.this[0].id, null) : null
+}
+
+output "subnet_mgmt_id" {
+  description = "Subnet ID for the mgmt subnet"
+  value       = aws_subnet.mgmt.id
+}
+
+output "subnet_wan_id" {
+  description = "Subnet ID for the WAN subnet"
+  value       = aws_subnet.wan.id
+}
+
+output "subnet_lan_id" {
+  description = "Subnet ID for the LAN subnet"
+  value       = aws_subnet.lan.id
+}
+
+output "route_table_wan_id" {
+  description = "Route table ID associated with mgmt + wan subnets (default route to IGW)"
+  value       = aws_route_table.wan.id
+}
+
+output "route_table_lan_id" {
+  description = "Route table ID associated with the LAN subnet (default-via-vEdge added by deploy_vedge)"
+  value       = aws_route_table.lan.id
 }
