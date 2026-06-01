@@ -1,4 +1,4 @@
-# Graphiant Playbooks Terraform Infrastructure as Code
+# Graphiant NaaS Terraform Playbooks
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 [![Terraform](https://img.shields.io/badge/terraform-1.3+-blue.svg)](https://www.terraform.io/)
