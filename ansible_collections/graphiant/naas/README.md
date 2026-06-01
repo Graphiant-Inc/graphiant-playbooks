@@ -73,6 +73,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_data_exchange_info` | Query Data Exchange info (services summary, customers summary, service health) |
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
 | `graphiant_ntp` | Manage NTP objects |
+| `graphiant_traffic_policy` | Manage device traffic policy rulesets and LAN segment attachments (configure workflow: rulesets + attach; deconfigure workflow: detach + delete) |
 
 ## Installation
 
@@ -357,6 +358,7 @@ View module documentation with `ansible-doc`:
 ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_static_routes
 ansible-doc graphiant.naas.graphiant_ntp
+ansible-doc graphiant.naas.graphiant_traffic_policy
 ansible-doc graphiant.naas.graphiant_device_system
 ansible-doc graphiant.naas.graphiant_edge_services
 ansible-doc graphiant.naas.graphiant_vrrp
@@ -568,6 +570,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_interface_config.yaml` - Interface configurations
 - `sample_static_route.yaml` - Static routes (per-segment) configuration
 - `sample_device_ntp.yaml` - NTP objects under `edge.ntpGlobalObject`
+- `sample_device_traffic_policies.yaml` - Traffic rulesets under `edge.trafficPolicy` and LAN segment ruleset attachments under `edge.segments` (use configure + attach_to_lan_segments, or the `traffic_policies_management.yml` playbook `--tags configure`)
 - `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
 - `sample_bgp_peering.yaml` - BGP peering configurations
 - `sample_global_*.yaml` - Global configuration objects

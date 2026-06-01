@@ -1091,6 +1091,63 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure device-level NTP result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Deconfigure device-level NTP idempotency failed"
 
+    def test_configure_device_traffic_policy(self):
+        """
+        Configure device-level traffic policy rulesets (edge.trafficPolicy.trafficRulesets).
+
+        Second run should be idempotent (changed=False) if desired state already matches.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.traffic_policy.configure("sample_device_traffic_policies.yaml")
+        LOG.info("Configure device-level traffic policy result: %s", result)
+        result2 = graphiant_config.traffic_policy.configure("sample_device_traffic_policies.yaml")
+        LOG.info("Configure device-level traffic policy result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure device-level traffic policy idempotency failed"
+
+    def test_deconfigure_device_traffic_policy(self):
+        """
+        Deconfigure (delete) device-level traffic policy rulesets listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when rulesets are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.traffic_policy.deconfigure("sample_device_traffic_policies.yaml")
+        LOG.info("Deconfigure device-level traffic policy result: %s", result)
+        result2 = graphiant_config.traffic_policy.deconfigure("sample_device_traffic_policies.yaml")
+        LOG.info("Deconfigure device-level traffic policy result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure device-level traffic policy idempotency failed"
+
+    def test_attach_traffic_policy_lan_segments(self):
+        """
+        Attach traffic ruleset reference on LAN segments (edge.segments.*.trafficRuleset).
+
+        Uses ``sample_device_traffic_policies.yaml``. Second run is idempotent when
+        the portal already shows the same ruleset name on the segment.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.traffic_policy.attach_to_lan_segments("sample_device_traffic_policies.yaml")
+        LOG.info("Attach traffic policy to LAN segments result: %s", result)
+        result2 = graphiant_config.traffic_policy.attach_to_lan_segments("sample_device_traffic_policies.yaml")
+        LOG.info("Attach traffic policy to LAN segments (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Attach LAN segment traffic policy idempotency failed"
+
+    def test_detach_traffic_policy_lan_segments(self):
+        """
+        Clear traffic ruleset reference on LAN segments listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when references are already cleared.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.traffic_policy.detach_from_lan_segments("sample_device_traffic_policies.yaml")
+        LOG.info("Detach traffic policy from LAN segments result: %s", result)
+        result2 = graphiant_config.traffic_policy.detach_from_lan_segments("sample_device_traffic_policies.yaml")
+        LOG.info("Detach traffic policy from LAN segments (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Detach LAN segment traffic policy idempotency failed"
+
     def test_configure_device_system(self):
         """
         Configure device system settings (edge/core name, regionName, site) from YAML.
@@ -1579,6 +1636,18 @@ if __name__ == '__main__':
     # Device-level NTP Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_ntp'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_ntp'))
+
+    # Device-level traffic policy tests (attach/detach segments before ruleset deconfigure)
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
+    suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_traffic_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_attach_traffic_policy_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_detach_traffic_policy_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_traffic_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
 
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
