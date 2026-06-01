@@ -6,7 +6,7 @@
 [![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.graphiant.com/docs/graphiant-playbooks)
 
-Automated network infrastructure management for [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com) offerings.
+Automated network infrastructure and configuration management for [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com).
 
 Refer [Graphiant Docs](https://docs.graphiant.com) to get started with [Graphiant Network-as-a-Service (NaaS)](https://www.graphiant.com) offerings.
 
