@@ -19,7 +19,7 @@ pushed only when none is configured; with force, requires password from YAML, va
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from .base_manager import BaseManager
 from .device_config_common import (
@@ -406,6 +406,11 @@ class EdgeServicesManager(BaseManager):
                 f"Device '{device_name}' has role 'core'; edge services apply to Edge/Gateway (CPE) devices only."
             )
 
+    @staticmethod
+    def _log_no_edge_changes(device_name: str, device_id: int) -> None:
+        """Log idempotent skip without referencing device config dicts (avoids secret taint in log sinks)."""
+        LOG.info("%s No changes needed for %s (ID: %s), skipping", _LOG_PREFIX, device_name, device_id)
+
     def _compute_after_snapshot(self, cfg: Dict[str, Any], before: Dict[str, Any]) -> Dict[str, Any]:
         after: Dict[str, Any] = {
             "localWebServerPasswordConfigured": before.get("localWebServerPasswordConfigured", False),
@@ -565,21 +570,6 @@ class EdgeServicesManager(BaseManager):
 
         return edge
 
-    def _iter_devices(
-        self, by_name: Dict[str, Dict[str, Any]]
-    ) -> Iterator[Tuple[int, str, Dict[str, Any], Dict[str, Any], Dict[str, Any], Dict[str, Any]]]:
-        enterprise = self.gsdk.enterprise_info["company_name"]
-        for device_name, cfg in by_name.items():
-            device_id, d = fetch_device_by_name(self.gsdk, device_name, enterprise)
-            self._assert_edge_device(device_name, d)
-
-            before = self._edge_services_snapshot(d)
-            if cfg.get("lldp"):
-                self._validate_lldp_entries(device_name, cfg["lldp"], d)
-            edge_payload = self._build_edge_payload(device_name, cfg, d)
-            after = self._compute_after_snapshot(cfg, before)
-            yield device_id, device_name, cfg, before, after, edge_payload
-
     def _inject_vault_lws_passwords(
         self, by_name: Dict[str, Dict[str, Any]], vault_lws: Optional[Dict[str, Any]]
     ) -> None:
@@ -625,10 +615,19 @@ class EdgeServicesManager(BaseManager):
         to_push: Dict[int, Dict[str, Any]] = {}
         configured: List[str] = []
         diff_plan: List[Dict[str, Any]] = []
+        enterprise = self.gsdk.enterprise_info["company_name"]
 
-        for device_id, device_name, _cfg, before, after, edge_payload in self._iter_devices(by_name):
+        for device_name, cfg in by_name.items():
+            device_id, d = fetch_device_by_name(self.gsdk, device_name, enterprise)
+            self._assert_edge_device(device_name, d)
+
+            before = self._edge_services_snapshot(d)
+            if cfg.get("lldp"):
+                self._validate_lldp_entries(device_name, cfg["lldp"], d)
+            edge_payload = self._build_edge_payload(device_name, cfg, d)
+            after = self._compute_after_snapshot(cfg, before)
             if not edge_payload:
-                LOG.info("%s No changes needed for %s (ID: %s), skipping", _LOG_PREFIX, device_name, device_id)
+                self._log_no_edge_changes(device_name, device_id)
                 result["skipped_devices"].append(device_name)
                 continue
 
