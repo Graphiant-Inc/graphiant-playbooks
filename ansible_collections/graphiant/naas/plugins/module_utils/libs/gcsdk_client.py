@@ -75,6 +75,7 @@ PydanticValidationError = _pydantic_validation_error_type()
 from .logger import setup_logger  # noqa: E402
 from .poller import poller  # noqa: E402
 from .exceptions import APIError  # noqa: E402
+from .device_config_common import format_config_payload_for_log  # noqa: E402
 
 LOG = setup_logger()
 
@@ -467,7 +468,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "[check_mode] put_device_config would push config for device_id=%s: %s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             return None
         try:
@@ -476,7 +477,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "put_device_config : config to be pushed for %s: \n%s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             response = self.api.v1_devices_device_id_config_put(
                 authorization=self.bearer_token,
@@ -539,7 +540,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "[check_mode] put_device_config_raw would push config for device_id=%s: %s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             return None
         try:
@@ -548,7 +549,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "put_device_config_raw : config to be pushed for %s: \n%s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             response = self.api.v1_devices_device_id_config_put(
                 authorization=self.bearer_token,
@@ -609,7 +610,7 @@ class GraphiantPortalClient:
         LOG.info(
             "show_validated_payload : validated config for %s: \n%s",
             device_id,
-            json.dumps(validated_payload_dict, indent=2),
+            format_config_payload_for_log(validated_payload_dict),
         )
 
         LOG.info("show_validated_payload: Successfully showed validated payload for %s", device_id)

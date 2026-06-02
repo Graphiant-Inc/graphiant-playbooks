@@ -16,6 +16,38 @@ from .logger import setup_logger
 
 LOG = setup_logger()
 
+# API payload keys redacted in library log output (non-Ansible paths).
+# Add names here for new secret fields; see CREDENTIAL_MANAGEMENT_GUIDE.md.
+_SENSITIVE_LOG_KEYS = frozenset(
+    {
+        "localWebServerPassword",
+        "presharedKey",
+        "md5Password",
+    }
+)
+
+
+def redact_sensitive_for_log(value: Any) -> Any:
+    """
+    Return a deep copy of ``value`` with known secret field names replaced for logging.
+
+    Redaction is by JSON key name (Graphiant API / config fields), not by vault values.
+    Does not modify the original object; safe to use on ``to_dict()`` output before ``LOG.info``.
+    """
+    if isinstance(value, dict):
+        return {
+            key: ("********" if key in _SENSITIVE_LOG_KEYS else redact_sensitive_for_log(item))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_sensitive_for_log(item) for item in value]
+    return value
+
+
+def format_config_payload_for_log(payload: Any) -> str:
+    """Format a config payload dict for ``LOG.info`` without logging secret values."""
+    return json.dumps(redact_sensitive_for_log(payload), indent=2)
+
 
 def coerce_str(val: Any) -> str:
     """Normalize optional scalars to a stripped string (empty when None)."""

@@ -13,8 +13,10 @@ from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_
     coerce_str,
     device_not_found_message,
     fetch_device_by_name,
+    format_config_payload_for_log,
     load_device_list_yaml_config,
     normalized_device_type,
+    redact_sensitive_for_log,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.libs.exceptions import (
     ConfigurationError,
@@ -85,3 +87,24 @@ def test_ansible_diff_from_plan() -> None:
     d = ansible_diff_from_plan(diff_plan)
     assert "edge-1" in d["before"] and "edge-1" in d["after"]
     assert '"a"' in d["before"] and '"b"' in d["after"]
+
+
+def test_redact_sensitive_for_log_by_key_name() -> None:
+    payload = {
+        "edge": {
+            "localWebServerPassword": "ReplaceMe1",
+            "dns": {"mode": "DNSModeCloudflare"},
+        },
+        "siteToSiteVpn": {"vpn-1": {"presharedKey": "secret-psk"}},
+    }
+    redacted = redact_sensitive_for_log(payload)
+    assert redacted["edge"]["localWebServerPassword"] == "********"
+    assert redacted["edge"]["dns"]["mode"] == "DNSModeCloudflare"
+    assert redacted["siteToSiteVpn"]["vpn-1"]["presharedKey"] == "********"
+    assert payload["edge"]["localWebServerPassword"] == "ReplaceMe1"
+
+
+def test_format_config_payload_for_log() -> None:
+    text = format_config_payload_for_log({"localWebServerPassword": "ReplaceMe1"})
+    assert "ReplaceMe1" not in text
+    assert '"localWebServerPassword": "********"' in text
