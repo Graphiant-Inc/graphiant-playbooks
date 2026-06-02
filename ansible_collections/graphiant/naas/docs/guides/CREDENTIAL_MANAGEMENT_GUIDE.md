@@ -163,6 +163,12 @@ Keys must match portal hostnames in `sample_edge_services.yaml`. Without `localW
 3. **Use service accounts** with minimal permissions
 4. **Environment-specific credentials** for different environments
 
+## Logging
+
+Secrets are already masked in Ansible: sensitive module options use ``no_log``, related playbook tasks use ``no_log``, and vault encrypts files at rest—playbook output shows ``********`` instead of plaintext.
+
+With ``detailed_logs: true``, the collection also writes device config payloads to ``logs/log_<timestamp>.log`` under the playbook working directory (for example ``playbooks/logs/``). That path is outside Ansible (library logging), so keep secrets out of those files by listing API field names in ``_SENSITIVE_LOG_KEYS`` in ``plugins/module_utils/libs/device_config_common.py``. ``gcsdk_client`` redacts those keys (currently ``localWebServerPassword``, ``presharedKey``, ``md5Password``) to ``********`` in log output only. Add new secret API keys there when you introduce sensitive config fields. Do not commit log files.
+
 ## Additional Resources
 
 - [Ansible Vault Documentation](https://docs.ansible.com/ansible/latest/vault_guide/index.html)

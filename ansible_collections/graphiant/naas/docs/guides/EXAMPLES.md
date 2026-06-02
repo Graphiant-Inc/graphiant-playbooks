@@ -44,7 +44,7 @@ Config file paths are resolved in the following order:
 
 Similarly, template paths use `GRAPHIANT_TEMPLATES_PATH` environment variable.
 
-Check `logs/log_<date>.log` for the actual path used during execution.
+Check `logs/log_<date>.log` under the playbook working directory (for example `playbooks/logs/`). Secrets are already masked in Ansible output (`no_log` on modules and tasks, plus vault). Outside Ansible, collection logs mask API keys in `_SENSITIVE_LOG_KEYS` (`device_config_common.py`)—see [CREDENTIAL_MANAGEMENT_GUIDE.md](CREDENTIAL_MANAGEMENT_GUIDE.md#logging). Do not commit log files.
 
 
 ## Device system settings (name, region, site)

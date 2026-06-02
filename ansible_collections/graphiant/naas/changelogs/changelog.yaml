@@ -8,6 +8,8 @@ releases:
   "26.5.0":
     release_date: "2026-05-27"
     changes:
+      security_fixes:
+        - "Mask API keys in ``_SENSITIVE_LOG_KEYS`` (``device_config_common``) in ``gcsdk_client`` ``put_device_config`` / ``put_device_config_raw`` and ``show_validated_payload`` log output"
       minor_changes:
         - "Collection version bumped to 26.5.0"
         - "New ``graphiant_backbone`` module and ``backbone_management.yml`` playbook for managing Graphiant Core (backbone) device configuration; samples ``sample_backbone_config.yaml`` and ``sample_backbone_direct_peer_config.yaml``"
