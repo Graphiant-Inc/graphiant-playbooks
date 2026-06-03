@@ -345,7 +345,7 @@ LWS via module params or vault (omit `localWebServerPasswordForce` for first-tim
   no_log: true
 ```
 
-There is no `deconfigure` operation or `state: absent` for the module as a whole. To revert settings, use module parameters per device: set `dns.mode` to `DNSModeDynamic`, set listed `lldp` interfaces to `false`, and use `dhcpSubnets` with `state: absent` for each pool (see `tests/test.py` `test_deconfigure_edge_services`).
+There is no `deconfigure` operation for the module as a whole. To revert settings, use module parameters per device: set `dns.mode` to `DNSModeDynamic`, set listed `lldp` interfaces to `false`, use `dhcpSubnets` with `state: absent` for each pool, and set each `dpiApplications` map key you want removed to `state: absent` (sends `application: null`). See `tests/test.py` `_edge_services_deconfigure_module_params` and `test_deconfigure_edge_services`.
 
 ## Interface Management
 

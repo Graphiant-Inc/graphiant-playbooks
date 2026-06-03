@@ -31,6 +31,8 @@ This collection provides Ansible modules to automate:
 - Raw device configuration deployment (Edge, Gateway, and Core devices)
 - Edge services (DHCP subnets, DNS mode, LLDP, local web server password) on Edge/Gateway devices
 - NTP Service Configuration
+- Traffic Policy configuration on Edge Devices
+- Prefix and Port List configuration on Edge Devices
 
 ### Key Features
 
@@ -77,6 +79,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
 | `graphiant_ntp` | Manage NTP objects |
 | `graphiant_traffic_policy` | Manage device traffic policy rulesets and LAN segment attachments (configure workflow: rulesets + attach; deconfigure workflow: detach + delete) |
+| `graphiant_prefix_port_list` | Manage Prefix & Port Lists on Edge devices | 
 
 ## Installation
 
@@ -352,6 +355,8 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `device_system_management.yml` | Device name, region, and site configuration |
 | `edge_services_management.yml` | Edge DHCP, DNS, LLDP, local web server password (Vault-supported) |
 | `test_collection.yml` | Collection validation and testing |
+| `traffic_policies_management.yml` | Traffic policies and LAN-segment attachments |
+| `prefix_port_list_management.yml` | Prefix and port lists | 
 
 #### Data Exchange Workflows
 
@@ -395,6 +400,7 @@ ansible-doc graphiant.naas.graphiant_data_exchange
 ansible-doc graphiant.naas.graphiant_data_exchange_info
 ansible-doc graphiant.naas.graphiant_device_config
 ansible-doc graphiant.naas.graphiant_backbone
+ansible-doc graphiant.naas.graphiant_prefix_port_list.py
 ```
 
 ## Documentation
@@ -455,13 +461,13 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
-| **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone` | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info`, `graphiant_prefix_port_list` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
+| **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone`                                                                                                                                                                                                                                                                    | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
 | **Read-only** | `graphiant_macsec_info` | Always read-only; check mode has no side effects. |
 
 **Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, and `graphiant_macsec` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, and `graphiant_macsec` document `diff_mode`; use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan` when an edge branch would change.
+**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list` and `graphiant_macsec` document `diff_mode`; use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan` when an edge branch would change.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -608,6 +614,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_device_config_with_template.yaml` - Device config with user-defined template (`device_config_template.yaml`)
 - `sample_backbone_config.yaml` - Core (backbone) device configuration covering interfaces (loopback, core_link, ipsec_tunnel, p2mp_tunnel, isp_circuit, direct_peer, disabled), site info, and per-VRF syslog targets
 - `sample_sites.yaml` - Site configurations
+- `sample_prefix_and_port_list.yaml` - Network Prefix and Port configuration
 
 ### Config File Path Resolution
 
