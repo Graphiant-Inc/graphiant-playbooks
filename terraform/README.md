@@ -95,7 +95,23 @@ brew tap hashicorp/tap
 brew install hashicorp/tap/terraform
 ```
 
-**Windows** and **Linux**: use the official install guide above for package managers, binaries, and supported distributions.
+**Windows**
+
+1. **Download**: Download the **Windows AMD64** binary from the official [Terraform Install Page](https://developer.hashicorp.com/terraform/install#windows).
+2. **Extract**: Unzip the downloaded folder and move the `terraform.exe` file to a permanent location (e.g., `C:\terraform\terraform.exe`).
+3. **Update System Path**:
+   - Search for **"Edit the system environment variables"** in the Start menu and open it.
+   - Click the **Environment Variables** button.
+   - Under **System variables**, find the **Path** variable, select it, and click **Edit**.
+   - Click **New** and enter the full path to the directory where you placed the binary (e.g., `C:\terraform`).
+   - Click **OK** on all windows to save your changes.
+4. **Verify**: Open a new Command Prompt or PowerShell window and verify the installation:
+
+```cmd
+terraform version
+```
+
+**Linux**: use the official install guide above for package managers, binaries, and supported distributions.
 
 ### Verify Terraform Installation
 
