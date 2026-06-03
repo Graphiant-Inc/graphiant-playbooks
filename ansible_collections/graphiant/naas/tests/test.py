@@ -1342,9 +1342,15 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
     @staticmethod
     def _edge_services_deconfigure_module_params(device_name, cfg):
-        """Build module_params to revert edge services (no deconfigure op on graphiant_edge_services)."""
+        """
+        Build module_params to revert edge services (configure-only module; no deconfigure operation).
+
+        Reverts DNS to dynamic, listed LLDP interfaces to false, DHCP pools to absent, and each
+        dpiApplications map key from the device config to absent (application: null on PUT).
+        """
         lldp_cfg = cfg.get("lldp") if isinstance(cfg.get("lldp"), dict) else {}
         dhcp_cfg = cfg.get("dhcpSubnets") if isinstance(cfg.get("dhcpSubnets"), list) else []
+        dpi_cfg = cfg.get("dpiApplications") if isinstance(cfg.get("dpiApplications"), dict) else {}
 
         dhcp_absent = []
         for entry in dhcp_cfg:
@@ -1364,12 +1370,17 @@ class TestGraphiantPlaybooks(unittest.TestCase):
                 }
             )
 
-        return {
+        dpi_absent = {app_key: {"state": "absent"} for app_key in dpi_cfg if app_key}
+
+        params = {
             "device": device_name,
             "dns": {"mode": "DNSModeDynamic"},
             "lldp": {if_name: False for if_name in lldp_cfg},
             "dhcpSubnets": dhcp_absent,
         }
+        if dpi_absent:
+            params["dpiApplications"] = dpi_absent
+        return params
 
     def test_configure_edge_services(self):
         """
@@ -1407,7 +1418,8 @@ class TestGraphiantPlaybooks(unittest.TestCase):
     def test_deconfigure_edge_services(self):
         """
         Revert edge services via module_params (module has no deconfigure operation):
-        dns.mode -> DNSModeDynamic, lldp -> false, dhcpSubnets -> state absent.
+        dns.mode -> DNSModeDynamic, lldp -> false, dhcpSubnets -> state absent,
+        and each dpiApplications map key from YAML -> state absent.
         """
         graphiant_config = graphiant_config_from_read_config()
         by_name = self._load_edge_services_from_yaml(graphiant_config, "sample_edge_services.yaml")
@@ -1636,6 +1648,75 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Rotate MACsec keys result (idempotency check): %s", result)
         assert result.get("changed") is False, "Rotate MACsec keys idempotency failed"
 
+    def test_configure_prefix_and_port_list(self):
+        """
+        Configure prefix and port list.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.prefix_port_list.create_prefix_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Configure prefix and port list result: %s", result)
+        result = graphiant_config.prefix_port_list.create_prefix_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Configure prefix and port list result (idempotency check): %s", result)
+
+    def test_deconfigure_prefix_and_port_list(self):
+        """
+        Deconfigure prefix and port list.
+
+        Second run should be idempotent (changed=False) when lists are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.prefix_port_list.delete_prefix_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Deconfigure prefix and port list result: %s", result)
+        result2 = graphiant_config.prefix_port_list.delete_prefix_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Deconfigure prefix and port list result (idempotency check): %s", result2)
+        assert result2["changed"] is False, "Deconfigure prefix and port list idempotency failed"
+
+    def test_configure_prefix_lists(self):
+        """
+        Configure prefix lists.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.prefix_port_list.create_prefix_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Configure prefix lists result: %s", result)
+        result = graphiant_config.prefix_port_list.create_prefix_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Configure prefix lists result (idempotency check): %s", result)
+
+    def test_deconfigure_prefix_lists(self):
+        """
+        Deconfigure prefix lists.
+
+        Second run should be idempotent (changed=False) when lists are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.prefix_port_list.delete_prefix_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Deconfigure prefix lists result: %s", result)
+        result2 = graphiant_config.prefix_port_list.delete_prefix_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Deconfigure prefix lists result (idempotency check): %s", result2)
+        assert result2["changed"] is False, "Deconfigure prefix lists idempotency failed"
+
+    def test_configure_port_lists(self):
+        """
+        Configure port lists.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.prefix_port_list.create_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Configure port lists result: %s", result)
+        result = graphiant_config.prefix_port_list.create_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Configure port lists result (idempotency check): %s", result)
+
+    def test_deconfigure_port_lists(self):
+        """
+        Deconfigure port lists.
+
+        Second run should be idempotent (changed=False) when lists are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.prefix_port_list.delete_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Deconfigure port lists result: %s", result)
+        result2 = graphiant_config.prefix_port_list.delete_port_lists("sample_prefix_and_port_list.yaml")
+        LOG.info("Deconfigure port lists result (idempotency check): %s", result2)
+        assert result2["changed"] is False, "Deconfigure port lists idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -1757,11 +1838,26 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_rotate_macsec_keys'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lag_interfaces'))
 
-    # Edge Services (graphiant_edge_services) — after LAN/WAN interfaces; prereq: interface_management
+    # Prefix and Port List Management Tests
+    # Configure and delete prefix lists
+    suite.addTest(TestGraphiantPlaybooks('test_configure_prefix_lists'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_lists'))
+    # Configure and delete port lists
+    suite.addTest(TestGraphiantPlaybooks('test_configure_port_lists'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_port_lists'))
+    # Configure and delete prefix and port lists
+    suite.addTest(TestGraphiantPlaybooks('test_configure_prefix_and_port_list'))
+
+    # Edge Services (graphiant_edge_services) — after LAN/WAN interfaces.
+    # Prereq: interface_management and prefix/port lists for DPI applications.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services_lws_force_requires_password'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services_lws_vault'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_edge_services'))
+
+    # Deconfigure prefix and port list
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_and_port_list'))
 
     # Global Configuration Management and BGP Peering
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
@@ -1826,15 +1922,20 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_ntp'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_ntp'))
 
-    # Device-level traffic policy tests (attach/detach segments before ruleset deconfigure)
+    # Device-level traffic policy tests (attach/detach segments before ruleset deconfigure).
+    # Prereq: prefix/port lists and edge services (DPI applications).
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_create_site_to_site_vpn'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_prefix_and_port_list'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_traffic_policy'))
     suite.addTest(TestGraphiantPlaybooks('test_attach_traffic_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_detach_traffic_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_traffic_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_edge_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_and_port_list'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
 

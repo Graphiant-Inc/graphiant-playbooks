@@ -58,6 +58,7 @@ def test_main_requires_device_or_file(mock_module_cls, mock_conn) -> None:
         "dns": None,
         "lldp": None,
         "dhcpSubnets": None,
+        "dpiApplications": None,
         "vault_devices_lws_password": {},
         "operation": "configure",
         "state": "present",

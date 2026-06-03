@@ -3,7 +3,7 @@
 # =================================
 #
 # Configures Edge/Gateway services via graphiant_edge_services:
-# DHCP subnets, DNS mode, LLDP on LAN interfaces, local web server password.
+# DHCP subnets, DNS mode, LLDP on LAN interfaces, local web server password, DPI applications.
 #
 # Local web server passwords can come from Ansible Vault (vault_devices_lws_password in
 # configs/vault_secrets.yml) — same pattern as site_to_site_vpn.yml.
@@ -195,6 +195,7 @@
         dns: "{{ item.dns | default(omit) }}"
         lldp: "{{ item.lldp | default(omit) }}"
         dhcpSubnets: "{{ item.dhcpSubnets | default(omit) }}"
+        dpiApplications: "{{ item.dpiApplications | default(omit) }}"
       loop: "{{ edge_module_param_examples }}"
       loop_control:
         label: "{{ item.device }}"

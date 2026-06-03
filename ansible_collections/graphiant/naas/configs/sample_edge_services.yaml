@@ -40,6 +40,21 @@
 #           ipRange:
 #             - start: "10.1.11.100"
 #               end: "10.1.11.200"
+#  Prerequisite for DPI list references: graphiant_prefix_port_list / sample_prefix_and_port_list.yaml
+#   dpiApplications:  # PUT edge.trafficPolicy.dpiApplications (map keyed by application name)
+#     my-app:          # map key → application.name in API (omit name in YAML)
+#       state: present # default; use absent to remove (application: null)
+#     my-app:
+#       application:
+#         ipProtocol: tcp              # UnknownIPProtocol | icmp | tcp | udp
+#         sourceNetwork: null          # optional; null/omitted = unset (portal cannot clear via null)
+#         sourceNetworkList: null      # edge.trafficPolicy.networkLists name
+#         sourcePort: null             # 1-65535 (tcp/udp when not using sourcePortList)
+#         sourcePortList: null         # edge.trafficPolicy.portLists name
+#         destinationNetwork: null     # prefix, e.g. "192.0.66.180/32"
+#         destinationNetworkList: null # edge.trafficPolicy.networkLists name
+#         destinationPort: null        # 1-65535 (tcp/udp when not using destinationPortList)
+#         destinationPortList: null    # edge.trafficPolicy.portLists name
 
 edge_services:
   - edge-1-sdktest:
@@ -90,6 +105,51 @@ edge_services:
               ipRange:
                 - start: "10.1.17.100"
                   end: "10.1.17.200"
+      dpiApplications:
+        whitehouse.gov:
+          application:
+            ipProtocol: tcp
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: "192.0.66.180/32"
+            destinationNetworkList: null
+            destinationPort: null
+            destinationPortList: web_ports
+        graphiant_dia_ping_via_IP:
+          application:
+            ipProtocol: UnknownIPProtocol
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: "8.8.8.8/32"
+            destinationNetworkList: null
+            destinationPort: null
+            destinationPortList: null
+        graphiant_dia_ping:
+          application:
+            ipProtocol: icmp
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: null
+            destinationNetworkList: graphiant_dia_prefix
+            destinationPort: null
+            destinationPortList: null
+        testing_dpi_application:
+          application:
+            ipProtocol: tcp
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: "10.1.1.0/24"
+            destinationNetworkList: null
+            destinationPort: null
+            destinationPortList: testing_port_list
 
   - edge-2-sdktest:
       dns:
@@ -114,6 +174,54 @@ edge_services:
             domainNameServer:
               primary: "8.8.8.8"
               secondary: "8.8.4.4"
+      dpiApplications:
+        whitehouse.gov:
+          application:
+            ipProtocol: tcp
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: "192.0.66.180/32"
+            destinationNetworkList: null
+            destinationPort: null
+            destinationPortList: web_ports
+        graphiant_dia_ping:
+          application:
+            name: graphiant_dia_ping
+            description: null
+            ipProtocol: icmp
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: null
+            destinationNetworkList: graphiant_dia_prefix
+            destinationPort: null
+            destinationPortList: null
+        graphiant_dia_ping_via_IP:
+          application:
+            ipProtocol: UnknownIPProtocol
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: "8.8.8.8/32"
+            destinationNetworkList: null
+            destinationPort: null
+            destinationPortList: null
+        testing_dpi_application:
+          application:
+            ipProtocol: tcp
+            sourceNetwork: null
+            sourceNetworkList: null
+            sourcePort: null
+            sourcePortList: null
+            destinationNetwork: "10.2.1.0/24"
+            destinationNetworkList: null
+            destinationPort: 80
+            destinationPortList: null
+          state: absent
 
   - edge-3-sdktest:
       dns:

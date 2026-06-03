@@ -7,6 +7,7 @@ Configures edge-only services on ``PUT /v1/devices/{device_id}/config``:
 - Edge-level DNS mode (``DNSModeStatic``, ``DNSModeCloudflare``, ``DNSModeDynamic``)
 - LAN interface ``lldpEnabled``
 - LAN segment ``dhcpSubnets`` (key ``{interface}-{ipPrefix}``)
+- Edge traffic policy ``dpiApplications`` (``edge.trafficPolicy.dpiApplications``)
 
 YAML uses the ``edge_services`` list-of-single-key-dicts pattern (same as ``device_system``).
 Configure-only; DHCP subnet removal uses ``state: absent`` (``subnet: null`` in the API payload).
@@ -44,17 +45,42 @@ _ALLOWED = frozenset(
         "dns",
         "lldp",
         "dhcpSubnets",
+        "dpiApplications",
     }
 )
 _DNS_MODES = frozenset({"DNSModeStatic", "DNSModeCloudflare", "DNSModeDynamic"})
 _LWS_PASSWORD_RE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
+_TRAFFIC_POLICY_KEYS = ("trafficPolicy", "traffic_policy")
+_DPI_PROTOCOLS = frozenset({"UnknownIPProtocol", "icmp", "tcp", "udp"})
+_DPI_APP_FIELDS = (
+    "name",
+    "description",
+    "ipProtocol",
+    "sourceNetwork",
+    "sourceNetworkList",
+    "sourcePort",
+    "sourcePortList",
+    "destinationNetwork",
+    "destinationNetworkList",
+    "destinationPort",
+    "destinationPortList",
+)
 
 
 class EdgeServicesManager(BaseManager):
-    """Manage edge DHCP, DNS, LLDP, and local web server settings via the device config API."""
+    """Manage edge DHCP, DNS, LLDP, DPI applications, and local web server settings via the device config API."""
 
     _str = staticmethod(coerce_str)
     _as_dict = staticmethod(as_dict)
+
+    @staticmethod
+    def _first_present(mapping: Dict[str, Any], keys: tuple) -> Any:
+        if not isinstance(mapping, dict):
+            return None
+        for key in keys:
+            if key in mapping:
+                return mapping.get(key)
+        return None
 
     @classmethod
     def _dhcp_subnet_key(cls, interface: Any, ip_prefix: Any) -> str:
@@ -256,12 +282,274 @@ class EdgeServicesManager(BaseManager):
         return out
 
     @classmethod
+    def _traffic_policy_from_device(cls, d: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve ``trafficPolicy`` from unwrapped device GET (``device.edge`` or ``device``)."""
+        edge = cls._as_dict(d.get("edge"))
+        merged: Dict[str, Any] = {}
+        for container in (edge, d):
+            tp = cls._as_dict(cls._first_present(container, _TRAFFIC_POLICY_KEYS))
+            if tp:
+                merged.update(tp)
+        return merged
+
+    @classmethod
+    def _list_names_from_traffic_policy(cls, tp: Dict[str, Any], list_keys: tuple) -> frozenset:
+        raw = cls._first_present(tp, list_keys)
+        if not raw:
+            return frozenset()
+        names: set[str] = set()
+        if isinstance(raw, dict):
+            for key, entry in raw.items():
+                if not isinstance(entry, dict):
+                    continue
+                body = entry.get("list") if "list" in entry else entry
+                if isinstance(body, dict) and body.get("name"):
+                    names.add(cls._str(body.get("name")))
+                elif body is not None:
+                    names.add(cls._str(key))
+        elif isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, dict) and item.get("name"):
+                    names.add(cls._str(item.get("name")))
+        return frozenset(n for n in names if n)
+
+    @classmethod
+    def _normalize_dpi_optional_str(cls, value: Any) -> Optional[str]:
+        s = cls._str(value)
+        return s if s else None
+
+    @classmethod
+    def _normalize_dpi_port(cls, value: Any) -> Optional[int]:
+        if value is None or value == "":
+            return None
+        try:
+            port = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ConfigurationError(f"Invalid DPI port value {value!r}") from exc
+        # Portal GET may return 0 for unset ports on icmp/any apps; treat as unset for compare/PUT.
+        return None if port == 0 else port
+
+    @classmethod
+    def _normalize_dpi_application(cls, app: Dict[str, Any], app_key: Optional[str] = None) -> Dict[str, Any]:
+        name = cls._str(app.get("name")) or cls._str(app_key)
+        proto = cls._str(app.get("ipProtocol"))
+        out: Dict[str, Any] = {
+            "name": name,
+            "description": app.get("description"),
+            "ipProtocol": proto or None,
+            "sourceNetwork": cls._normalize_dpi_optional_str(app.get("sourceNetwork")),
+            "sourceNetworkList": cls._normalize_dpi_optional_str(app.get("sourceNetworkList")),
+            "sourcePort": cls._normalize_dpi_port(app.get("sourcePort")),
+            "sourcePortList": cls._normalize_dpi_optional_str(app.get("sourcePortList")),
+            "destinationNetwork": cls._normalize_dpi_optional_str(app.get("destinationNetwork")),
+            "destinationNetworkList": cls._normalize_dpi_optional_str(app.get("destinationNetworkList")),
+            "destinationPort": cls._normalize_dpi_port(app.get("destinationPort")),
+            "destinationPortList": cls._normalize_dpi_optional_str(app.get("destinationPortList")),
+        }
+        if out["description"] is not None and not cls._str(out["description"]):
+            out["description"] = None
+        return out
+
+    @classmethod
+    def _dpi_canonical_for_compare(cls, norm: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Compare only meaningful fields so sparse portal GET (omitted nulls) matches YAML with explicit nulls.
+        """
+        if not norm:
+            return {}
+        out: Dict[str, Any] = {}
+        for key, value in norm.items():
+            if key in ("name", "ipProtocol"):
+                if value is not None:
+                    out[key] = value
+                continue
+            if value is None:
+                continue
+            out[key] = value
+        return out
+
+    @classmethod
+    def _dpi_compare_field_keys(cls, desired_app: Dict[str, Any]) -> frozenset:
+        """Fields to compare: name/protocol always; other non-null keys present in YAML."""
+        keys: set = {"name", "ipProtocol"}
+        for field in _DPI_APP_FIELDS:
+            if field in keys:
+                continue
+            if field in desired_app and desired_app.get(field) is not None:
+                keys.add(field)
+        return frozenset(keys)
+
+    @classmethod
+    def _dpi_canonical_subset(cls, norm: Dict[str, Any], keys: frozenset) -> Dict[str, Any]:
+        canon = cls._dpi_canonical_for_compare(norm)
+        return {key: canon[key] for key in keys if key in canon}
+
+    @classmethod
+    def _dpi_applications_equal(
+        cls, before: Optional[Dict[str, Any]], desired_app: Dict[str, Any], app_key: str
+    ) -> bool:
+        norm_before = cls._normalize_dpi_application(before or {}, app_key=app_key) if before else {}
+        norm_desired = cls._normalize_dpi_application(desired_app, app_key=app_key)
+        keys = cls._dpi_compare_field_keys(desired_app)
+        before_sub = cls._dpi_canonical_subset(norm_before, keys)
+        desired_sub = cls._dpi_canonical_subset(norm_desired, keys)
+        if before_sub == desired_sub:
+            return True
+        # Portal GET often omits ipProtocol after PUT even when YAML/API used UnknownIPProtocol.
+        if norm_desired.get("ipProtocol") == "UnknownIPProtocol" and "ipProtocol" not in before_sub:
+            keys_without_proto = frozenset(key for key in keys if key != "ipProtocol")
+            return cls._dpi_canonical_subset(norm_before, keys_without_proto) == cls._dpi_canonical_subset(
+                norm_desired, keys_without_proto
+            )
+        return False
+
+    @classmethod
+    def _extract_dpi_application_from_entry(
+        cls, entry: Dict[str, Any], app_key: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Unwrap ``application`` or flat field dict; inject map key as name when omitted."""
+        app = cls._as_dict(entry.get("application"))
+        if not app and any(k in entry for k in _DPI_APP_FIELDS):
+            app = dict(entry)
+        if not app:
+            return None
+        if app_key and not cls._str(app.get("name")):
+            app = dict(app)
+            app["name"] = app_key
+        return app
+
+    @classmethod
+    def _dpi_application_for_put(cls, app: Dict[str, Any], app_key: str) -> Dict[str, Any]:
+        """Send non-null application fields listed in YAML (partial PUT delta)."""
+        norm = cls._normalize_dpi_application(app, app_key=app_key)
+        put: Dict[str, Any] = {"name": norm["name"], "ipProtocol": norm["ipProtocol"]}
+        for field in _DPI_APP_FIELDS:
+            if field in ("name", "ipProtocol"):
+                continue
+            if field in app and norm.get(field) is not None:
+                put[field] = norm[field]
+        return put
+
+    @classmethod
+    def _dpi_snapshot_from_device(cls, d: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """Portal GET returns ``dpiApplications`` as a map or flat list under ``trafficPolicy``."""
+        tp = cls._traffic_policy_from_device(d)
+        raw = cls._first_present(tp, ("dpiApplications", "dpi_applications"))
+        out: Dict[str, Dict[str, Any]] = {}
+        if isinstance(raw, list):
+            for entry in raw:
+                if not isinstance(entry, dict):
+                    continue
+                app_key = cls._str(entry.get("name"))
+                if not app_key:
+                    continue
+                out[app_key] = cls._normalize_dpi_application(entry, app_key=app_key)
+            return out
+        if isinstance(raw, dict):
+            for key, entry in raw.items():
+                if not isinstance(entry, dict):
+                    continue
+                app = cls._as_dict(entry.get("application")) or entry
+                app_key = cls._str(key) or cls._str(app.get("name"))
+                if app_key:
+                    out[app_key] = cls._normalize_dpi_application(app, app_key=app_key)
+        return out
+
+    @classmethod
+    def _coerce_dpi_applications_map(cls, raw: Any) -> Dict[str, Optional[Dict[str, Any]]]:
+        """
+        Normalize YAML/module input to ``{app_name: application_dict}`` or ``{app_name: None}`` for removal.
+        """
+        if raw is None:
+            return {}
+        out: Dict[str, Optional[Dict[str, Any]]] = {}
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    raise ConfigurationError("Each dpiApplications list entry must be a dict.")
+                app = cls._extract_dpi_application_from_entry(item)
+                if not app:
+                    raise ConfigurationError("dpiApplications list entries require an 'application' dict.")
+                name = cls._str(app.get("name"))
+                if not name:
+                    raise ConfigurationError("dpiApplications application requires 'name'.")
+                out[name] = app
+            return out
+        if not isinstance(raw, dict):
+            raise ConfigurationError("dpiApplications must be a dict (map) or list of applications.")
+        for app_key, body in raw.items():
+            key = cls._str(app_key)
+            if not key:
+                raise ConfigurationError("dpiApplications map keys must be non-empty application names.")
+            if body is None:
+                out[key] = None
+                continue
+            if not isinstance(body, dict):
+                raise ConfigurationError(f"dpiApplications entry {key!r} must be a dict.")
+            state = cls._str(body.get("state") or "present").lower()
+            if state == "absent":
+                out[key] = None
+                continue
+            app = cls._extract_dpi_application_from_entry(body, app_key=key)
+            if not app:
+                raise ConfigurationError(
+                    f"dpiApplications entry {key!r} requires an 'application' dict or application fields."
+                )
+            out[key] = app
+        return out
+
+    @classmethod
+    def _validate_dpi_application(cls, app_key: str, app: Dict[str, Any]) -> None:
+        explicit_name = cls._str(app.get("name"))
+        if explicit_name and explicit_name != app_key:
+            raise ConfigurationError(
+                f"dpiApplications map key {app_key!r} must match application.name {explicit_name!r}."
+            )
+        norm = cls._normalize_dpi_application(app, app_key=app_key)
+        proto = norm.get("ipProtocol")
+        if proto not in _DPI_PROTOCOLS:
+            raise ConfigurationError(
+                f"dpiApplications {app_key!r}: ipProtocol must be one of {sorted(_DPI_PROTOCOLS)}."
+            )
+
+    @classmethod
+    def _validate_dpi_list_references(
+        cls,
+        device_name: str,
+        desired: Dict[str, Optional[Dict[str, Any]]],
+        current_device: Dict[str, Any],
+    ) -> None:
+        desired = cls._coerce_dpi_applications_map(desired)
+        tp = cls._traffic_policy_from_device(current_device)
+        network_lists = cls._list_names_from_traffic_policy(tp, ("networkLists", "network_lists"))
+        port_lists = cls._list_names_from_traffic_policy(tp, ("portLists", "port_lists"))
+        for app_key, app in desired.items():
+            if app is None:
+                continue
+            norm = cls._normalize_dpi_application(app, app_key=app_key)
+            for field, known, label in (
+                ("sourceNetworkList", network_lists, "networkLists"),
+                ("destinationNetworkList", network_lists, "networkLists"),
+                ("sourcePortList", port_lists, "portLists"),
+                ("destinationPortList", port_lists, "portLists"),
+            ):
+                ref = norm.get(field)
+                if ref and ref not in known:
+                    known_str = ", ".join(sorted(known)) if known else "(none on device)"
+                    raise ConfigurationError(
+                        f"Device '{device_name}': dpiApplications {app_key!r} references "
+                        f"{field}={ref!r} which is not in edge.trafficPolicy.{label}. "
+                        f"Known names: {known_str}. Configure lists first (graphiant_prefix_port_list)."
+                    )
+
+    @classmethod
     def _edge_services_snapshot(cls, d: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "localWebServerPasswordConfigured": bool(cls._str(d.get("localWebServerPassword"))),
             "dns": cls._dns_snapshot_from_device(d),
             "lldp": cls._lldp_snapshot_from_device(d),
             "dhcpSubnets": cls._dhcp_snapshot_from_device(d),
+            "dpiApplications": cls._dpi_snapshot_from_device(d),
         }
 
     @classmethod
@@ -362,6 +650,12 @@ class EdgeServicesManager(BaseManager):
             for entry in out["dhcpSubnets"]:
                 if not isinstance(entry, dict):
                     raise ConfigurationError("Each dhcpSubnets entry must be a dict.")
+        if out.get("dpiApplications") is not None:
+            desired_dpi = self._coerce_dpi_applications_map(out["dpiApplications"])
+            for app_key, app in desired_dpi.items():
+                if app is not None:
+                    self._validate_dpi_application(app_key, app)
+            out["dpiApplications"] = desired_dpi
         return out
 
     @staticmethod
@@ -381,6 +675,10 @@ class EdgeServicesManager(BaseManager):
                 merged_dns = dict(merged["dns"])
                 merged_dns.update(v)
                 merged["dns"] = merged_dns
+            elif k == "dpiApplications" and isinstance(merged.get("dpiApplications"), dict) and isinstance(v, dict):
+                merged_dpi = dict(merged["dpiApplications"])
+                merged_dpi.update(v)
+                merged["dpiApplications"] = merged_dpi
             else:
                 merged[k] = v
         return merged
@@ -417,6 +715,7 @@ class EdgeServicesManager(BaseManager):
             "dns": dict(before.get("dns") or {}),
             "lldp": dict(before.get("lldp") or {}),
             "dhcpSubnets": dict(before.get("dhcpSubnets") or {}),
+            "dpiApplications": dict(before.get("dpiApplications") or {}),
         }
         if cfg.get("localWebServerPassword") is not None:
             after["localWebServerPasswordConfigured"] = True
@@ -439,6 +738,15 @@ class EdgeServicesManager(BaseManager):
             merged = dict(after["dhcpSubnets"].get(key) or {})
             merged.update(subnet)
             after["dhcpSubnets"][key] = merged
+        desired_dpi = cfg.get("dpiApplications")
+        if isinstance(desired_dpi, dict):
+            merged_dpi = dict(after["dpiApplications"])
+            for app_key, app in desired_dpi.items():
+                if app is None:
+                    merged_dpi.pop(app_key, None)
+                else:
+                    merged_dpi[app_key] = self._normalize_dpi_application(app, app_key=app_key)
+            after["dpiApplications"] = merged_dpi
         return after
 
     @classmethod
@@ -568,6 +876,24 @@ class EdgeServicesManager(BaseManager):
             if dhcp_delta:
                 edge.update(self._build_dhcp_put(dhcp_delta))
 
+        if cfg.get("dpiApplications"):
+            desired_dpi = self._coerce_dpi_applications_map(cfg["dpiApplications"])
+            self._validate_dpi_list_references(device_name, desired_dpi, current_device)
+            before_dpi = self._dpi_snapshot_from_device(current_device)
+            dpi_delta: Dict[str, Any] = {}
+            for app_key, app in desired_dpi.items():
+                if app is None:
+                    if app_key in before_dpi:
+                        dpi_delta[app_key] = {"application": None}
+                    continue
+                if not self._dpi_applications_equal(before_dpi.get(app_key), app, app_key):
+                    dpi_delta[app_key] = {"application": self._dpi_application_for_put(app, app_key)}
+            if dpi_delta:
+                if edge.get("trafficPolicy"):
+                    edge["trafficPolicy"]["dpiApplications"] = dpi_delta
+                else:
+                    edge["trafficPolicy"] = {"dpiApplications": dpi_delta}
+
         return edge
 
     def _inject_vault_lws_passwords(
@@ -631,8 +957,7 @@ class EdgeServicesManager(BaseManager):
                 result["skipped_devices"].append(device_name)
                 continue
 
-            payload = {"edge": edge_payload}
-            to_push[device_id] = {"device_id": device_id, "payload": payload}
+            to_push[device_id] = {"device_id": device_id, "payload": {"edge": edge_payload}}
             configured.append(device_name)
             diff_plan.append({"device": device_name, "branch": "edge", "before": before, "after": after})
 
@@ -665,5 +990,6 @@ class EdgeServicesManager(BaseManager):
     def deconfigure(self, config_yaml_file: str) -> dict:
         raise ConfigurationError(
             "Deconfigure is not supported for edge services. "
-            "Use configure with desired values, or dhcpSubnets state: absent to remove a subnet."
+            "Use configure with desired values, dhcpSubnets state: absent to remove a subnet, "
+            "or dpiApplications state: absent (application: null) to remove a DPI application."
         )

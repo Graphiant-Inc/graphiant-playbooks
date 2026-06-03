@@ -11,13 +11,14 @@ Ansible module for Graphiant edge services (DHCP, DNS, LLDP, local web server pa
 DOCUMENTATION = r"""
 ---
 module: graphiant_edge_services
-short_description: Configure edge services (DHCP, DNS, LLDP, LWS password)
+short_description: Configure edge services (DHCP, DNS, LLDP, DPI, LWS password)
 description:
   - >-
     Configures Edge Services on the Edge/Gateway devices
     C(PUT /v1/devices/{device_id}/config): LAN segment C(dhcpSubnets), device
-    C(localWebServerPassword), LAN interface C(lldpEnabled), and edge C(dns) mode
-    (C(DNSModeStatic), C(DNSModeCloudflare), or C(DNSModeDynamic)).
+    C(localWebServerPassword), LAN interface C(lldpEnabled), edge C(dns) mode
+    (C(DNSModeStatic), C(DNSModeCloudflare), or C(DNSModeDynamic)), and edge
+    C(trafficPolicy.dpiApplications).
   - >-
     Edge/Gateway only; core devices are rejected. Complements M(graphiant.naas.graphiant_global_config)
     (syslog, IPFIX, SNMP) and M(graphiant.naas.graphiant_ntp) (NTP). For unstructured payloads,
@@ -46,8 +47,19 @@ description:
     C(include_vars).
   - Idempotent merge for DNS mode, LLDP, and DHCP fields. Configure-only (no deconfigure operation).
   - >-
-    Module parameters use camelCase names aligned with the API (C(dhcpSubnets), C(localWebServerPassword),
-    C(localWebServerPasswordForce)). Legacy snake_case aliases (C(dhcp_subnets), etc.) are still accepted.
+    Module parameters use camelCase names aligned with the API (C(dhcpSubnets), C(dpiApplications),
+    C(localWebServerPassword), C(localWebServerPasswordForce)). Legacy snake_case aliases
+    (C(dhcp_subnets), C(dpi_applications), etc.) are still accepted.
+  - >-
+    DPI applications are pushed under C(edge.trafficPolicy.dpiApplications) as a map keyed by application
+    name. The map key is used as C(application.name) in the PUT payload when C(name) is omitted in YAML.
+    Each value wraps C(application) fields (C(ipProtocol), networks, ports, and optional references
+    to C(sourceNetworkList), C(destinationNetworkList), C(sourcePortList), C(destinationPortList) names
+    defined under C(edge.trafficPolicy) via M(graphiant.naas.graphiant_prefix_port_list)). Use
+    C(state: absent) on a map entry to remove an application (sends C(application: null)).
+    Idempotency compares non-null fields present in YAML; omitted keys and explicit C(null) are
+    ignored (the portal does not clear nested match fields via null). Portal-only fields such as
+    C(description) are ignored unless set in YAML.
 notes:
   - "Configuration files support Jinja2 templating syntax for dynamic value substitution."
   - >-
@@ -119,13 +131,31 @@ options:
     required: false
     aliases:
       - dhcp_subnets
+  dpiApplications:
+    description:
+      - >-
+        Map of DPI application name to C(application) settings
+        (API C(edge.trafficPolicy.dpiApplications)).
+      - >-
+        The map key is the application name in the API; C(application.name) in YAML is optional and
+        defaults to the key. If set, it must match the key. C(ipProtocol) (C(any), C(icmp), C(tcp), or C(udp))
+        and optional network/port fields or list name references are required per app.
+      - >-
+        Use C(state: absent) on an entry to remove an application. Legacy list-of-C(application) YAML is
+        also accepted and normalized to this map shape.
+    type: dict
+    required: false
+    aliases:
+      - dpi_applications
   vault_devices_lws_password:
     description:
-      - Map of portal device hostname to local web server password (from Ansible Vault via
+      - >-
+        Map of portal device hostname to local web server password (from Ansible Vault via
         C(include_vars)). Keys must match device names in C(edge_services_config_file) or C(device).
         Injected as C(localWebServerPassword) before apply when YAML does not already set
         C(localWebServerPassword) for that device. YAML may set C(localWebServerPasswordForce).
-      - Do not reference Ansible/playbook variables inside the config file; pass this dict as this
+      - >-
+        Do not reference Ansible/playbook variables inside the config file; pass this dict as this
         module parameter after C(include_vars). Self-contained Jinja2 in the config file is supported.
     type: dict
     required: false
@@ -306,6 +336,7 @@ _SERVICE_PARAM_KEYS = (
     "dns",
     "lldp",
     "dhcpSubnets",
+    "dpiApplications",
 )
 
 
@@ -347,6 +378,8 @@ def _module_params_from_ansible(params: Dict[str, Any]) -> Dict[str, Any]:
         mp["lldp"] = params["lldp"]
     if params.get("dhcpSubnets") is not None:
         mp["dhcpSubnets"] = params["dhcpSubnets"]
+    if params.get("dpiApplications") is not None:
+        mp["dpiApplications"] = params["dpiApplications"]
     return mp
 
 
@@ -368,6 +401,7 @@ def main():
         dns=dict(type="dict", required=False, default=None),
         lldp=dict(type="dict", required=False, default=None),
         dhcpSubnets=dict(type="list", required=False, default=None, elements="dict", aliases=["dhcp_subnets"]),
+        dpiApplications=dict(type="dict", required=False, default=None, aliases=["dpi_applications"]),
         vault_devices_lws_password=dict(type="dict", required=False, default={}, no_log=True),
         operation=dict(type="str", required=False, default="configure", choices=["configure"]),
         state=dict(type="str", required=False, default="present", choices=["present"]),
@@ -404,8 +438,8 @@ def main():
             module.fail_json(
                 msg=(
                     "When edge_services_config_file is omitted, at least one of localWebServerPassword, "
-                    "dns, lldp, or dhcpSubnets is required, or vault_devices_lws_password must include "
-                    "the target device."
+                    "dns, lldp, dhcpSubnets, or dpiApplications is required, or vault_devices_lws_password "
+                    "must include the target device."
                 ),
                 operation=operation,
             )

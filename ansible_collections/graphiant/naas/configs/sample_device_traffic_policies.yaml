@@ -211,7 +211,6 @@ trafficPolicyObject:
                 ipsecLabel: ipsec_label_2
               backupCircuitLabel:
                 ipsecLabel: ipsec_label_3
-              state: absent
 
             - seq: 200
               ipProtocol: udp  # any, icmp, igmp, tcp, udp, esp, or ah.
@@ -229,7 +228,6 @@ trafficPolicyObject:
               slaClass: Gold  # Default, Bronze, Silver, or Gold.
               egress: dia  # overlay, dia, or ipsec; dia/ipsec usually require circuit labels.
               primaryCircuitLabel: "internet_dia_2"
-              state: absent
 
             - seq: 400
               applicationBuiltin: YouTube
