@@ -282,12 +282,11 @@ class MacsecManager(BaseManager):
     @classmethod
     def _macsec_snapshot_from_block(cls, macsec_raw: Dict[str, Any]) -> Dict[str, Any]:
         enabled_raw = macsec_raw.get("enabled")
+        key_server_priority = macsec_raw.get("keyServerPriority")
         snap: Dict[str, Any] = {
             "enabled": bool(enabled_raw) if enabled_raw is not None else False,
             "encryptionEnforcementMode": cls._str(macsec_raw.get("encryptionEnforcementMode")),
-            "keyServerPriority": (
-                int(macsec_raw.get("keyServerPriority")) if macsec_raw.get("keyServerPriority") is not None else None
-            ),
+            "keyServerPriority": (int(key_server_priority) if key_server_priority is not None else None),
             "presharedKeys": cls._normalize_psk_from_get(macsec_raw.get("pskConfigurations")),
             "sakConfiguration": cls._normalize_sak_from_get(macsec_raw.get("sakConfigurations")),
         }
