@@ -22,6 +22,7 @@ _SENSITIVE_LOG_KEYS = frozenset(
     {
         "localWebServerPassword",
         "presharedKey",
+        "cak",
         "md5Password",
     }
 )

@@ -20,6 +20,7 @@ from .ntp_manager import NtpManager
 from .traffic_policy_manager import TrafficPolicyManager
 from .device_system_manager import DeviceSystemManager
 from .edge_services_manager import EdgeServicesManager
+from .macsec_manager import MacsecManager
 from .logger import setup_logger
 from .exceptions import GraphiantPlaybookError
 
@@ -89,6 +90,7 @@ class GraphiantConfig:
             self.traffic_policy = TrafficPolicyManager(self.config_utils)
             self.device_system = DeviceSystemManager(self.config_utils)
             self.edge_services = EdgeServicesManager(self.config_utils)
+            self.macsec = MacsecManager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -120,4 +122,5 @@ class GraphiantConfig:
             "traffic_policy": hasattr(self, "traffic_policy") and self.traffic_policy is not None,
             "device_system": hasattr(self, "device_system") and self.device_system is not None,
             "edge_services": hasattr(self, "edge_services") and self.edge_services is not None,
+            "macsec": hasattr(self, "macsec") and self.macsec is not None,
         }

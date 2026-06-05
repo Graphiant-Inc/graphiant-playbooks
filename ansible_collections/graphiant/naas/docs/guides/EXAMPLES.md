@@ -28,7 +28,7 @@ All modules support `state` parameter:
 - `absent`: Deconfigure/remove resources (maps to `deconfigure` operation)
 - When both `operation` and `state` are provided, `operation` takes precedence
 
-`graphiant_device_system` and `graphiant_edge_services` only support `present` (configure); `absent` is not valid.
+`graphiant_device_system`, `graphiant_edge_services`, and `graphiant_macsec` only support `present` (configure); `absent` is not valid at module level (MACsec PSK removal uses `state: absent` on individual `presharedKeys` entries).
 
 ### Config File Path Resolution
 
@@ -970,6 +970,189 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_mana
     msg: "{{ deconfigure_result.msg }}"
   when: deconfigure_result is defined and deconfigure_result.msg is defined
   tags: ['deconfigure']
+```
+
+## MACsec (802.1AE)
+
+### Module: graphiant.naas.graphiant_macsec
+
+`graphiant_macsec` configures interface MACsec on Edge/Gateway devices using `PUT /v1/devices/{id}/config`:
+
+- **Ethernet or LAG main interfaces** — `edge.interfaces.{name}.interface.macsec.macsec` or `edge.lagInterfaces.{name}.interface.macsec.macsec` (not subinterfaces)
+- **Enable/disable**, encryption enforcement mode, key server priority
+- **Pre-shared keys (PSK)** — up to 3 per interface; rotate with `state: absent` on a key entry (at least one must remain when enabled)
+- **SAK profile** — replay protection window and rekey interval
+
+Configure-only (`state: present` at module level). Requires a **software image with MACsec support** on the target device.
+
+**Prerequisites:** main LAN interfaces must exist (`interface_management.yml --tags lan`). For MACsec on a LAG, configure the LAG first (`lag_interface_management.yml --tags configure`).
+
+**CAK (recommended):** omit `cak` from YAML; set `ckn` on each key and pass `vault_devices_macsec_psk` (device → interface → ckn → cak) via Ansible Vault. Plaintext `cak` in YAML or module params is for dev/local only. Diffs redact CAK and show `cakConfigured` booleans. Use `no_log: true` on tasks that pass secrets.
+
+Partial updates merge with portal state (disable with `enabled: false`, priority-only, PSK rotation, SAK-only). With `--check`, nothing is pushed; use `--diff` for `details.diff_plan` and Ansible `diff`.
+
+Use `configs/sample_macsec.yaml` (top-level `macsec` list, same pattern as `edge_services`).
+
+Query operational status with `graphiant_macsec_info` (`GET /v2/monitoring/macsec/{device_id}/status`).
+
+#### Vault setup
+
+Required when CAK is supplied via Ansible Vault (`vault_devices_macsec_psk` in `vault_secrets.yml`). Use the `configure` tag and pass `--vault-password-file` on every run (including `--check`). For dev-only plaintext `cak` in the config YAML, use `configure_without_vault` instead.
+
+```bash
+cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example ansible_collections/graphiant/naas/configs/vault_secrets.yml
+# Edit vault_devices_macsec_psk (device → interface → ckn → cak), then:
+export ANSIBLE_VAULT_PASSPHRASE="*************"
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+```
+
+### Playbook
+
+Tags: `configure` (YAML + vault for CAK), `configure_without_vault` (YAML only, no vault load), `configure_params_examples`, `status`, `info`.
+
+**With vault** (`configure`):
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+```
+
+**Without vault** (`configure_without_vault`) — only when each key has plaintext `cak` in the config YAML (dev/local):
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure_without_vault -e config_file=sample_macsec.yaml --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure_without_vault -e config_file=sample_macsec.yaml
+```
+
+**Module-parameter examples** and **monitoring status**:
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure_params_examples --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags status -e macsec_device=edge-1-sdktest
+```
+
+### Module task
+
+From YAML **with vault**:
+
+```yaml
+- name: Load vault secrets for MACsec
+  ansible.builtin.include_vars:
+    file: vault_secrets.yml
+  no_log: true
+
+- name: Configure MACsec from YAML
+  graphiant.naas.graphiant_macsec:
+    <<: *graphiant_client_params
+    operation: configure
+    macsec_config_file: "{{ config_file }}"
+    vault_devices_macsec_psk: "{{ vault_devices_macsec_psk | default({}) }}"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  no_log: true
+
+- name: Display configure result
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+```
+
+**Single device** via module parameters (LAG example):
+
+```yaml
+- name: Enable MACsec on LAG1
+  graphiant.naas.graphiant_macsec:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    vault_devices_macsec_psk: "{{ vault_devices_macsec_psk | default({}) }}"
+    interfaces:
+      LAG1:
+        enabled: true
+        encryptionEnforcementMode: MACSEC_ENFORCEMENT_MODE_MUST_ENCRYPT
+        keyServerPriority: 200
+        presharedKeys:
+          - nickname: macsec-key-1
+            startTime: "2029-12-11 11:12:13"
+            ckn: "853c6a4eb4f21c58a5bfeb9600dd26e8e045ded866b02a45f5f52cebadcd5956"
+            cipherSuite: AES_256_CMAC
+            useXpnForCipherSuite: true
+        sakConfiguration:
+          replayProtectionWindowSize: 64
+          rekeyInterval: 3600
+    state: present
+  no_log: true
+```
+
+**Disable**, **rotate keys**, and **SAK-only** updates:
+
+```yaml
+- name: Disable MACsec on an interface
+  graphiant.naas.graphiant_macsec:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    interfaces:
+      LAG1:
+        enabled: false
+    state: present
+
+- name: Rotate MACsec keys (remove key1, keep key2)
+  graphiant.naas.graphiant_macsec:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    vault_devices_macsec_psk: "{{ vault_devices_macsec_psk | default({}) }}"
+    interfaces:
+      GigabitEthernet7/0/0:
+        presharedKeys:
+          - nickname: key1
+            state: absent
+    state: present
+  no_log: true
+
+- name: Update SAK replay window only
+  graphiant.naas.graphiant_macsec:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    interfaces:
+      LAG1:
+        sakConfiguration:
+          replayProtectionWindowSize: 62
+    state: present
+```
+
+There is no module-level `deconfigure` or `state: absent`. To turn off MACsec, set `enabled: false` on the interface. To remove a PSK, use `state: absent` on that key entry (see `tests/test.py` MACsec tests).
+
+**PSK rotation:** the API does not allow updating an existing nickname in place (same behavior as the portal UI). Add a new `presharedKeys` entry with a **unique nickname**, then delete the old key with `state: absent`. Listing an unchanged existing key in YAML is idempotent and does not re-push CAK. SAK-only or `enabled` changes push without touching existing PSKs. CAK is omitted from Ansible `--diff` output (`cakConfigured` is shown instead).
+
+### Module: graphiant.naas.graphiant_macsec_info
+
+Read-only monitoring status per interface (`MACSEC_STATUS_SECURE`, `MACSEC_STATUS_UNSECURE`).
+
+```yaml
+- name: Get MACsec status for all interfaces
+  graphiant.naas.graphiant_macsec_info:
+    <<: *graphiant_client_params
+    device: "edge-1-sdktest"
+    detailed_logs: true
+  register: macsec_status
+
+- name: Display MACsec statuses
+  ansible.builtin.debug:
+    var: macsec_status.macsec_statuses
+
+- name: Get MACsec status for one interface
+  graphiant.naas.graphiant_macsec_info:
+    <<: *graphiant_client_params
+    device: "edge-1-sdktest"
+    interface: LAG1
+  register: lag_macsec_status
 ```
 
 ## BGP Configuration
@@ -1949,6 +2132,8 @@ Sample configuration files are in the `configs/` directory:
 | `sample_site_attachments.yaml` | Site attachment configurations |
 | `sample_device_ntp.yaml` | Device NTP configuration  |
 | `sample_static_route.yaml` | Static routes under edge segments |
+| `sample_macsec.yaml` | Interface MACsec (802.1AE) on ethernet or LAG main interfaces |
+| `sample_edge_services.yaml` | Edge services (DHCP, DNS, LLDP, LWS password) |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
 
@@ -1961,6 +2146,7 @@ For Python library usage, see `tests/test.py` which demonstrates:
 - Global object management
 - Site operations
 - Device system settings
+- Edge services and MACsec configuration
 - Data Exchange workflows
 
 ```python

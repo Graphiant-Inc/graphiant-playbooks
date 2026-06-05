@@ -22,6 +22,7 @@ This collection provides Ansible modules to automate:
 - Static routes management (per-segment configure/deconfigure)
 - VRRP (Virtual Router Redundancy Protocol) configuration
 - LAG (Link Aggregation Group) interface configuration
+- Interface MACsec (802.1AE) configuration and monitoring on Edge/Gateway devices
 - BGP peering management (including BFD — Bidirectional Forwarding Detection)
 - Site-to-Site VPN configuration (static and BGP routing)
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
@@ -65,6 +66,8 @@ This collection provides Ansible modules to automate:
 | `graphiant_static_routes` | Manage static routes (per-segment configure/deconfigure/validate) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
 | `graphiant_lag_interfaces` | Manage LAG interfaces configuration |
+| `graphiant_macsec` | Configure interface MACsec (802.1AE) on Edge/Gateway devices |
+| `graphiant_macsec_info` | Query MACsec monitoring status (secure/unsecure) per interface |
 | `graphiant_bgp` | Manage BGP peering and routing policies (including BFD) |
 | `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
@@ -251,6 +254,24 @@ For detailed usage examples and per-module playbook walkthroughs, see the **[Exa
       when: edge_services_result is defined and edge_services_result.msg is defined
       tags: ['edge_services']
 
+    - name: Configure MACsec from YAML (Vault CAK secrets)
+      graphiant.naas.graphiant_macsec:
+        <<: *graphiant_client_params
+        macsec_config_file: "sample_macsec.yaml"
+        vault_devices_macsec_psk: "{{ vault_devices_macsec_psk | default({}) }}"
+        operation: configure
+        detailed_logs: true
+        state: present
+      register: macsec_result
+      no_log: true
+      tags: ['macsec']
+
+    - name: Display MACsec result
+      ansible.builtin.debug:
+        msg: "{{ macsec_result.msg }}"
+      when: macsec_result is defined and macsec_result.msg is defined
+      tags: ['macsec']
+
     - name: Configure global prefix sets
       graphiant.naas.graphiant_global_config:
         <<: *graphiant_client_params
@@ -319,6 +340,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `static_routes_management.yml` | Static routes configure/deconfigure/validate |
 | `vrrp_interface_management.yml` | VRRP configuration on interfaces and subinterfaces |
 | `lag_interface_management.yml` | LAG interface configuration |
+| `macsec_management.yml` | Interface MACsec configuration and monitoring status |
 | `circuit_management.yml` | Circuit configuration and static routes |
 | `lan_segments_management.yml` | LAN segment configuration |
 | `site_management.yml` | Site creation and management |
@@ -363,6 +385,8 @@ ansible-doc graphiant.naas.graphiant_device_system
 ansible-doc graphiant.naas.graphiant_edge_services
 ansible-doc graphiant.naas.graphiant_vrrp
 ansible-doc graphiant.naas.graphiant_lag_interfaces
+ansible-doc graphiant.naas.graphiant_macsec
+ansible-doc graphiant.naas.graphiant_macsec_info
 ansible-doc graphiant.naas.graphiant_bgp
 ansible-doc graphiant.naas.graphiant_site_to_site_vpn
 ansible-doc graphiant.naas.graphiant_global_config
@@ -431,12 +455,13 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
 | **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone` | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
+| **Read-only** | `graphiant_macsec_info` | Always read-only; check mode has no side effects. |
 
-**Full-mode nuances:** `graphiant_device_system` and `graphiant_edge_services` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` is always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
+**Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, and `graphiant_macsec` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** `graphiant_device_system` and `graphiant_edge_services` document `diff_mode`; use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan` when an edge/core branch would change.
+**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, and `graphiant_macsec` document `diff_mode`; use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan` when an edge branch would change.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -446,6 +471,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
 # LWS via vault: use --tags configure and --vault-password-file (see edge_services_management.yml)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+# CAK via vault required for configure tag; use configure_without_vault only with plaintext cak in YAML (dev/local)
 ```
 
 **Example: single task in check mode**
@@ -572,6 +599,8 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_device_ntp.yaml` - NTP objects under `edge.ntpGlobalObject`
 - `sample_device_traffic_policies.yaml` - Traffic rulesets under `edge.trafficPolicy` and LAN segment ruleset attachments under `edge.segments` (use configure + attach_to_lan_segments, or the `traffic_policies_management.yml` playbook `--tags configure`)
 - `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
+- `sample_lag_interface_config.yaml` - LAG interface configurations
+- `sample_macsec.yaml` - Interface MACsec (PSK/SAK) configuration; CAK via `vault_devices_macsec_psk` in `vault_secrets.yml`
 - `sample_bgp_peering.yaml` - BGP peering configurations
 - `sample_global_*.yaml` - Global configuration objects
 - `sample_device_config_payload.yaml` - Raw device configuration payloads (Edge/Gateway Device types)

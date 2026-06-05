@@ -61,6 +61,8 @@ def check_structure(base_path):
         "plugins/modules/graphiant_device_config.py",
         "plugins/modules/graphiant_device_system.py",
         "plugins/modules/graphiant_edge_services.py",
+        "plugins/modules/graphiant_macsec.py",
+        "plugins/modules/graphiant_macsec_info.py",
         "plugins/modules/graphiant_ntp.py",
         "plugins/module_utils/graphiant_utils.py",
         "plugins/module_utils/logging_decorator.py",
