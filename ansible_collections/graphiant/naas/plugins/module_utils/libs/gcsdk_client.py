@@ -2010,3 +2010,44 @@ class GraphiantPortalClient:
                 method_name="get_device_info", api_url=api_url, path_params={"device_id": device_id}, exception=e
             )
             return None
+
+    def get_macsec_status(self, device_id: int):
+        """
+        Get MACsec monitoring status for a device.
+
+        GET /v2/monitoring/macsec/{device_id}/status
+
+        Args:
+            device_id (int): The device ID
+
+        Returns:
+            dict or SDK response object with macsecStatuses list
+        """
+        api_url = f"{self.api.api_client.configuration.host}/v2/monitoring/macsec/{device_id}/status"
+        try:
+            LOG.info("get_macsec_status: Retrieving MACsec status for device ID %s", device_id)
+            method = getattr(self.api, "v2_monitoring_macsec_device_id_status_get", None)
+            if callable(method):
+                response = method(authorization=self.bearer_token, device_id=device_id)
+                LOG.info("get_macsec_status: Successfully retrieved MACsec status for device ID %s", device_id)
+                return response
+            response_data = self.api.api_client.call_api(
+                resource_path="/v2/monitoring/macsec/{device_id}/status",
+                method="GET",
+                path_params={"device_id": device_id},
+                header_params={"Authorization": self.bearer_token},
+                response_types_map={200: "dict"},
+                _request_timeout=None,
+            )
+            LOG.info("get_macsec_status: Successfully retrieved MACsec status for device ID %s", device_id)
+            return response_data
+        except ApiException as e:
+            self._log_api_error(
+                method_name="get_macsec_status",
+                api_url=api_url,
+                path_params={"device_id": device_id},
+                exception=e,
+            )
+            raise APIError(
+                f"get_macsec_status: Failed to retrieve MACsec status for device_id={device_id}. Exception: {e}"
+            )
