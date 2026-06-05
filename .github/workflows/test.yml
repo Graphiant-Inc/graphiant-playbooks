@@ -38,12 +38,17 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        ansible:
-          - stable-2.17
-          - stable-2.18
-          - stable-2.19
-          - stable-2.20
-          - devel
+        include:
+          - ansible: stable-2.17
+            python-version: '3.12'
+          - ansible: stable-2.18
+            python-version: '3.12'
+          - ansible: stable-2.19
+            python-version: '3.12'
+          - ansible: stable-2.20
+            python-version: '3.12'
+          - ansible: devel
+            python-version: '3.13'
     defaults:
       run:
         working-directory: ansible_collections/graphiant/naas
@@ -54,7 +59,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
           cache: 'pip'
           cache-dependency-path: |
             ansible_collections/graphiant/naas/requirements-ee.txt
@@ -84,7 +89,7 @@ jobs:
         run: |
           set -e
           echo "Running ansible-test units (pytest, no live API)…"
-          ansible-test units --local --python 3.12
+          ansible-test units --local --python ${{ matrix.python-version }}
 
       - name: Set PYTHONPATH
         run: |
