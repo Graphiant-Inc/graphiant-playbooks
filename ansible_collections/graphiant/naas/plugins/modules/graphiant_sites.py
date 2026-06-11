@@ -24,7 +24,7 @@ description:
   - Can perform site-only operations or object attachment operations independently.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "25.11.0"
+version_added: "25.12.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "Use playbook I(playbooks/site_management.yml) with tags I(configure_sites), I(deconfigure_sites),"
@@ -99,7 +99,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
 
 seealso:
   - module: graphiant.naas.graphiant_global_config

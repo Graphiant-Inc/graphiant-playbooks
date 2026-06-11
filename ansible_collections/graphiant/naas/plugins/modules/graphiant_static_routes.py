@@ -75,7 +75,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
 
 seealso:
   - module: graphiant.naas.graphiant_global_config

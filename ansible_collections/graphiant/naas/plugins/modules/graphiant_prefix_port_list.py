@@ -47,7 +47,7 @@ notes:
   - >-
     With C(ansible-playbook --check), writes are skipped but C(changed) reflects whether an apply would update
     at least one device. Use C(--diff) to preview C(details.diff_plan) and Ansible C(diff).
-version_added: "26.2.0"
+version_added: "26.5.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:
@@ -111,7 +111,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
 
 author:
   - Graphiant Team (@graphiant)

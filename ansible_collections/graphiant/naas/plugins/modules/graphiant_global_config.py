@@ -29,7 +29,7 @@ description:
     syslog services, NTP services, IPFIX services, VPN profiles, and LAN segments.
   - Can manage all object types together using general operations or specific object types individually.
   - All operations use Jinja2 templates for consistent configuration deployment.
-version_added: "25.11.0"
+version_added: "25.12.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "Global Configuration Operations:"
@@ -133,7 +133,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
 
 seealso:
   - module: graphiant.naas.graphiant_bgp

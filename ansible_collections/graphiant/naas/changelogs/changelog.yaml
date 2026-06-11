@@ -6,12 +6,13 @@
 ancestor: null
 releases:
   "26.5.0":
-    release_date: "2026-05-27"
+    release_date: "2026-06-10"
     changes:
       security_fixes:
         - "Mask API keys in ``_SENSITIVE_LOG_KEYS`` (``device_config_common``) in ``gcsdk_client`` ``put_device_config`` / ``put_device_config_raw`` and ``show_validated_payload`` log output"
       minor_changes:
         - "Collection version bumped to 26.5.0"
+        - "Minimum ``graphiant-sdk`` raised to ``>= 26.5.0`` (see ``_version.py`` ``DEPENDENCIES``)"
         - "New ``graphiant_backbone`` module and ``backbone_management.yml`` playbook for managing Graphiant Core (backbone) device configuration; samples ``sample_backbone_config.yaml`` and ``sample_backbone_direct_peer_config.yaml``"
         - "Backbone operations: ``configure`` / ``deconfigure`` (orchestrate sites + tunnel-underlay phasing + per-device push), ``configure_core_to_core_interfaces`` / ``deconfigure_core_to_core_interfaces`` (with VLAN sub-interface support), ``configure_core_to_core_tunnel_interfaces`` / ``deconfigure_core_to_core_tunnel_interfaces``, ``configure_wan_circuits`` / ``deconfigure_wan_circuits``, ``configure_direct_peer_interfaces`` / ``deconfigure_direct_peer_interfaces``, ``configure_syslog_targets`` / ``deconfigure_syslog_targets``"
         - "New ``backbone_interface_template.yaml`` Jinja2 template covering Core ``interface_type`` flavors: ``loopback``, ``core_to_core_link`` (with VLAN sub-interfaces + ``ospf`` block rendered to ``coreNeighbor``), ``core_to_core_ipsec_tunnel``, ``p2mp_tunnel``, ``isp_circuit``, ``direct_peer``, ``disabled``"
@@ -19,6 +20,7 @@ releases:
         - "``BackboneManager`` registered on ``GraphiantConfig.backbone``; payloads build the ``core`` branch (counterpart to ``graphiant_interfaces`` on ``edge``). ``ConfigTemplates.render_backbone_interface()`` and ``ConfigUtils.device_backbone_interface()`` render the new template"
         - "New ``graphiant_edge_services`` module and ``edge_services_management.yml`` playbook for Edge/Gateway DHCP subnets, DNS mode, LLDP, and local web server password; sample ``sample_edge_services.yaml``"
         - "New ``graphiant_macsec`` and ``graphiant_macsec_info`` modules and ``macsec_management.yml`` playbook for interface MACsec configuration and monitoring; sample ``sample_macsec.yaml``"
+        - "New ``graphiant_prefix_port_list`` module and ``prefix_port_list_mangement.yml`` playbook for managing Prefix and Port Lists on Edge devices; sample ``sample_prefix_and_port_list.yaml``"
 
   "26.4.0":
     release_date: "2026-05-01"

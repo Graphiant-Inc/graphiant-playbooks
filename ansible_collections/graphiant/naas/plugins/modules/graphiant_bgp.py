@@ -23,7 +23,7 @@ description:
   - Enables attachment and detachment of global BGP routing policies (filters) to BGP peers.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-version_added: "25.11.0"
+version_added: "25.12.0"
 notes:
   - "BGP Operations:"
   - "  - Configure: Create BGP peering neighbors and attach global BGP routing policies."
@@ -87,7 +87,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
 
 seealso:
   - module: graphiant.naas.graphiant_interfaces
