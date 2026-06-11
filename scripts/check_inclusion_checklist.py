@@ -659,9 +659,9 @@ def check_version_added() -> Dict[str, List[str]]:
 
 # Flat quantifiers only — avoids ReDoS from nested alternation in the full semver spec regex.
 _SEMVER_RE = re.compile(
-    r"^\d+\.\d+\.\d+"           # MAJOR.MINOR.PATCH
-    r"(?:-[0-9A-Za-z.-]+)?"     # optional pre-release  e.g. -alpha.1
-    r"(?:\+[0-9A-Za-z.-]+)?$"   # optional build metadata  e.g. +build.20230101
+    r"^\d+\.\d+\.\d+"                                   # MAJOR.MINOR.PATCH
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"         # optional pre-release identifiers separated by dots
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"       # optional build metadata identifiers separated by dots
 )
 
 
