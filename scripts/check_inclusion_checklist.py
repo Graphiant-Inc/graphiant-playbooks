@@ -394,9 +394,30 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                         # Check if there's any conditional logic for changed
                         try:
                             parsed_block = ast.parse(block)
-                            has_conditional_logic = any(
-                                isinstance(node, ast.If) for node in ast.walk(parsed_block)
-                            )
+                            has_conditional_logic = False
+
+                            # The captured block already starts with `if module.check_mode:`.
+                            # We only consider it conditional if there is *additional* branching
+                            # inside that outer check-mode block.
+                            for stmt in parsed_block.body:
+                                if isinstance(stmt, ast.If):
+                                    is_check_mode_if = (
+                                        isinstance(stmt.test, ast.Attribute)
+                                        and stmt.test.attr == "check_mode"
+                                        and isinstance(stmt.test.value, ast.Name)
+                                        and stmt.test.value.id == "module"
+                                    )
+                                    if not is_check_mode_if:
+                                        continue
+
+                                    has_nested_condition = any(
+                                        isinstance(node, (ast.If, ast.IfExp, ast.Match))
+                                        for node in ast.walk(stmt)
+                                        if node is not stmt
+                                    )
+                                    if has_nested_condition:
+                                        has_conditional_logic = True
+                                        break
                         except SyntaxError:
                             # Fallback for partial/non-parseable block captures
                             has_conditional_logic = (
