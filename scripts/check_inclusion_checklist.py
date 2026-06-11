@@ -364,7 +364,16 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                     # Check if it always sets changed=True without conditions
                     if "changed=True" in block or "changed: True" in block:
                         # Check if there's any conditional logic for changed
-                        has_conditional_logic = re.search(r"^\s*(if|elif)\s+.+:", block, re.MULTILINE) is not None
+                        try:
+                            parsed_block = ast.parse(block)
+                            has_conditional_logic = any(
+                                isinstance(node, ast.If) for node in ast.walk(parsed_block)
+                            )
+                        except SyntaxError:
+                            # Fallback for partial/non-parseable block captures
+                            has_conditional_logic = (
+                                re.search(r"\b(if|elif)\b\s*.*:", block) is not None
+                            )
                         if not has_conditional_logic:
                             # Check if it's graphiant_device_config with show_validated_payload handling
                             if module_name == "graphiant_device_config" and "show_validated_payload" in block:
