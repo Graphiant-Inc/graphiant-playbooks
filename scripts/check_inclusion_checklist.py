@@ -474,7 +474,7 @@ def check_python_version() -> Dict[str, List[str]]:
                 continue
 
             # Check python version
-            if "python >= 3.7" not in content and "python>=3.7" not in content:
+            if not re.search(r"\bpython\s*>=\s*3\.7\b", content, re.IGNORECASE):
                 if module_name not in issues:
                     issues[module_name] = []
                 issues[module_name].append("Python requirement should be >= 3.7")
