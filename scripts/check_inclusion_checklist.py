@@ -16,7 +16,7 @@ import sys
 import yaml
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # Collection root directory
 COLLECTION_ROOT = Path(__file__).parent.parent / "ansible_collections" / "graphiant" / "naas"
@@ -27,7 +27,7 @@ DOCUMENTATION_PATTERN = re.compile(r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1", r
 
 
 @lru_cache(maxsize=None)
-def _extract_documentation_block(content: str) -> str | None:
+def _extract_documentation_block(content: str) -> Optional[str]:
     """Extract DOCUMENTATION YAML text from module source content."""
     match = DOCUMENTATION_PATTERN.search(content)
     if not match:
