@@ -274,7 +274,6 @@ def test_coerce_dpi_applications_list_to_map() -> None:
         }
     ]
     out = EdgeServicesManager._coerce_dpi_applications_map(raw)
-    assert "whitehouse.gov" in out.keys()
     assert out["whitehouse.gov"]["name"] == "whitehouse.gov"
 
 
