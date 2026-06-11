@@ -513,8 +513,16 @@ def check_license_headers() -> Dict[str, List[str]]:
         try:
             content = module_file.read_text(encoding="utf-8")
 
-            # Check for GPL license header
-            if "GNU General Public License" not in content and "GPL" not in content:
+            # Check for GPL license header (full name or SPDX/identifier forms)
+            has_gpl_header = any(
+                re.search(pattern, content, re.IGNORECASE)
+                for pattern in (
+                    r"\bGNU\s+General\s+Public\s+License\b",
+                    r"\bSPDX-License-Identifier:\s*GPL-[0-9](?:\.[0-9])?(?:-only|-or-later)?\b",
+                    r"\bGPLv?3(?:\.[0-9])?\b",
+                )
+            )
+            if not has_gpl_header:
                 if module_name not in issues:
                     issues[module_name] = []
                 issues[module_name].append("Missing GPLv3 license header")
