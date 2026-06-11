@@ -244,3 +244,395 @@ def test_lldp_snapshot_skips_wan() -> None:
     )
     assert "GigabitEthernet2/0/0" not in snap
     assert snap["GigabitEthernet5/0/0"] is False
+
+
+def test_dpi_snapshot_from_device_edge_traffic_policy() -> None:
+    """DPI snapshot reads dpiApplications from device.edge.trafficPolicy like other edge services."""
+    device = {
+        "dns": {"mode": "DNSModeStatic"},
+        "edge": {
+            "trafficPolicy": {
+                "dpiApplications": {
+                    "app1": {"application": {"name": "app1", "ipProtocol": "tcp"}},
+                }
+            }
+        },
+    }
+    snap = EdgeServicesManager._dpi_snapshot_from_device(device)
+    assert snap["app1"]["name"] == "app1"
+    assert snap["app1"]["ipProtocol"] == "tcp"
+
+
+def test_coerce_dpi_applications_list_to_map() -> None:
+    raw = [
+        {
+            "application": {
+                "name": "whitehouse.gov",
+                "ipProtocol": "tcp",
+                "destinationNetwork": "192.0.66.180/32",
+            }
+        }
+    ]
+    out = EdgeServicesManager._coerce_dpi_applications_map(raw)
+    assert "whitehouse.gov" in out
+    assert out["whitehouse.gov"]["name"] == "whitehouse.gov"
+
+
+def test_build_edge_payload_dpi_injects_name_from_map_key() -> None:
+    mgr = _make_manager()
+    current = {
+        "role": "cpe",
+        "edge": {
+            "trafficPolicy": {
+                "portLists": {"web_ports": {"list": {"name": "web_ports", "ports": [80, 443]}}},
+                "networkLists": {
+                    "graphiant_dia_prefix": {"list": {"name": "graphiant_dia_prefix", "networks": ["1.1.1.1/32"]}}
+                },
+            }
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "whitehouse.gov": {
+                "application": {
+                    "ipProtocol": "tcp",
+                    "destinationNetwork": "192.0.66.180/32",
+                    "destinationPortList": "web_ports",
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    app = edge["trafficPolicy"]["dpiApplications"]["whitehouse.gov"]["application"]
+    assert app["name"] == "whitehouse.gov"
+    assert app["ipProtocol"] == "tcp"
+    assert app["destinationPortList"] == "web_ports"
+
+
+def test_build_edge_payload_skips_dpi_yaml_nulls_vs_sparse_get() -> None:
+    """Explicit nulls in YAML must match portal GET that omits unset application fields."""
+    mgr = _make_manager()
+    get_app = {
+        "name": "whitehouse.gov",
+        "ipProtocol": "tcp",
+        "destinationNetwork": "192.0.66.180/32",
+        "destinationPortList": "web_ports",
+    }
+    current = {
+        "role": "cpe",
+        "edge": {
+            "trafficPolicy": {
+                "dpiApplications": {"whitehouse.gov": {"application": get_app}},
+                "portLists": {"web_ports": {"list": {"name": "web_ports", "ports": [80, 443]}}},
+            }
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "whitehouse.gov": {
+                "application": {
+                    "ipProtocol": "tcp",
+                    "sourceNetwork": None,
+                    "sourceNetworkList": None,
+                    "sourcePort": None,
+                    "sourcePortList": None,
+                    "destinationNetwork": "192.0.66.180/32",
+                    "destinationNetworkList": None,
+                    "destinationPort": None,
+                    "destinationPortList": "web_ports",
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_build_edge_payload_updates_source_when_yaml_nulls_destination() -> None:
+    """Non-null source fields are pushed; explicit null destination fields are omitted from PUT."""
+    mgr = _make_manager()
+    current = {
+        "role": "cpe",
+        "trafficPolicy": {
+            "dpiApplications": [
+                {
+                    "name": "graphiant_dia_ping_via_IP",
+                    "ipProtocol": "tcp",
+                    "destinationNetwork": "192.0.66.180/32",
+                    "destinationPortList": "web_ports",
+                },
+            ],
+            "portLists": [{"name": "web_ports", "ports": [80, 443]}],
+            "networkLists": [{"name": "graphiant_dia_prefix", "networks": ["1.1.1.1/32"]}],
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "graphiant_dia_ping_via_IP": {
+                "application": {
+                    "ipProtocol": "tcp",
+                    "sourceNetwork": None,
+                    "sourceNetworkList": "graphiant_dia_prefix",
+                    "sourcePort": 80,
+                    "sourcePortList": None,
+                    "destinationNetwork": None,
+                    "destinationNetworkList": None,
+                    "destinationPort": None,
+                    "destinationPortList": None,
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    app = edge["trafficPolicy"]["dpiApplications"]["graphiant_dia_ping_via_IP"]["application"]
+    assert app["sourceNetworkList"] == "graphiant_dia_prefix"
+    assert app["sourcePort"] == 80
+    assert "destinationNetwork" not in app
+    assert "destinationPortList" not in app
+
+
+def test_build_edge_payload_skips_dpi_when_only_null_field_changes() -> None:
+    """Explicit nulls alone do not trigger updates (portal cannot clear nested fields via null)."""
+    mgr = _make_manager()
+    current = {
+        "role": "cpe",
+        "trafficPolicy": {
+            "dpiApplications": [
+                {
+                    "name": "graphiant_dia_ping_via_IP",
+                    "ipProtocol": "tcp",
+                    "sourceNetworkList": "graphiant_dia_prefix",
+                    "sourcePort": 80,
+                    "destinationNetwork": "8.8.8.8/32",
+                },
+            ],
+            "networkLists": [{"name": "graphiant_dia_prefix", "networks": ["1.1.1.1/32"]}],
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "graphiant_dia_ping_via_IP": {
+                "application": {
+                    "ipProtocol": "tcp",
+                    "sourceNetwork": None,
+                    "sourceNetworkList": None,
+                    "sourcePort": None,
+                    "sourcePortList": None,
+                    "destinationNetwork": "8.8.8.8/32",
+                    "destinationNetworkList": None,
+                    "destinationPort": None,
+                    "destinationPortList": None,
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_build_edge_payload_dpi_put_only_sends_changed_fields() -> None:
+    """Explicit nulls in YAML must not be re-sent when portal already has the field unset."""
+    mgr = _make_manager()
+    get_app = {
+        "name": "whitehouse.gov",
+        "ipProtocol": "tcp",
+        "destinationNetwork": "192.0.66.180/32",
+        "destinationPortList": "web_ports",
+    }
+    current = {
+        "role": "cpe",
+        "trafficPolicy": {
+            "dpiApplications": [{"name": "whitehouse.gov", **{k: v for k, v in get_app.items() if k != "name"}}],
+            "portLists": [{"name": "web_ports", "ports": [80, 443]}],
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "whitehouse.gov": {
+                "application": {
+                    "ipProtocol": "tcp",
+                    "sourceNetwork": None,
+                    "sourceNetworkList": None,
+                    "sourcePort": None,
+                    "sourcePortList": None,
+                    "destinationNetwork": "192.0.66.180/32",
+                    "destinationNetworkList": None,
+                    "destinationPort": None,
+                    "destinationPortList": "web_ports",
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_build_edge_payload_skips_dpi_when_get_returns_zero_ports() -> None:
+    mgr = _make_manager()
+    get_app = {
+        "name": "graphiant_dia_ping",
+        "ipProtocol": "icmp",
+        "sourcePort": 0,
+        "destinationPort": 0,
+        "destinationNetworkList": "graphiant_dia_prefix",
+    }
+    current = {
+        "role": "cpe",
+        "edge": {
+            "trafficPolicy": {
+                "dpiApplications": {"graphiant_dia_ping": {"application": get_app}},
+                "networkLists": {
+                    "graphiant_dia_prefix": {"list": {"name": "graphiant_dia_prefix", "networks": ["1.1.1.1/32"]}}
+                },
+            }
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "graphiant_dia_ping": {
+                "application": {
+                    "ipProtocol": "icmp",
+                    "destinationNetworkList": "graphiant_dia_prefix",
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_dpi_idempotent_when_portal_omits_unknown_ip_protocol() -> None:
+    """Portal GET may drop ipProtocol after PUT with UnknownIPProtocol; must not re-push."""
+    desired = {
+        "ipProtocol": "UnknownIPProtocol",
+        "destinationNetwork": "8.8.8.8/32",
+        "sourceNetworkList": None,
+    }
+    before = {"name": "graphiant_dia_ping_via_IP", "destinationNetwork": "8.8.8.8/32"}
+    assert EdgeServicesManager._dpi_applications_equal(before, desired, "graphiant_dia_ping_via_IP") is True
+
+    mgr = _make_manager()
+    current = {
+        "role": "cpe",
+        "trafficPolicy": {
+            "dpiApplications": [
+                {"name": "graphiant_dia_ping_via_IP", "destinationNetwork": "8.8.8.8/32"},
+            ],
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "graphiant_dia_ping_via_IP": {
+                "application": {
+                    "ipProtocol": "UnknownIPProtocol",
+                    "sourceNetwork": None,
+                    "sourceNetworkList": None,
+                    "sourcePort": None,
+                    "sourcePortList": None,
+                    "destinationNetwork": "8.8.8.8/32",
+                    "destinationNetworkList": None,
+                    "destinationPort": None,
+                    "destinationPortList": None,
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-2", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_build_edge_payload_skips_dpi_when_portal_description_not_in_yaml() -> None:
+    """Portal GET may include description; YAML without it should still be idempotent."""
+    mgr = _make_manager()
+    current = {
+        "role": "cpe",
+        "trafficPolicy": {
+            "dpiApplications": [
+                {
+                    "name": "whitehouse.gov",
+                    "description": "TCP app using destination prefix and port list",
+                    "ipProtocol": "tcp",
+                    "destinationNetwork": "192.0.66.180/32",
+                    "destinationPortList": "web_ports",
+                },
+            ],
+            "portLists": [{"id": 1, "name": "web_ports", "ports": [80, 443]}],
+        },
+    }
+    cfg = {
+        "dpiApplications": {
+            "whitehouse.gov": {
+                "application": {
+                    "ipProtocol": "tcp",
+                    "destinationNetwork": "192.0.66.180/32",
+                    "destinationPortList": "web_ports",
+                }
+            }
+        }
+    }
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_build_edge_payload_skips_dpi_when_unchanged() -> None:
+    mgr = _make_manager()
+    app = {
+        "name": "whitehouse.gov",
+        "description": None,
+        "ipProtocol": "tcp",
+        "sourceNetwork": None,
+        "sourceNetworkList": None,
+        "sourcePort": None,
+        "sourcePortList": None,
+        "destinationNetwork": "192.0.66.180/32",
+        "destinationNetworkList": None,
+        "destinationPort": None,
+        "destinationPortList": "web_ports",
+    }
+    current = {
+        "role": "cpe",
+        "edge": {
+            "trafficPolicy": {
+                "dpiApplications": {"whitehouse.gov": {"application": app}},
+                "portLists": {"web_ports": {"list": {"name": "web_ports", "ports": [80, 443]}}},
+            }
+        },
+    }
+    cfg = {"dpiApplications": {"whitehouse.gov": {"application": dict(app)}}}
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert "trafficPolicy" not in edge
+
+
+def test_build_edge_payload_dpi_remove_application() -> None:
+    mgr = _make_manager()
+    current = {
+        "role": "cpe",
+        "edge": {
+            "trafficPolicy": {
+                "dpiApplications": {
+                    "old-app": {
+                        "application": {"name": "old-app", "ipProtocol": "icmp"},
+                    }
+                }
+            }
+        },
+    }
+    cfg = {"dpiApplications": {"old-app": {"state": "absent"}}}
+    edge = mgr._build_edge_payload("edge-1", cfg, current)
+    assert edge["trafficPolicy"]["dpiApplications"]["old-app"] == {"application": None}
+
+
+def test_validate_dpi_unknown_port_list_fails() -> None:
+    mgr = _make_manager()
+    current = {"edge": {"trafficPolicy": {"portLists": {}}}}
+    desired = {
+        "app1": {
+            "application": {
+                "name": "app1",
+                "ipProtocol": "tcp",
+                "destinationPortList": "missing_ports",
+            }
+        }
+    }
+    with pytest.raises(ConfigurationError, match="missing_ports"):
+        mgr._validate_dpi_list_references("edge-1", desired, current)

@@ -8,6 +8,8 @@ releases:
   "26.5.0":
     release_date: "2026-05-27"
     changes:
+      security_fixes:
+        - "Mask API keys in ``_SENSITIVE_LOG_KEYS`` (``device_config_common``) in ``gcsdk_client`` ``put_device_config`` / ``put_device_config_raw`` and ``show_validated_payload`` log output"
       minor_changes:
         - "Collection version bumped to 26.5.0"
         - "New ``graphiant_backbone`` module and ``backbone_management.yml`` playbook for managing Graphiant Core (backbone) device configuration; samples ``sample_backbone_config.yaml`` and ``sample_backbone_direct_peer_config.yaml``"
@@ -16,6 +18,7 @@ releases:
         - "Deconfigure workflows are idempotent: parent and VLAN sub-interface existence checked via ``gsdk.get_device_info`` before issuing deletes; per-VRF ``syslogTargets`` existence checked against ``device.segments[*].syslog_targets[*].name``"
         - "``BackboneManager`` registered on ``GraphiantConfig.backbone``; payloads build the ``core`` branch (counterpart to ``graphiant_interfaces`` on ``edge``). ``ConfigTemplates.render_backbone_interface()`` and ``ConfigUtils.device_backbone_interface()`` render the new template"
         - "New ``graphiant_edge_services`` module and ``edge_services_management.yml`` playbook for Edge/Gateway DHCP subnets, DNS mode, LLDP, and local web server password; sample ``sample_edge_services.yaml``"
+        - "New ``graphiant_macsec`` and ``graphiant_macsec_info`` modules and ``macsec_management.yml`` playbook for interface MACsec configuration and monitoring; sample ``sample_macsec.yaml``"
 
   "26.4.0":
     release_date: "2026-05-01"

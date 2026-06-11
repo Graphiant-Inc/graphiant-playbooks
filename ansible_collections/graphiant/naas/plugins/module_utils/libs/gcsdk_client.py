@@ -75,6 +75,7 @@ PydanticValidationError = _pydantic_validation_error_type()
 from .logger import setup_logger  # noqa: E402
 from .poller import poller  # noqa: E402
 from .exceptions import APIError  # noqa: E402
+from .device_config_common import format_config_payload_for_log  # noqa: E402
 
 LOG = setup_logger()
 
@@ -467,7 +468,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "[check_mode] put_device_config would push config for device_id=%s: %s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             return None
         try:
@@ -476,7 +477,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "put_device_config : config to be pushed for %s: \n%s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             response = self.api.v1_devices_device_id_config_put(
                 authorization=self.bearer_token,
@@ -539,7 +540,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "[check_mode] put_device_config_raw would push config for device_id=%s: %s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             return None
         try:
@@ -548,7 +549,7 @@ class GraphiantPortalClient:
             LOG.info(
                 "put_device_config_raw : config to be pushed for %s: \n%s",
                 device_id,
-                json.dumps(device_config_put_request.to_dict(), indent=2),
+                format_config_payload_for_log(device_config_put_request.to_dict()),
             )
             response = self.api.v1_devices_device_id_config_put(
                 authorization=self.bearer_token,
@@ -609,7 +610,7 @@ class GraphiantPortalClient:
         LOG.info(
             "show_validated_payload : validated config for %s: \n%s",
             device_id,
-            json.dumps(validated_payload_dict, indent=2),
+            format_config_payload_for_log(validated_payload_dict),
         )
 
         LOG.info("show_validated_payload: Successfully showed validated payload for %s", device_id)
@@ -2009,3 +2010,44 @@ class GraphiantPortalClient:
                 method_name="get_device_info", api_url=api_url, path_params={"device_id": device_id}, exception=e
             )
             return None
+
+    def get_macsec_status(self, device_id: int):
+        """
+        Get MACsec monitoring status for a device.
+
+        GET /v2/monitoring/macsec/{device_id}/status
+
+        Args:
+            device_id (int): The device ID
+
+        Returns:
+            dict or SDK response object with macsecStatuses list
+        """
+        api_url = f"{self.api.api_client.configuration.host}/v2/monitoring/macsec/{device_id}/status"
+        try:
+            LOG.info("get_macsec_status: Retrieving MACsec status for device ID %s", device_id)
+            method = getattr(self.api, "v2_monitoring_macsec_device_id_status_get", None)
+            if callable(method):
+                response = method(authorization=self.bearer_token, device_id=device_id)
+                LOG.info("get_macsec_status: Successfully retrieved MACsec status for device ID %s", device_id)
+                return response
+            response_data = self.api.api_client.call_api(
+                resource_path="/v2/monitoring/macsec/{device_id}/status",
+                method="GET",
+                path_params={"device_id": device_id},
+                header_params={"Authorization": self.bearer_token},
+                response_types_map={200: "dict"},
+                _request_timeout=None,
+            )
+            LOG.info("get_macsec_status: Successfully retrieved MACsec status for device ID %s", device_id)
+            return response_data
+        except ApiException as e:
+            self._log_api_error(
+                method_name="get_macsec_status",
+                api_url=api_url,
+                path_params={"device_id": device_id},
+                exception=e,
+            )
+            raise APIError(
+                f"get_macsec_status: Failed to retrieve MACsec status for device_id={device_id}. Exception: {e}"
+            )
