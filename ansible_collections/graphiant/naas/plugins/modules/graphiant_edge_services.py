@@ -193,7 +193,7 @@ attributes:
       C(localWebServerPasswordConfigured). Structured entries are also in C(details.diff_plan).
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
 seealso:
   - module: graphiant.naas.graphiant_device_system
     description: Configure device name, region, and site.

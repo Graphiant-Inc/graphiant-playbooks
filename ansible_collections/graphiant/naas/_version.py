@@ -16,8 +16,8 @@ DEPENDENCIES = {
     "Jinja2": "3.1.6",
     "tabulate": "0.9.0",
 
-    # Graphiant SDK (use version >= 26.4.0)
-    "graphiant-sdk": "26.4.0",
+    # Graphiant SDK (use version >= 26.5.0)
+    "graphiant-sdk": "26.5.0",
 
     # Ansible
     "ansible-core": ">=2.17.0",

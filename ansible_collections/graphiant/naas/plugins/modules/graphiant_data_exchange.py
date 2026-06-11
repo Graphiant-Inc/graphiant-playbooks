@@ -23,7 +23,7 @@ description:
   - Enables creating and deleting Data Exchange services and customers.
   - Provides service-to-customer matching operations with automatic match response file management.
   - Supports invitation acceptance with gateway service deployment and VPN configuration.
-version_added: "25.11.0"
+version_added: "25.12.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 notes:
@@ -138,7 +138,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.4.0
+  - graphiant-sdk >= 26.5.0
   - tabulate
 
 seealso:

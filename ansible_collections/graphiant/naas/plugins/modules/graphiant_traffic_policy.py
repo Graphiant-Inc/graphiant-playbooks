@@ -40,7 +40,7 @@ notes:
   - >-
     Deconfigure payload uses C(ruleset: null) per ruleset key; this module preserves nulls in the final
     payload pushed to the API.
-version_added: "26.4.0"
+version_added: "26.5.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:

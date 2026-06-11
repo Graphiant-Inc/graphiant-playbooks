@@ -6,8 +6,9 @@ We actively support the following versions with security updates:
 
 | Version | Supported          | Notes                                    |
 | ------- | ------------------ | ---------------------------------------- |
-| 26.4.x  | :white_check_mark: | Current stable release (latest: **26.4.0**) |
-| 26.3.x  | :white_check_mark: | Previous release line (latest: **26.3.0**) |
+| 26.5.x  | :white_check_mark: | Current stable release (latest: **26.5.0**) |
+| 26.4.x  | :white_check_mark: | Previous release line (latest: **26.4.0**) |
+| 26.3.x  | :white_check_mark: | Older supported release                  |
 | 26.2.x  | :white_check_mark: | Older supported release                  |
 | 26.1.x  | :white_check_mark: | Older supported release                  |
 | 25.12.x | :white_check_mark: | Legacy release                           |
@@ -248,4 +249,4 @@ Security updates are released as:
 
 ---
 
-**Last Updated**: 2026-05-01
+**Last Updated**: 2026-06-10

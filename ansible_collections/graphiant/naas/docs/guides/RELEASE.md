@@ -326,7 +326,7 @@ python scripts/bump_version.py major
 python scripts/bump_version.py 26.4.0
 
 # Update dependency during bump
-python scripts/bump_version.py patch --update-deps graphiant-sdk=26.4.0
+python scripts/bump_version.py patch --update-deps graphiant-sdk=26.4.0 
 
 # Build collection
 python scripts/build_collection.py
