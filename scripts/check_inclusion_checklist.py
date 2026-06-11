@@ -337,7 +337,7 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
 
                     # State-changing modules should not claim full support if they always return changed=True
                     if support_level == "full" and not module_name.endswith("_info"):
-                        if re.search(CHECK_MODE_ALWAYS_CHANGED_PATTERN, content):
+                        if _has_check_mode_always_changed(content):
                             if module_name not in issues:
                                 issues[module_name] = []
                             issues[module_name].append(
