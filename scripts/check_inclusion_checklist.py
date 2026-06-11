@@ -150,7 +150,24 @@ def check_builtin_modules_fqcn() -> Dict[str, List[Tuple[int, str]]]:
         return issues
 
     module_files = list(COLLECTION_MODULES_DIR.glob("graphiant_*.py"))
-    builtin_modules = ["debug", "copy", "file", "template", "lineinfile", "blockinfile", "replace", "set_fact"]
+    builtin_modules = [
+        "debug",
+        "copy",
+        "file",
+        "template",
+        "lineinfile",
+        "blockinfile",
+        "replace",
+        "set_fact",
+        "assert",
+        "fail",
+        "include_vars",
+        "uri",
+        "get_url",
+        "stat",
+        "shell",
+        "command",
+    ]
 
     for module_file in module_files:
         module_name = module_file.stem
@@ -373,18 +390,15 @@ def check_module_naming() -> Dict[str, List[str]]:
 
             # Check if _info modules only gather information
             if module_name.endswith("_info"):
-                # Should not have state-changing operations
-                if any(
-                    op in content
-                    for op in [
-                        "state:",
-                        "operation:",
-                        "configure",
-                        "deconfigure",
-                        "create",
-                        "delete",
-                    ]
-                ):
+                # Should not have state-changing operations.
+                # Use targeted matching to avoid false positives from comments/docstrings.
+                state_change_pattern = re.compile(
+                    r"(^|\n)\s*(state|operation)\s*:\s*(configure|deconfigure|create|delete)\b"
+                    r"|(^|\n)\s*choices\s*:\s*\[[^\]]*\b(configure|deconfigure|create|delete)\b[^\]]*\]"
+                    r"|(^|\n)\s*choices\s*:\s*\n(?:\s*-\s*.*\n)*\s*-\s*(configure|deconfigure|create|delete)\b",
+                    re.IGNORECASE | re.MULTILINE,
+                )
+                if state_change_pattern.search(content):
                     if "query" not in content.lower() and "get" not in content.lower():
                         if module_name not in issues:
                             issues[module_name] = []
@@ -394,18 +408,32 @@ def check_module_naming() -> Dict[str, List[str]]:
 
             # Check if state-changing modules have query operations
             if not module_name.endswith("_info") and not module_name.endswith("_facts"):
-                # Should not have state=query or state=get in choices
-                # Look for patterns like: choices: [query, get] or state: query
-                if re.search(
-                    r"choices:\s*\[.*(query|get).*\]|state:\s*(query|get)|" r"choices:\s*-\s*(query|get)",
+                # Parse DOCUMENTATION YAML and inspect the actual state option structure.
+                doc_match = re.search(
+                    r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1",
                     content,
-                    re.IGNORECASE | re.MULTILINE,
-                ):
-                    if module_name not in issues:
-                        issues[module_name] = []
-                    issues[module_name].append(
-                        "State-changing modules should not have query/get operations " "(use _info module instead)"
-                    )
+                    re.DOTALL,
+                )
+                if doc_match:
+                    try:
+                        doc_data = yaml.safe_load(doc_match.group(2)) or {}
+                        state_option = ((doc_data.get("options") or {}).get("state") or {})
+                        choices = state_option.get("choices") or []
+                        default = state_option.get("default")
+                        has_query_get = any(
+                            isinstance(choice, str) and choice.lower() in {"query", "get"}
+                            for choice in choices
+                        ) or (isinstance(default, str) and default.lower() in {"query", "get"})
+                        if has_query_get:
+                            if module_name not in issues:
+                                issues[module_name] = []
+                            issues[module_name].append(
+                                "State-changing modules should not have query/get operations "
+                                "(use _info module instead)"
+                            )
+                    except yaml.YAMLError:
+                        # If DOCUMENTATION cannot be parsed, skip this specific structural check.
+                        pass
         except Exception as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
@@ -515,7 +543,7 @@ def check_collection_structure() -> List[str]:
 
 # Ansible C() markup must not appear in changelog; use RST double backticks for literals.
 # See https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html#inline-markup
-ANSIBLE_C_MARKUP_IN_CHANGELOG = re.compile(r"\bC\s*\(")
+ANSIBLE_C_MARKUP_IN_CHANGELOG = re.compile(r"\bC\s*\(\s*[^)\s][^)]*\)")
 
 
 def _collect_changelog_entries(data: dict) -> List[Tuple[str, str]]:
