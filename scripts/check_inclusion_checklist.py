@@ -487,8 +487,10 @@ def check_module_naming() -> Dict[str, List[str]]:
                             if module_name not in issues:
                                 issues[module_name] = []
                             issues[module_name].append(
-                                "State-changing modules should not have query/get operations "
-                                "(use _info module instead)"
+                                (
+                                    "State-changing modules should not have query/get operations "
+                                    + "(use _info module instead)"
+                                )
                             )
                     except yaml.YAMLError:
                         # If DOCUMENTATION cannot be parsed, skip this specific structural check.
