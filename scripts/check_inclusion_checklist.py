@@ -186,10 +186,10 @@ def check_builtin_modules_fqcn() -> Dict[str, List[Tuple[int, str]]]:
                 if in_examples:
                     for builtin in builtin_modules:
                         pattern = rf"^\s+{builtin}:"
-                        if re.match(pattern, check_line := line) and "ansible.builtin" not in check_line:
+                        if re.match(pattern, line) and "ansible.builtin" not in line:
                             if module_name not in issues:
                                 issues[module_name] = []
-                            issues[module_name].append((line_num, check_line.strip()))
+                            issues[module_name].append((line_num, line.strip()))
         except Exception as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
@@ -257,65 +257,58 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
             content = module_file.read_text(encoding="utf-8")
 
             # Check for attributes section
-            if "attributes:" not in content:
+            documentation_match = re.search(r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1", content, re.DOTALL)
+            if not documentation_match:
+                issues[module_name] = ["Missing DOCUMENTATION section"]
+                continue
+            try:
+                documentation_yaml = yaml.safe_load(documentation_match.group(2)) or {}
+            except yaml.YAMLError:
+                issues[module_name] = ["Invalid DOCUMENTATION YAML format"]
+                continue
+            attributes = documentation_yaml.get("attributes")
+            if not isinstance(attributes, dict):
                 issues[module_name] = ["Missing attributes: section"]
                 continue
 
             # Check for check_mode in attributes
-            if "check_mode:" not in content:
+            check_mode = attributes.get("check_mode")
+            if not isinstance(check_mode, dict):
                 issues[module_name] = ["Missing check_mode: information in attributes section"]
                 continue
 
-            # Verify it has support information (can be on same line or in the check_mode subsection)
-            check_mode_pos = content.find("check_mode:")
-            if check_mode_pos != -1:
-                # Determine the check_mode subsection by scanning until the next attribute key at the same indentation.
-                check_mode_match = re.search(r"(?m)^(\s*)check_mode:\s*$", content)
-                if check_mode_match:
-                    check_mode_indent = check_mode_match.group(1)
-                    next_key_match = re.search(
-                        rf"(?m)^({re.escape(check_mode_indent)})[A-Za-z_][A-Za-z0-9_]*:\s*$",
-                        content[check_mode_match.end():],
-                    )
-                    if next_key_match:
-                        section_end = check_mode_match.end() + next_key_match.start()
-                        check_mode_section = content[check_mode_match.start():section_end]
-                    else:
-                        check_mode_section = content[check_mode_match.start():]
-                else:
-                    # Fallback for uncommon formatting where check_mode appears inline.
-                    check_mode_section = content[check_mode_pos:]
-                if "support:" not in check_mode_section:
-                    if module_name not in issues:
-                        issues[module_name] = []
-                    issues[module_name].append("check_mode: section missing support: information")
-                else:
-                    # Extract support level
-                    support_match = re.search(r"support:\s*(full|partial|none)", check_mode_section, re.IGNORECASE)
-                    if support_match:
-                        support_level = support_match.group(1).lower()
+            # Verify it has support information
+            support_value = check_mode.get("support")
+            if not isinstance(support_value, str):
+                if module_name not in issues:
+                    issues[module_name] = []
+                issues[module_name].append("check_mode: section missing support: information")
+            else:
+                support_level = support_value.lower()
+                if support_level in {"full", "partial", "none"}:
+                    # Validate support level appropriateness
+                    # _info modules should have full support (read-only)
+                    if module_name.endswith("_info"):
+                        if support_level != "full":
+                            if module_name not in issues:
+                                issues[module_name] = []
+                            issues[module_name].append(
+                                "_info module should have support: full (read-only), " f"found: {support_level}"
+                            )
 
-                        # Validate support level appropriateness
-                        # _info modules should have full support (read-only)
-                        if module_name.endswith("_info"):
-                            if support_level != "full":
-                                if module_name not in issues:
-                                    issues[module_name] = []
-                                issues[module_name].append(
-                                    "_info module should have support: full (read-only), " f"found: {support_level}"
-                                )
-
-                        # State-changing modules should not claim full support if they always return changed=True
-                        # Check if module always returns changed=True in check mode
-                        if support_level == "full" and not module_name.endswith("_info"):
-                            # Look for check mode handling that always returns changed=True
-                            if re.search(r"if\s+module\.check_mode:.*changed\s*=\s*True", content, re.DOTALL):
-                                if module_name not in issues:
-                                    issues[module_name] = []
-                                issues[module_name].append(
-                                    "Module claims support: full but always returns changed=True "
-                                    "in check mode. Should be support: partial"
-                                )
+                    # State-changing modules should not claim full support if they always return changed=True
+                    if support_level == "full" and not module_name.endswith("_info"):
+                        # Restrict match to the same indented check_mode block to avoid cross-block overmatching.
+                        if re.search(
+                            r"(?m)^([ \t]*)if\s+module\.check_mode:\s*(?:#.*)?\n(?:\1[ \t]+.*\n)*?\1[ \t]+changed\s*=\s*True\b",
+                            content,
+                        ):
+                            if module_name not in issues:
+                                issues[module_name] = []
+                            issues[module_name].append(
+                                "Module claims support: full but always returns changed=True "
+                                "in check mode. Should be support: partial"
+                            )
         except Exception as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
@@ -345,9 +338,9 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                 # Look for patterns that always return changed=True
                 # Pattern 1: Direct changed=True assignment
                 check_mode_blocks = re.findall(
-                    r"if\s+module\.check_mode:.*?module\.exit_json\([^)]*\)",
+                    r"if\s+module\.check_mode:.*?^\s*module\.exit_json\(.*$",
                     content,
-                    re.DOTALL,
+                    re.DOTALL | re.MULTILINE,
                 )
 
                 for block in check_mode_blocks:
@@ -390,21 +383,40 @@ def check_module_naming() -> Dict[str, List[str]]:
 
             # Check if _info modules only gather information
             if module_name.endswith("_info"):
-                # Should not have state-changing operations.
-                # Use targeted matching to avoid false positives from comments/docstrings.
-                state_change_pattern = re.compile(
-                    r"(^|\n)\s*(state|operation)\s*:\s*(configure|deconfigure|create|delete)\b"
-                    r"|(^|\n)\s*choices\s*:\s*\[[^\]]*\b(configure|deconfigure|create|delete)\b[^\]]*\]"
-                    r"|(^|\n)\s*choices\s*:\s*\n(?:\s*-\s*.*\n)*\s*-\s*(configure|deconfigure|create|delete)\b",
-                    re.IGNORECASE | re.MULTILINE,
+                # Parse DOCUMENTATION YAML and inspect the actual state option structure.
+                doc_match = re.search(
+                    r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1",
+                    content,
+                    re.DOTALL,
                 )
-                if state_change_pattern.search(content):
-                    if "query" not in content.lower() and "get" not in content.lower():
-                        if module_name not in issues:
-                            issues[module_name] = []
-                        issues[module_name].append(
-                            "_info module should only gather information, " "not perform state changes"
+                if doc_match:
+                    try:
+                        doc_data = yaml.safe_load(doc_match.group(2)) or {}
+                        state_option = ((doc_data.get("options") or {}).get("state") or {})
+                        choices = state_option.get("choices") or []
+                        default = state_option.get("default")
+                        normalized_choices = {
+                            choice.lower() for choice in choices if isinstance(choice, str)
+                        }
+                        normalized_default = default.lower() if isinstance(default, str) else None
+                        state_changing_ops = {"configure", "deconfigure", "create", "delete"}
+                        query_ops = {"query", "get"}
+                        has_state_change = bool(normalized_choices & state_changing_ops) or (
+                            normalized_default in state_changing_ops
                         )
+                        has_query_get = bool(normalized_choices & query_ops) or (
+                            normalized_default in query_ops
+                        )
+
+                        if has_state_change and not has_query_get:
+                            if module_name not in issues:
+                                issues[module_name] = []
+                            issues[module_name].append(
+                                "_info module should only gather information, " "not perform state changes"
+                            )
+                    except yaml.YAMLError:
+                        # If DOCUMENTATION cannot be parsed, skip this specific structural check.
+                        pass
 
             # Check if state-changing modules have query operations
             if not module_name.endswith("_info") and not module_name.endswith("_facts"):
