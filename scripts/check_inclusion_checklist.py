@@ -275,7 +275,7 @@ def check_semantic_markup() -> Dict[str, List[Tuple[int, str, str]]]:
                                 issues[module_name].append(
                                     (line_num, line.strip(), "Option value should use V() markup")
                                 )
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
     return issues
