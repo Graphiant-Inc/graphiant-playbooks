@@ -75,6 +75,7 @@ _ENCRYPTION_MODES = frozenset(
 )
 _CIPHER_SUITES = frozenset({"AES_128_CMAC", "AES_256_CMAC"})
 _CAK_HEX_LENGTH = {"AES_128_CMAC": 32, "AES_256_CMAC": 64}
+# Backend/API supports at most three presharedKeys entries per MACsec interface.
 _MAX_PSK_KEYS = 3
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 _START_TIME_DATETIME_FORMATS = (
@@ -82,8 +83,6 @@ _START_TIME_DATETIME_FORMATS = (
     "%Y-%m-%dT%H:%M:%S",
     "%Y-%m-%d",
 )
-_MACSEC_STATUS_SECURE = "MACSEC_STATUS_SECURE"
-_MACSEC_STATUS_UNSECURE = "MACSEC_STATUS_UNSECURE"
 
 
 class MacsecManager(BaseManager):
@@ -461,6 +460,11 @@ class MacsecManager(BaseManager):
             )
 
     @classmethod
+    def _validate_psk_limit(cls, psk_map: Dict[str, Dict[str, Any]]) -> None:
+        if len(psk_map) > _MAX_PSK_KEYS:
+            raise ConfigurationError(f"At most {_MAX_PSK_KEYS} presharedKeys are allowed per interface.")
+
+    @classmethod
     def _compute_desired_psk_map(
         cls,
         current_psk: Dict[str, Dict[str, Any]],
@@ -480,8 +484,7 @@ class MacsecManager(BaseManager):
                 merged["cakCryptographicAlgorithm"] = cls._normalize_cipher_suite(merged)
                 merged.pop("cipherSuite", None)
             desired[nick] = merged
-        if len(desired) > _MAX_PSK_KEYS:
-            raise ConfigurationError(f"At most {_MAX_PSK_KEYS} presharedKeys are allowed per interface.")
+        cls._validate_psk_limit(desired)
         return desired
 
     @classmethod
@@ -663,8 +666,8 @@ class MacsecManager(BaseManager):
                 "MACsec cannot be enabled without at least one presharedKeys entry; "
                 "the API requires at least one PSK configuration."
             )
-        if enabled_after and len(after.get("presharedKeys") or {}) > _MAX_PSK_KEYS:
-            raise ConfigurationError(f"At most {_MAX_PSK_KEYS} presharedKeys are allowed per interface.")
+        if enabled_after:
+            cls._validate_psk_limit(after.get("presharedKeys") or {})
 
         return delta, after
 

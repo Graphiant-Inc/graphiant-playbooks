@@ -131,8 +131,8 @@ def capture_library_logs(func):
             if log_handler_added:
                 try:
                     LOG.removeHandler(log_handler)
-                except Exception:
-                    pass
+                except Exception:  # noqa: BLE001
+                    pass  # best-effort cleanup; ignore handler removal errors
                 log_capture.close()
 
     return wrapper

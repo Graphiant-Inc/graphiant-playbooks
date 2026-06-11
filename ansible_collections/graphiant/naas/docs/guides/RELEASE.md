@@ -23,7 +23,7 @@ We follow [Semantic Versioning](https://semver.org/):
 
 The current collection version is defined in `_version.py`:
 ```python
-__version__ = "26.4.0"
+__version__ = "26.5.0"
 ```
 
 ## Release Process

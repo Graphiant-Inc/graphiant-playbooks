@@ -22,8 +22,8 @@ def ansible_module_log(module: Any, message: str) -> None:
         log = getattr(module, "log", None)
         if callable(log):
             log(f"[graphiant] {message}")
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001
+        pass  # best-effort logging; never raise into the caller
 
 
 def graphiant_portal_auth_argument_spec():
@@ -154,11 +154,19 @@ def _get_graphiant_libs():
     return _GRAPHiant_LIBS_CACHE
 
 
-# For backward compatibility and type hints, import at module level
-# _import_graphiant_libs() returns None values if imports fail, allowing
-# ansible-test validate-modules to introspect the module even when dependencies are not available
-# The actual imports will happen lazily when functions are called via _get_graphiant_libs()
+# Re-exported for backward compatibility so callers can do:
+#   from ...graphiant_utils import ConfigurationError
+# _import_graphiant_libs() returns None for each name when the dependency is absent, allowing
+# ansible-test validate-modules to introspect modules without the runtime library installed.
 GraphiantConfig, GraphiantPlaybookError, ConfigurationError, APIError, DeviceNotFoundError = _import_graphiant_libs()
+
+__all__ = [
+    "GraphiantConfig",
+    "GraphiantPlaybookError",
+    "ConfigurationError",
+    "APIError",
+    "DeviceNotFoundError",
+]
 
 
 class GraphiantConnection:

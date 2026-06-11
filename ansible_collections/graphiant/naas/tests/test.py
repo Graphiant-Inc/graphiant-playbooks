@@ -1960,4 +1960,4 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_syslog_targets'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_syslog_targets'))
 
-    runner = unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.TextTestRunner(verbosity=2).run(suite)
