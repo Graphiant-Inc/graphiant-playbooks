@@ -497,15 +497,45 @@ def check_python_version() -> Dict[str, List[str]]:
         try:
             content = module_file.read_text(encoding="utf-8")
 
-            # Check for python requirement
-            if "requirements:" not in content:
+            documentation_yaml = None
+            try:
+                tree = ast.parse(content)
+                for node in tree.body:
+                    if (
+                        isinstance(node, ast.Assign)
+                        and any(isinstance(t, ast.Name) and t.id == "DOCUMENTATION" for t in node.targets)
+                        and isinstance(node.value, ast.Constant)
+                        and isinstance(node.value.value, str)
+                    ):
+                        documentation_yaml = node.value.value
+                        break
+            except SyntaxError:
+                documentation_yaml = None
+
+            if not documentation_yaml:
                 if module_name not in issues:
                     issues[module_name] = []
                 issues[module_name].append("Missing requirements: section")
                 continue
 
-            # Check python version
-            if not re.search(r"\bpython\s*>=\s*3\.7\b", content, re.IGNORECASE):
+            doc_data = yaml.safe_load(documentation_yaml) or {}
+            requirements = doc_data.get("requirements")
+
+            if not requirements:
+                if module_name not in issues:
+                    issues[module_name] = []
+                issues[module_name].append("Missing requirements: section")
+                continue
+
+            if isinstance(requirements, str):
+                requirement_entries = [requirements]
+            elif isinstance(requirements, list):
+                requirement_entries = [str(entry) for entry in requirements]
+            else:
+                requirement_entries = [str(requirements)]
+
+            python_req_pattern = re.compile(r"\bpython\b\s*>=\s*3\.7\b", re.IGNORECASE)
+            if not any(python_req_pattern.search(entry) for entry in requirement_entries):
                 if module_name not in issues:
                     issues[module_name] = []
                 issues[module_name].append("Python requirement should be >= 3.7")
