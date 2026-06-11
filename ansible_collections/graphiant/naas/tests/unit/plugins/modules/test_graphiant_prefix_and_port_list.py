@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Graphiant, Inc. | GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt)
-"""Unit tests for graphiant_prefix_port_list module (mocked Ansible + connection)."""
+"""Unit tests for graphiant_prefix_and_port_list module (mocked Ansible + connection)."""
 
 from __future__ import annotations
 

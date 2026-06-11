@@ -372,9 +372,9 @@ class GraphiantPortalClient:
         output = self.get_edges_summary()
         if not output:
             return None
-        for device_info in output:
-            LOG.debug("get_enterprise_id : %s", device_info.enterprise_id)
-            return device_info.enterprise_id
+        device_info = output[0]
+        LOG.debug("get_enterprise_id : %s", device_info.enterprise_id)
+        return device_info.enterprise_id
 
     def get_edges_summary_filter(self, role="gateway", region="us-central-1 (Chicago)", status="active"):
         """

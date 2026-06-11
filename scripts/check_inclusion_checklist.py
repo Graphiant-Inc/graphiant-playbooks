@@ -249,11 +249,25 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
                 issues[module_name] = ["Missing check_mode: information in attributes section"]
                 continue
 
-            # Verify it has support information (can be on same line or next few lines)
+            # Verify it has support information (can be on same line or in the check_mode subsection)
             check_mode_pos = content.find("check_mode:")
             if check_mode_pos != -1:
-                # Look for support: within 500 characters after check_mode: (to handle multi-line descriptions)
-                check_mode_section = content[check_mode_pos:check_mode_pos + 500]
+                # Determine the check_mode subsection by scanning until the next attribute key at the same indentation.
+                check_mode_match = re.search(r"(?m)^(\s*)check_mode:\s*$", content)
+                if check_mode_match:
+                    check_mode_indent = check_mode_match.group(1)
+                    next_key_match = re.search(
+                        rf"(?m)^({re.escape(check_mode_indent)})[A-Za-z_][A-Za-z0-9_]*:\s*$",
+                        content[check_mode_match.end():],
+                    )
+                    if next_key_match:
+                        section_end = check_mode_match.end() + next_key_match.start()
+                        check_mode_section = content[check_mode_match.start():section_end]
+                    else:
+                        check_mode_section = content[check_mode_match.start():]
+                else:
+                    # Fallback for uncommon formatting where check_mode appears inline.
+                    check_mode_section = content[check_mode_pos:]
                 if "support:" not in check_mode_section:
                     if module_name not in issues:
                         issues[module_name] = []

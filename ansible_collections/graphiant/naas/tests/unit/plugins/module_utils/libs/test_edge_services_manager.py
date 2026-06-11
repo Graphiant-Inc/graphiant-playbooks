@@ -181,11 +181,8 @@ def test_validate_lws_force_with_vault_password_ok() -> None:
 
 
 def test_validate_lws_password_rejects_weak() -> None:
-    try:
+    with pytest.raises(ConfigurationError):
         EdgeServicesManager._validate_lws_password("short1")
-        raise AssertionError("expected ConfigurationError")
-    except ConfigurationError:
-        pass
 
 
 def test_dns_snapshot_from_device_static() -> None:
@@ -438,10 +435,12 @@ def test_build_edge_payload_dpi_put_only_sends_changed_fields() -> None:
         "destinationNetwork": "192.0.66.180/32",
         "destinationPortList": "web_ports",
     }
+    get_app_fields = get_app.copy()
+    get_app_fields.pop("name", None)
     current = {
         "role": "cpe",
         "trafficPolicy": {
-            "dpiApplications": [{"name": "whitehouse.gov", **{k: v for k, v in get_app.items() if k != "name"}}],
+            "dpiApplications": [{"name": "whitehouse.gov", **get_app_fields}],
             "portLists": [{"name": "web_ports", "ports": [80, 443]}],
         },
     }
