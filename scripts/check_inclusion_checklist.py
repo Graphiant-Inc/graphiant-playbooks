@@ -394,9 +394,26 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                         # Check if there's any conditional logic for changed
                         try:
                             parsed_block = ast.parse(block)
-                            has_conditional_logic = any(
-                                isinstance(node, ast.If) for node in ast.walk(parsed_block)
-                            )
+                            has_conditional_logic = False
+                            # The captured block starts with `if module.check_mode:`.
+                            # Only flag as unconditional if there is no *additional* branching
+                            # nested inside that outer check-mode body.
+                            for stmt in parsed_block.body:
+                                if not (
+                                    isinstance(stmt, ast.If)
+                                    and isinstance(stmt.test, ast.Attribute)
+                                    and stmt.test.attr == "check_mode"
+                                    and isinstance(stmt.test.value, ast.Name)
+                                    and stmt.test.value.id == "module"
+                                ):
+                                    continue
+                                if any(
+                                    isinstance(node, (ast.If, ast.IfExp, ast.Match))
+                                    for node in ast.walk(stmt)
+                                    if node is not stmt
+                                ):
+                                    has_conditional_logic = True
+                                    break
                         except SyntaxError:
                             # Fallback for partial/non-parseable block captures
                             has_conditional_logic = (
@@ -571,7 +588,7 @@ def check_python_version() -> Dict[str, List[str]]:
             else:
                 requirement_entries = [str(requirements)]
 
-            python_req_pattern = re.compile(r"\bpython\b\s*>=\s*3\.7\b", re.IGNORECASE)
+            python_req_pattern = re.compile(r"\bpython\b\s*>=\s*3\.7(?:\.\d+)*\b", re.IGNORECASE)
             if not any(python_req_pattern.search(entry) for entry in requirement_entries):
                 if module_name not in issues:
                     issues[module_name] = []
@@ -640,7 +657,12 @@ def check_version_added() -> Dict[str, List[str]]:
     return issues
 
 
-_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+# Flat quantifiers only — avoids ReDoS from nested alternation in the full semver spec regex.
+_SEMVER_RE = re.compile(
+    r"^\d+\.\d+\.\d+"           # MAJOR.MINOR.PATCH
+    r"(?:-[0-9A-Za-z.-]+)?"     # optional pre-release  e.g. -alpha.1
+    r"(?:\+[0-9A-Za-z.-]+)?$"   # optional build metadata  e.g. +build.20230101
+)
 
 
 def check_galaxy_yml() -> List[str]:
@@ -690,7 +712,7 @@ def check_galaxy_yml() -> List[str]:
                     if int(parts[0]) < 1:
                         issues.append(f"dependency {dep!r} lower bound {lower.group(1)!r} must be >= 1.0.0")
                 except (ValueError, IndexError):
-                    pass
+                    issues.append(f"dependency {dep!r} lower bound {lower.group(1)!r} could not be parsed as a version")
 
     return issues
 
