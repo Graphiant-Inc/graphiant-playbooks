@@ -354,7 +354,18 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                                 continue
 
                             # Check if documentation explains the limitation
-                            if "assumes changes" not in content.lower() and "cannot determine" not in content.lower():
+                            documentation_patterns = (
+                                r"assum(?:e|es|ed)\s+changes?",
+                                r"cannot\s+determin(?:e|ed|ing)",
+                                r"unable\s+to\s+determin(?:e|ed|ing)",
+                                r"check\s*mode.*(?:may|might)\s+report\s+changed",
+                                r"check\s*mode.*(?:cannot|unable).*(?:determin|verify)",
+                            )
+                            has_documented_limitation = any(
+                                re.search(pattern, content, re.IGNORECASE)
+                                for pattern in documentation_patterns
+                            )
+                            if not has_documented_limitation:
                                 if module_name not in issues:
                                     issues[module_name] = []
                                 issues[module_name].append(
