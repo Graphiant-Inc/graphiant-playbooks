@@ -459,7 +459,7 @@ def check_module_naming() -> Dict[str, List[str]]:
                             if module_name not in issues:
                                 issues[module_name] = []
                             issues[module_name].append(
-                                "_info module should only gather information, " "not perform state changes"
+                                "_info module should only gather information, not perform state changes"
                             )
                     except yaml.YAMLError:
                         # If DOCUMENTATION cannot be parsed, skip this specific structural check.
