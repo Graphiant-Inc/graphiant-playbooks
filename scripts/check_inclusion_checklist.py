@@ -14,6 +14,7 @@ import ast
 import re
 import sys
 import yaml
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -21,6 +22,18 @@ from typing import Dict, List, Tuple
 COLLECTION_ROOT = Path(__file__).parent.parent / "ansible_collections" / "graphiant" / "naas"
 COLLECTION_MODULES_DIR = COLLECTION_ROOT / "plugins" / "modules"
 REPO_ROOT = Path(__file__).parent.parent
+
+DOCUMENTATION_PATTERN = re.compile(r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1", re.DOTALL)
+
+
+@lru_cache(maxsize=None)
+def _extract_documentation_block(content: str) -> str | None:
+    """Extract DOCUMENTATION YAML text from module source content."""
+    match = DOCUMENTATION_PATTERN.search(content)
+    if not match:
+        return None
+    return match.group(2)
+
 
 def _is_module_check_mode_test(test: ast.expr) -> bool:
     """Return True for `if module.check_mode:` style tests."""
@@ -278,12 +291,12 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
             content = module_file.read_text(encoding="utf-8")
 
             # Check for attributes section
-            documentation_match = re.search(r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1", content, re.DOTALL)
-            if not documentation_match:
+            documentation_text = _extract_documentation_block(content)
+            if documentation_text is None:
                 issues[module_name] = ["Missing DOCUMENTATION section"]
                 continue
             try:
-                documentation_yaml = yaml.safe_load(documentation_match.group(2)) or {}
+                documentation_yaml = yaml.safe_load(documentation_text) or {}
             except yaml.YAMLError:
                 issues[module_name] = ["Invalid DOCUMENTATION YAML format"]
                 continue
