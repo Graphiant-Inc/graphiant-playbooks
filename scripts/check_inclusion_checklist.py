@@ -21,6 +21,13 @@ COLLECTION_ROOT = Path(__file__).parent.parent / "ansible_collections" / "graphi
 COLLECTION_MODULES_DIR = COLLECTION_ROOT / "plugins" / "modules"
 REPO_ROOT = Path(__file__).parent.parent
 
+# Matches a check_mode block where "changed = True" is assigned at the same indentation scope.
+# This helps detect modules that claim full check_mode support but always report changed=True.
+CHECK_MODE_ALWAYS_CHANGED_PATTERN = (
+    r"(?m)^([ \t]*)if\s+module\.check_mode:\s*(?:#.*)?\n"
+    r"(?:\1[ \t]+.*\n)*?\1[ \t]+changed\s*=\s*True\b"
+)
+
 
 def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int, str, str]]:
     """Find references to modules in DOCUMENTATION text that don't use M() with FQCN."""
@@ -298,11 +305,7 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
 
                     # State-changing modules should not claim full support if they always return changed=True
                     if support_level == "full" and not module_name.endswith("_info"):
-                        # Restrict match to the same indented check_mode block to avoid cross-block overmatching.
-                        if re.search(
-                            r"(?m)^([ \t]*)if\s+module\.check_mode:\s*(?:#.*)?\n(?:\1[ \t]+.*\n)*?\1[ \t]+changed\s*=\s*True\b",
-                            content,
-                        ):
+                        if re.search(CHECK_MODE_ALWAYS_CHANGED_PATTERN, content):
                             if module_name not in issues:
                                 issues[module_name] = []
                             issues[module_name].append(
