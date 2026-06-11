@@ -571,7 +571,7 @@ def check_python_version() -> Dict[str, List[str]]:
             else:
                 requirement_entries = [str(requirements)]
 
-            python_req_pattern = re.compile(r"\bpython\b\s*>=\s*3\.7\b", re.IGNORECASE)
+            python_req_pattern = re.compile(r"\bpython\b\s*>=\s*3\.7(?:\.\d+)*\b", re.IGNORECASE)
             if not any(python_req_pattern.search(entry) for entry in requirement_entries):
                 if module_name not in issues:
                     issues[module_name] = []
