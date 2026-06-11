@@ -142,25 +142,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
         return issues
 
     module_files = list(COLLECTION_MODULES_DIR.glob("graphiant_*.py"))
-    module_names = [
-        "graphiant_backbone",
-        "graphiant_bgp",
-        "graphiant_data_exchange",
-        "graphiant_data_exchange_info",
-        "graphiant_device_config",
-        "graphiant_device_system",
-        "graphiant_edge_services",
-        "graphiant_macsec",
-        "graphiant_macsec_info",
-        "graphiant_global_config",
-        "graphiant_interfaces",
-        "graphiant_sites",
-        "graphiant_vrrp",
-        "graphiant_lag_interfaces",
-        "graphiant_site_to_site_vpn",
-        "graphiant_static_routes",
-        "graphiant_ntp",
-    ]
+    module_names = sorted(module_file.stem for module_file in module_files)
 
     for module_file in module_files:
         module_name = module_file.stem
