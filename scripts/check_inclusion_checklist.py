@@ -338,7 +338,7 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                 # Look for patterns that always return changed=True
                 # Pattern 1: Direct changed=True assignment
                 check_mode_blocks = re.findall(
-                    r"if\s+module\.check_mode:.*?^\s*module\.exit_json\(.*$",
+                    r"if\s+module\.check_mode:.*?module\.exit_json\([^)]*\)",
                     content,
                     re.DOTALL | re.MULTILINE,
                 )
