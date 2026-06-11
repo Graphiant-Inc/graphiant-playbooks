@@ -143,7 +143,7 @@ def check_module_references_in_documentation() -> Dict[str, List[Tuple[int, str,
                         issues[module_name] = []
                     for line_num, line, match in ref_issues:
                         issues[module_name].append((line_num, line, match))
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
     return issues
@@ -197,7 +197,7 @@ def check_builtin_modules_fqcn() -> Dict[str, List[Tuple[int, str]]]:
                             if module_name not in issues:
                                 issues[module_name] = []
                             issues[module_name].append((line_num, line.strip()))
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
     return issues
