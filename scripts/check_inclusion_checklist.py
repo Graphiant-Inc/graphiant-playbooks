@@ -10,6 +10,7 @@ Usage:
     python scripts/check_inclusion_checklist.py --strict  # Exit with error on failures
 """
 
+import ast
 import re
 import sys
 import yaml
@@ -21,12 +22,43 @@ COLLECTION_ROOT = Path(__file__).parent.parent / "ansible_collections" / "graphi
 COLLECTION_MODULES_DIR = COLLECTION_ROOT / "plugins" / "modules"
 REPO_ROOT = Path(__file__).parent.parent
 
-# Matches a check_mode block where "changed = True" is assigned at the same indentation scope.
-# This helps detect modules that claim full check_mode support but always report changed=True.
-CHECK_MODE_ALWAYS_CHANGED_PATTERN = (
-    r"(?m)^([ \t]*)if\s+module\.check_mode:\s*(?:#.*)?\n"
-    r"(?:\1[ \t]+.*\n)*?\1[ \t]+changed\s*=\s*True\b"
-)
+def _is_module_check_mode_test(test: ast.expr) -> bool:
+    """Return True for `if module.check_mode:` style tests."""
+    return (
+        isinstance(test, ast.Attribute)
+        and isinstance(test.value, ast.Name)
+        and test.value.id == "module"
+        and test.attr == "check_mode"
+    )
+
+
+def _contains_changed_true_assignment(statements: List[ast.stmt]) -> bool:
+    """Check whether `changed = True` occurs in the provided statement list."""
+    for stmt in statements:
+        if isinstance(stmt, ast.Assign):
+            for target in stmt.targets:
+                if isinstance(target, ast.Name) and target.id == "changed":
+                    if isinstance(stmt.value, ast.Constant) and stmt.value.value is True:
+                        return True
+        elif isinstance(stmt, ast.AnnAssign):
+            if isinstance(stmt.target, ast.Name) and stmt.target.id == "changed":
+                if isinstance(stmt.value, ast.Constant) and stmt.value.value is True:
+                    return True
+    return False
+
+
+def _has_check_mode_always_changed(source: str) -> bool:
+    """AST-based detection of `if module.check_mode:` blocks assigning `changed = True`."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and _is_module_check_mode_test(node.test):
+            if _contains_changed_true_assignment(node.body):
+                return True
+    return False
 
 
 def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int, str, str]]:
