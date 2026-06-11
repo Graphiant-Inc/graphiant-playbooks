@@ -415,9 +415,10 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                                     has_conditional_logic = True
                                     break
                         except SyntaxError:
-                            # Fallback for partial/non-parseable block captures
+                            # Fallback for partial/non-parseable block captures.
+                            # Restrict to actual conditional statement lines (not comments/strings).
                             has_conditional_logic = (
-                                re.search(r"\b(if|elif)\b\s*.*:", block) is not None
+                                re.search(r"(?m)^[ \t]*(?:if|elif)\b[^\n:]*:", block) is not None
                             )
                         if not has_conditional_logic:
                             # Check if it's graphiant_device_config with show_validated_payload handling
