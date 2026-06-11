@@ -300,7 +300,7 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
                             if module_name not in issues:
                                 issues[module_name] = []
                             issues[module_name].append(
-                                "_info module should have support: full (read-only), " f"found: {support_level}"
+                                f"_info module should have support: full (read-only), found: {support_level}"
                             )
 
                     # State-changing modules should not claim full support if they always return changed=True
