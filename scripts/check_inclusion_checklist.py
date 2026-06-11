@@ -592,9 +592,10 @@ def check_collection_structure() -> List[str]:
     return issues
 
 
-# Ansible C() markup must not appear in changelog; use RST double backticks for literals.
+# Ansible semantic markup (C(), M(), O(), V(), I(), RV()) must not appear in changelog;
+# use RST double backticks for literals.
 # See https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html#inline-markup
-ANSIBLE_C_MARKUP_IN_CHANGELOG = re.compile(r"\bC\s*\(\s*[^)\s][^)]*\)")
+ANSIBLE_C_MARKUP_IN_CHANGELOG = re.compile(r"\b(?:C|M|O|V|I|RV)\s*\(\s*[^)\s][^)]*\)")
 
 
 def _collect_changelog_entries(data: dict) -> List[Tuple[str, str]]:
