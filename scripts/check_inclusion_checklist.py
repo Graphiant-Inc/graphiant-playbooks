@@ -231,45 +231,60 @@ def check_builtin_modules_fqcn() -> Dict[str, List[Tuple[int, str]]]:
 
 
 def check_semantic_markup() -> Dict[str, List[Tuple[int, str, str]]]:
-    """Check semantic markup usage (V/O/M/C/I/RV)."""
+    """Check semantic markup in DOCUMENTATION: option refs use O(), choice refs use V() (§2.3.1)."""
     issues: Dict[str, List[Tuple[int, str, str]]] = {}
 
     if not COLLECTION_MODULES_DIR.exists():
         return issues
 
-    module_files = list(COLLECTION_MODULES_DIR.glob("graphiant_*.py"))
-
-    for module_file in module_files:
+    for module_file in COLLECTION_MODULES_DIR.glob("graphiant_*.py"):
         module_name = module_file.stem
         try:
             content = module_file.read_text(encoding="utf-8")
-            lines = content.split("\n")
-            in_documentation = False
+            doc_text = _extract_documentation_block(content)
+            if not doc_text:
+                continue
+            try:
+                doc_data = yaml.safe_load(doc_text) or {}
+            except yaml.YAMLError:
+                continue
 
-            for line_num, line in enumerate(lines, 1):
-                if "DOCUMENTATION =" in line or "DOCUMENTATION = r'''" in line:
-                    in_documentation = True
+            options = doc_data.get("options") or {}
+            option_names = set(options.keys())
+
+            in_doc = False
+            for line_num, line in enumerate(content.split("\n"), 1):
+                if re.search(r"^\s*DOCUMENTATION\s*=", line):
+                    in_doc = True
                     continue
-                if in_documentation and line.strip().startswith("EXAMPLES ="):
+                if in_doc and re.search(r"^\s*EXAMPLES\s*=", line):
                     break
+                if not in_doc:
+                    continue
 
-                if in_documentation:
-                    # Check for option values that should use V()
-                    # Look for patterns like "configure", "present", "true", "false" in description
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                # Skip structural YAML keys and bare list items (choice values themselves)
+                if re.match(
+                    r"^(?:choices|type|default|required|version_added|elements|suboptions|options)\s*:",
+                    stripped,
+                    re.IGNORECASE,
+                ):
+                    continue
+
+                # Check: "the <option_name> parameter/option/field/argument" → should use O()
+                for opt_name in option_names:
+                    if len(opt_name) < 3:
+                        continue
                     if re.search(
-                        r"\b(configure|deconfigure|present|absent|true|false|yes|no)\b",
+                        rf"\bthe\s+{re.escape(opt_name)}\s+(?:parameter|option|field|argument)\b",
                         line,
                         re.IGNORECASE,
-                    ):
-                        # Skip if already using V() or in certain contexts
-                        if "V(" not in line and "choices:" not in line.lower() and "type:" not in line.lower():
-                            # Check if it's describing an option value
-                            if any(keyword in line.lower() for keyword in ["maps to", "one of", "value", "option"]):
-                                if module_name not in issues:
-                                    issues[module_name] = []
-                                issues[module_name].append(
-                                    (line_num, line.strip(), "Option value should use V() markup")
-                                )
+                    ) and f"O({opt_name})" not in line:
+                        issues.setdefault(module_name, []).append(
+                            (line_num, stripped[:100], f"option {opt_name!r} should use O({opt_name}) markup")
+                        )
         except (OSError, UnicodeDecodeError) as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
@@ -625,6 +640,155 @@ def check_version_added() -> Dict[str, List[str]]:
     return issues
 
 
+_SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def check_galaxy_yml() -> List[str]:
+    """Validate galaxy.yml: semantic versioning, license, tags, dependency bounds (§2.1, §2.2, §3.5, §3.6)."""
+    issues: List[str] = []
+    galaxy_file = COLLECTION_ROOT / "galaxy.yml"
+    if not galaxy_file.exists():
+        return ["galaxy.yml not found"]
+    try:
+        data = yaml.safe_load(galaxy_file.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as e:
+        return [f"galaxy.yml parse error: {e}"]
+
+    version = str(data.get("version") or "").strip()
+    if not _SEMVER_RE.match(version):
+        issues.append(f"version {version!r} does not follow MAJOR.MINOR.PATCH semantic versioning")
+
+    license_val = data.get("license")
+    license_file_val = str(data.get("license_file") or "").strip()
+    if not license_val and not license_file_val:
+        issues.append("missing 'license' or 'license_file' field")
+    elif license_val:
+        licenses = license_val if isinstance(license_val, list) else [license_val]
+        if not any(re.search(r"GPL", str(lic), re.IGNORECASE) for lic in licenses):
+            issues.append(f"license {licenses!r} is not GPL-compatible (Ansible requires GPL)")
+    elif license_file_val:
+        license_path = COLLECTION_ROOT / license_file_val
+        if not license_path.exists():
+            issues.append(f"license_file {license_file_val!r} does not exist")
+
+    if not data.get("tags"):
+        issues.append("missing or empty 'tags' field")
+
+    deps = data.get("dependencies") or {}
+    if isinstance(deps, dict):
+        for dep, spec_raw in deps.items():
+            spec = str(spec_raw or "").strip()
+            if not spec:
+                issues.append(f"dependency {dep!r} has no version specification")
+                continue
+            lower = re.search(r">=?\s*([\d.]+)", spec)
+            if not lower:
+                issues.append(f"dependency {dep!r} has no lower bound (must specify >= 1.0.0)")
+            else:
+                parts = lower.group(1).split(".")
+                try:
+                    if int(parts[0]) < 1:
+                        issues.append(f"dependency {dep!r} lower bound {lower.group(1)!r} must be >= 1.0.0")
+                except (ValueError, IndexError):
+                    pass
+
+    return issues
+
+
+def check_runtime_yml() -> List[str]:
+    """Check meta/runtime.yml defines requires_ansible (§3.7)."""
+    issues: List[str] = []
+    runtime_file = COLLECTION_ROOT / "meta" / "runtime.yml"
+    if not runtime_file.exists():
+        return ["meta/runtime.yml not found"]
+    try:
+        data = yaml.safe_load(runtime_file.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as e:
+        return [f"meta/runtime.yml parse error: {e}"]
+
+    requires_ansible = str(data.get("requires_ansible") or "").strip()
+    if not requires_ansible:
+        issues.append("missing 'requires_ansible' field")
+    elif not re.search(r">=?\s*2\.", requires_ansible):
+        issues.append(f"requires_ansible {requires_ansible!r} should specify a minimum ansible-core >= 2.x version")
+
+    return issues
+
+
+def check_documentation_sections() -> Dict[str, List[str]]:
+    """Check all modules have DOCUMENTATION, EXAMPLES, and RETURN sections (§2.3)."""
+    issues: Dict[str, List[str]] = {}
+
+    if not COLLECTION_MODULES_DIR.exists():
+        return issues
+
+    for module_file in COLLECTION_MODULES_DIR.glob("graphiant_*.py"):
+        module_name = module_file.stem
+        try:
+            content = module_file.read_text(encoding="utf-8")
+            module_issues = []
+            for section in ("DOCUMENTATION", "EXAMPLES", "RETURN"):
+                if not re.search(rf"^\s*{section}\s*=", content, re.MULTILINE):
+                    module_issues.append(f"Missing {section} section")
+            if module_issues:
+                issues[module_name] = module_issues
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
+
+    return issues
+
+
+def check_module_count() -> List[str]:
+    """Check collection has at least one module (§3.2)."""
+    if not COLLECTION_MODULES_DIR.exists():
+        return ["plugins/modules/ directory not found"]
+    modules = list(COLLECTION_MODULES_DIR.glob("graphiant_*.py"))
+    if not modules:
+        return [f"No modules found (collection must have at least 1 module)"]
+    return []
+
+
+def check_plugin_types() -> List[str]:
+    """Check only allowed plugin types are present (§2.6)."""
+    issues: List[str] = []
+    plugins_dir = COLLECTION_ROOT / "plugins"
+    if not plugins_dir.exists():
+        return issues
+
+    allowed = {"modules", "module_utils", "doc_fragments"}
+    for child in plugins_dir.iterdir():
+        if child.is_dir() and child.name not in allowed:
+            issues.append(
+                f"plugins/{child.name}/ uses plugin type {child.name!r}; "
+                f"only {sorted(allowed)} are allowed for Ansible inclusion"
+            )
+
+    return issues
+
+
+def check_supports_check_mode() -> Dict[str, List[str]]:
+    """Check all modules declare supports_check_mode in AnsibleModule (§2.4)."""
+    issues: Dict[str, List[str]] = {}
+
+    if not COLLECTION_MODULES_DIR.exists():
+        return issues
+
+    for module_file in COLLECTION_MODULES_DIR.glob("graphiant_*.py"):
+        module_name = module_file.stem
+        try:
+            content = module_file.read_text(encoding="utf-8")
+            if "AnsibleModule(" not in content:
+                continue
+            if not re.search(r"supports_check_mode\s*=", content):
+                issues.setdefault(module_name, []).append(
+                    "Missing supports_check_mode= in AnsibleModule constructor"
+                )
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
+
+    return issues
+
+
 def check_collection_structure() -> List[str]:
     """Check required collection structure files."""
     issues = []
@@ -728,6 +892,49 @@ def main():
     errors = []
     warnings = []
 
+    # Check 0a: Module count (§3.2)
+    print("\n0a. Checking module count...")
+    module_count_issues = check_module_count()
+    if module_count_issues:
+        for issue in module_count_issues:
+            print(f"   ❌ {issue}")
+            errors.append(issue)
+    else:
+        modules_found = len(list(COLLECTION_MODULES_DIR.glob("graphiant_*.py")))
+        print(f"   ✅ {modules_found} module(s) found")
+
+    # Check 0b: Plugin types (§2.6)
+    print("\n0b. Checking allowed plugin types...")
+    plugin_type_issues = check_plugin_types()
+    if plugin_type_issues:
+        for issue in plugin_type_issues:
+            print(f"   ❌ {issue}")
+            errors.append(issue)
+    else:
+        print("   ✅ Only allowed plugin types present")
+
+    # Check 0c: galaxy.yml — semver, license, tags, dependency bounds (§2.1, §2.2, §3.5, §3.6)
+    print("\n0c. Checking galaxy.yml (semantic versioning, license, tags, dependencies)...")
+    galaxy_issues = check_galaxy_yml()
+    if galaxy_issues:
+        print("   ❌ galaxy.yml issues:")
+        for issue in galaxy_issues:
+            print(f"      - {issue}")
+            errors.append(f"galaxy.yml: {issue}")
+    else:
+        print("   ✅ galaxy.yml passes all structural checks")
+
+    # Check 0d: meta/runtime.yml — requires_ansible (§3.7)
+    print("\n0d. Checking meta/runtime.yml...")
+    runtime_issues = check_runtime_yml()
+    if runtime_issues:
+        print("   ❌ meta/runtime.yml issues:")
+        for issue in runtime_issues:
+            print(f"      - {issue}")
+            errors.append(f"meta/runtime.yml: {issue}")
+    else:
+        print("   ✅ meta/runtime.yml defines requires_ansible")
+
     # Check 1: Module references in DOCUMENTATION
     print("\n1. Checking module references in DOCUMENTATION sections...")
     doc_issues = check_module_references_in_documentation()
@@ -740,6 +947,19 @@ def main():
                 errors.append(f"{module}.py: Line {line_num} - Module reference should use M() with FQCN")
     else:
         print("   ✅ All module references in DOCUMENTATION use M() with FQCN")
+
+    # Check 1.5: DOCUMENTATION, EXAMPLES, RETURN sections (§2.3)
+    print("\n1.5. Checking DOCUMENTATION, EXAMPLES, and RETURN sections...")
+    doc_section_issues = check_documentation_sections()
+    if doc_section_issues:
+        print("   ❌ Found modules with missing sections:")
+        for module, issues_list in doc_section_issues.items():
+            print(f"\n   📄 {module}.py:")
+            for issue in issues_list:
+                print(f"      - {issue}")
+                errors.append(f"{module}.py: {issue}")
+    else:
+        print("   ✅ All modules have DOCUMENTATION, EXAMPLES, and RETURN sections")
 
     # Check 2: Builtin modules FQCN
     print("\n2. Checking builtin modules use FQCN in EXAMPLES...")
@@ -779,6 +999,19 @@ def main():
                 warnings.append(f"{module}.py: {issue}")
     else:
         print("   ✅ All modules comply with check_mode best practices")
+
+    # Check 3.7: supports_check_mode declaration (§2.4)
+    print("\n3.7. Checking supports_check_mode declarations...")
+    scm_issues = check_supports_check_mode()
+    if scm_issues:
+        print("   ❌ Found modules missing supports_check_mode:")
+        for module, issues_list in scm_issues.items():
+            print(f"\n   📄 {module}.py:")
+            for issue in issues_list:
+                print(f"      - {issue}")
+                errors.append(f"{module}.py: {issue}")
+    else:
+        print("   ✅ All modules declare supports_check_mode")
 
     # Check 4: Module naming
     print("\n4. Checking module naming conventions...")
