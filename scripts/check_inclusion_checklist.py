@@ -344,7 +344,7 @@ def check_check_mode_attributes() -> Dict[str, List[str]]:
                                 "Module claims support: full but always returns changed=True "
                                 "in check mode. Should be support: partial"
                             )
-        except Exception as e:
+        except (OSError, UnicodeDecodeError, re.error, yaml.YAMLError) as e:
             print(f"⚠️  Warning: Could not check {module_file.name}: {e}")
 
     return issues
