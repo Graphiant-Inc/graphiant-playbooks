@@ -26,9 +26,9 @@ def test_get_available_templates(m_env, _m_loader, tmp_path: Path) -> None:
     (templates_dir / "global_site_lists_template.yaml").write_text("site_list: []", encoding="utf-8")
 
     ct = ConfigTemplates(str(templates_dir))
-    m = ct.get_available_templates()
-    assert m["interface"] == "interface_template.yaml"
-    assert m["site_list"] == "global_site_lists_template.yaml"
+    available_templates = ct.get_available_templates()
+    assert available_templates["interface"] == "interface_template.yaml"
+    assert available_templates["site_list"] == "global_site_lists_template.yaml"
 
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
