@@ -92,7 +92,7 @@ def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int
             continue
         if in_documentation and line.strip().startswith("EXAMPLES ="):
             break
-        if "RETURN =" in line or "RETURN = r'''" in line:
+        if re.search(r'^\s*RETURN\s*=\s*[rR]?([\'"]{3})', line):
             in_return = True
             in_seealso = False
             continue
