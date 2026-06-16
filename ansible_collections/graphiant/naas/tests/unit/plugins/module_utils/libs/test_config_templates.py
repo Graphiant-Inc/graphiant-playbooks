@@ -170,7 +170,7 @@ def test_render_template_unexpected_get_template_error(m_env, _m_loader, tmp_pat
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_render_vpn_profile_template_error(
-    m_env, _m_loader, m_map: MagicMock, tmp_path: Path,
+    m_env, _m_loader, mock_map_vpn_profiles: MagicMock, tmp_path: Path,
 ) -> None:
     m_env.return_value = MagicMock()
     ct = ConfigTemplates(str(tmp_path))
@@ -178,4 +178,4 @@ def test_render_vpn_profile_template_error(
         with pytest.raises(TemplateError, match="Error in VPN profile rendering"):
             # No vpn_profiles key so map is skipped; failure comes from render_by_type
             ct.render_vpn_profile()
-    m_map.assert_not_called()
+    mock_map_vpn_profiles.assert_not_called()
