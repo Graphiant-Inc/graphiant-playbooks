@@ -19,7 +19,13 @@ from ansible_collections.graphiant.naas.plugins.module_utils.libs.exceptions imp
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_get_available_templates(m_env, _m_loader, tmp_path: Path) -> None:
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates(str(tmp_path / "collection" / "templates"))
+
+    templates_dir = tmp_path / "collection" / "templates"
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "interface_template.yaml").write_text("interface: {{ name }}", encoding="utf-8")
+    (templates_dir / "global_site_lists_template.yaml").write_text("site_list: []", encoding="utf-8")
+
+    ct = ConfigTemplates(str(templates_dir))
     m = ct.get_available_templates()
     assert m["interface"] == "interface_template.yaml"
     assert m["site_list"] == "global_site_lists_template.yaml"
