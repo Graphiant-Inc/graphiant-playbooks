@@ -112,7 +112,11 @@ def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int
 
             # Pattern 1: C(module_name) - should be M(graphiant.naas.module_name)
             if re.search(rf"C\(({module_name})\)", line, re.IGNORECASE):
-                if f"M(graphiant.naas.{module_name})" not in line:
+                if not re.search(
+                    rf"M\(\s*graphiant\.naas\.{re.escape(module_name)}\s*\)",
+                    line,
+                    re.IGNORECASE,
+                ):
                     issues.append((line_num, line.strip(), f"C({module_name})"))
 
             # Pattern 2: Direct module name in documentation text (not in YAML keys)
