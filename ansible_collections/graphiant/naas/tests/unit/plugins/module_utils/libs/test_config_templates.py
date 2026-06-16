@@ -119,7 +119,7 @@ def test_render_template_not_found(m_env, _m_loader, tmp_path: Path) -> None:
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_render_template_syntax_error(m_env, _m_loader, tmp_path: Path) -> None:
     tmpl = MagicMock()
-    tmpl.render.side_effect = TemplateSyntaxError("bad", 1, 1, "")
+    tmpl.render.side_effect = TemplateSyntaxError("bad", 1, 1, "bad.j2")
     env = MagicMock()
     env.get_template.return_value = tmpl
     m_env.return_value = env
