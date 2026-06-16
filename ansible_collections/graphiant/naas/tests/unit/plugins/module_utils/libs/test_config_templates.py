@@ -75,7 +75,7 @@ def test_render_vpn_profile_applies_map_vpn_profiles(
         return_value={"vpn_profiles": {"v": 1}},
     ) as m_rb:
         out = ct.render_vpn_profile(vpn_profiles=[{"name": "a"}])
-    mock_map_vpn_profiles.assert_called_once()
+    mock_map_vpn_profiles.assert_called_once_with([{"name": "a"}])
     m_rb.assert_called_once()
     assert out == {"vpn_profiles": {"v": 1}}
 
