@@ -100,7 +100,7 @@ def test_render_template_import_error_no_yaml(m_env, _m_loader, tmp_path: Path) 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_init_fails_wrapped_as_template_error(m_env, m_loader) -> None:
     m_env.side_effect = OSError("bad path")
-    with pytest.raises(TemplateError, match="Failed to initialize template environment"):
+    with pytest.raises(TemplateError, match="Failed to initialize template environment.*bad path"):
         ConfigTemplates("/nope/that/does/not/matter")
 
 
