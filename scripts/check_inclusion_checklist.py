@@ -416,9 +416,17 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                                     break
                         except SyntaxError:
                             # Fallback for partial/non-parseable block captures.
-                            # Restrict to actual conditional statement lines (not comments/strings).
-                            has_conditional_logic = (
-                                re.search(r"(?m)^[ \t]*(?:if|elif)\b[^\n:]*:", block) is not None
+                            # Use a broader heuristic for conditional constructs while
+                            # still focusing on code-like lines (not free text).
+                            fallback_conditional_patterns = (
+                                r"(?m)^[ \t]*(?:if|elif)\b[^\n:]*:",      # if/elif statements
+                                r"(?m)^[ \t]*match\b[^\n:]*:",            # match statement
+                                r"(?m)^[ \t]*case\b[^\n:]*:",             # case clause
+                                r"(?m)^[ \t]*[^#\n]*\bif\b[^#\n]*\belse\b[^#\n]*$",  # ternary if-expression
+                            )
+                            has_conditional_logic = any(
+                                re.search(pattern, block) is not None
+                                for pattern in fallback_conditional_patterns
                             )
                         if not has_conditional_logic:
                             # Check if it's graphiant_device_config with show_validated_payload handling
