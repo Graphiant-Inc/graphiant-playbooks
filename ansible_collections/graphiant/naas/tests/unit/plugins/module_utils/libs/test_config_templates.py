@@ -64,9 +64,9 @@ def test_validate_template_false(m_env, _m_loader, tmp_path: Path) -> None:
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_render_vpn_profile_applies_map_vpn_profiles(
-    m_env, _m_loader, m_map: MagicMock, tmp_path: Path,
+    m_env, _m_loader, mock_map_vpn_profiles: MagicMock, tmp_path: Path,
 ) -> None:
-    m_map.side_effect = lambda x: x
+    mock_map_vpn_profiles.side_effect = lambda x: x
     m_env.return_value = MagicMock()
     ct = ConfigTemplates(str(tmp_path))
     with patch.object(
@@ -75,7 +75,7 @@ def test_render_vpn_profile_applies_map_vpn_profiles(
         return_value={"vpn_profiles": {"v": 1}},
     ) as m_rb:
         out = ct.render_vpn_profile(vpn_profiles=[{"name": "a"}])
-    m_map.assert_called_once()
+    mock_map_vpn_profiles.assert_called_once()
     m_rb.assert_called_once()
     assert out == {"vpn_profiles": {"v": 1}}
 
