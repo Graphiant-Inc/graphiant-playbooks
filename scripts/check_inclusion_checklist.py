@@ -24,6 +24,13 @@ COLLECTION_MODULES_DIR = COLLECTION_ROOT / "plugins" / "modules"
 REPO_ROOT = Path(__file__).parent.parent
 
 DOCUMENTATION_PATTERN = re.compile(r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1", re.DOTALL)
+CHECK_MODE_LIMITATION_PATTERNS = (
+    r"assum(?:e|es|ed)\s+changes?",
+    r"cannot\s+determin(?:e|ed|ing)",
+    r"unable\s+to\s+determin(?:e|ed|ing)",
+    r"check\s*mode.*(?:may|might)\s+report\s+changed",
+    r"check\s*mode.*(?:cannot|unable).*(?:determin|verify)",
+)
 
 
 @lru_cache(maxsize=128)
@@ -439,16 +446,9 @@ def check_check_mode_behavior() -> Dict[str, List[str]]:
                                 continue
 
                             # Check if documentation explains the limitation
-                            documentation_patterns = (
-                                r"assum(?:e|es|ed)\s+changes?",
-                                r"cannot\s+determin(?:e|ed|ing)",
-                                r"unable\s+to\s+determin(?:e|ed|ing)",
-                                r"check\s*mode.*(?:may|might)\s+report\s+changed",
-                                r"check\s*mode.*(?:cannot|unable).*(?:determin|verify)",
-                            )
                             has_documented_limitation = any(
                                 re.search(pattern, content, re.IGNORECASE)
-                                for pattern in documentation_patterns
+                                for pattern in CHECK_MODE_LIMITATION_PATTERNS
                             )
                             if not has_documented_limitation:
                                 if module_name not in issues:
