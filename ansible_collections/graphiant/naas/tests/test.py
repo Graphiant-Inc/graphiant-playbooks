@@ -13,7 +13,7 @@ Run from repo root with PYTHONPATH including the collection module_utils:
 """
 import os
 import shutil
-import subprocess
+import subprocess  # nosec B404 — used only to invoke ansible-vault CLI in test setup
 import unittest
 import yaml
 from libs.graphiant_config import GraphiantConfig
@@ -96,7 +96,7 @@ def load_vault_secrets_from_example(config_path):
         return _vault_secrets_cache[config_path]
 
     if not os.environ.get("ANSIBLE_VAULT_PASSPHRASE"):
-        os.environ["ANSIBLE_VAULT_PASSPHRASE"] = "test-vault-pass"
+        os.environ["ANSIBLE_VAULT_PASSPHRASE"] = "test-vault-pass"  # nosec B105 - test-only default
 
     vault_secrets_path = os.path.join(config_path, "vault_secrets.yml")
     example_path = os.path.join(config_path, "vault_secrets.yml.example")
@@ -108,7 +108,7 @@ def load_vault_secrets_from_example(config_path):
         raise FileNotFoundError(f"Vault password script not found: {vault_pass_file}")
     env = os.environ.copy()
     env["ANSIBLE_VAULT_PASSWORD_FILE"] = os.path.abspath(vault_pass_file)
-    enc = subprocess.run(
+    enc = subprocess.run(  # nosec B603 B607 — fixed args; ansible-vault is a known test dependency
         ["ansible-vault", "encrypt", vault_secrets_path],
         capture_output=True,
         text=True,
@@ -120,7 +120,7 @@ def load_vault_secrets_from_example(config_path):
         err = (enc.stderr and enc.stderr.strip()) or "unknown"
         raise RuntimeError(f"ansible-vault encrypt failed: {err}")
 
-    view = subprocess.run(
+    view = subprocess.run(  # nosec B603 B607 — fixed args; ansible-vault is a known test dependency
         ["ansible-vault", "view", vault_secrets_path],
         capture_output=True,
         text=True,
@@ -172,8 +172,8 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         username = os.getenv('GRAPHIANT_USERNAME')
         if not host or not username:
             self.skipTest('GRAPHIANT_HOST and GRAPHIANT_USERNAME are required for this test')
-        bad_token = '__invalid_access_token_for_double_failure_test__'
-        bad_password = '__invalid_password_for_double_failure_test__'
+        bad_token = '__invalid_access_token_for_double_failure_test__'  # nosec B105 - invalid test cred
+        bad_password = '__invalid_password_for_double_failure_test__'  # nosec B105 - invalid test cred
         with self.assertRaises(GraphiantPlaybookError) as ctx:
             GraphiantConfig(
                 base_url=host,
@@ -207,7 +207,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             self.skipTest(
                 'GRAPHIANT_HOST, GRAPHIANT_USERNAME, and GRAPHIANT_PASSWORD are required'
             )
-        bad_token = '__invalid_access_token_for_fallback_success_test__'
+        bad_token = '__invalid_access_token_for_fallback_success_test__'  # nosec B105 - invalid test cred
         graphiant_config = GraphiantConfig(
             base_url=host,
             username=username,

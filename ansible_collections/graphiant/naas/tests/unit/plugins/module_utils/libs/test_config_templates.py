@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,9 +17,9 @@ from ansible_collections.graphiant.naas.plugins.module_utils.libs.exceptions imp
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_get_available_templates(m_env, _m_loader) -> None:
+def test_get_available_templates(m_env, _m_loader, tmp_path: Path) -> None:
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates("/tmp/collection/templates")
+    ct = ConfigTemplates(str(tmp_path / "collection" / "templates"))
     m = ct.get_available_templates()
     assert m["interface"] == "interface_template.yaml"
     assert m["site_list"] == "global_site_lists_template.yaml"
@@ -26,30 +27,30 @@ def test_get_available_templates(m_env, _m_loader) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_render_by_type_unknown(m_env, _m_loader) -> None:
+def test_render_by_type_unknown(m_env, _m_loader, tmp_path: Path) -> None:
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(TemplateError, match="Unknown template type"):
         ct.render_by_type("not_a_real_type_ever")
 
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_validate_template_true(m_env, _m_loader) -> None:
+def test_validate_template_true(m_env, _m_loader, tmp_path: Path) -> None:
     tmpl = MagicMock()
     m_env.return_value = MagicMock()
     m_env.return_value.get_template.return_value = tmpl
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     assert ct.validate_template("x.yaml") is True
     tmpl.render.assert_called_once()
 
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_validate_template_false(m_env, _m_loader) -> None:
+def test_validate_template_false(m_env, _m_loader, tmp_path: Path) -> None:
     m_env.return_value = MagicMock()
     m_env.return_value.get_template.side_effect = OSError("no")
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     assert ct.validate_template("x.yaml") is False
 
 
@@ -57,11 +58,11 @@ def test_validate_template_false(m_env, _m_loader) -> None:
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_render_vpn_profile_applies_map_vpn_profiles(
-    m_env, _m_loader, m_map: MagicMock,
+    m_env, _m_loader, m_map: MagicMock, tmp_path: Path,
 ) -> None:
     m_map.side_effect = lambda x: x
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with patch.object(
         ct,
         "render_by_type",
@@ -77,9 +78,9 @@ def test_render_vpn_profile_applies_map_vpn_profiles(
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.HAS_JINJA2", False)
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.HAS_YAML", True)
-def test_render_template_import_error_no_jinja(m_env, _m_loader) -> None:
+def test_render_template_import_error_no_jinja(m_env, _m_loader, tmp_path: Path) -> None:
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(ImportError, match="Jinja2"):
         ct.render_template("any.yaml", a=1)
 
@@ -88,9 +89,9 @@ def test_render_template_import_error_no_jinja(m_env, _m_loader) -> None:
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.HAS_JINJA2", True)
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.HAS_YAML", False)
-def test_render_template_import_error_no_yaml(m_env, _m_loader) -> None:
+def test_render_template_import_error_no_yaml(m_env, _m_loader, tmp_path: Path) -> None:
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(ImportError, match="PyYAML"):
         ct.render_template("any.yaml", a=1)
 
@@ -105,24 +106,24 @@ def test_init_fails_wrapped_as_template_error(m_env, m_loader) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_render_template_not_found(m_env, _m_loader) -> None:
+def test_render_template_not_found(m_env, _m_loader, tmp_path: Path) -> None:
     env = MagicMock()
     env.get_template.side_effect = TemplateNotFound("missing.j2")
     m_env.return_value = env
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(TemplateError, match="not found"):
         ct.render_template("missing.j2")
 
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_render_template_syntax_error(m_env, _m_loader) -> None:
+def test_render_template_syntax_error(m_env, _m_loader, tmp_path: Path) -> None:
     tmpl = MagicMock()
     tmpl.render.side_effect = TemplateSyntaxError("bad", 1, 1, "")
     env = MagicMock()
     env.get_template.return_value = tmpl
     m_env.return_value = env
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(TemplateError, match="Syntax error"):
         ct.render_template("bad.j2", x=1)
 
@@ -130,14 +131,14 @@ def test_render_template_syntax_error(m_env, _m_loader) -> None:
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.yaml.safe_load")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_render_template_yaml_error(m_env, _m_loader, m_safe) -> None:
+def test_render_template_yaml_error(m_env, _m_loader, m_safe, tmp_path: Path) -> None:
     tmpl = MagicMock()
     tmpl.render.return_value = "k: 1"
     env = MagicMock()
     env.get_template.return_value = tmpl
     m_env.return_value = env
     m_safe.side_effect = yaml.YAMLError("parse fail")
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(ConfigurationError, match="YAML parsing error"):
         ct.render_template("x.j2", k=1)
     m_safe.assert_called_once()
@@ -145,11 +146,11 @@ def test_render_template_yaml_error(m_env, _m_loader, m_safe) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
-def test_render_template_unexpected_get_template_error(m_env, _m_loader) -> None:
+def test_render_template_unexpected_get_template_error(m_env, _m_loader, tmp_path: Path) -> None:
     env = MagicMock()
     env.get_template.side_effect = RuntimeError("weird")
     m_env.return_value = env
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with pytest.raises(TemplateError, match="Unexpected error rendering"):
         ct.render_template("x.j2")
 
@@ -158,10 +159,10 @@ def test_render_template_unexpected_get_template_error(m_env, _m_loader) -> None
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.FileSystemLoader")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_templates.Environment")
 def test_render_vpn_profile_template_error(
-    m_env, _m_loader, m_map: MagicMock
+    m_env, _m_loader, m_map: MagicMock, tmp_path: Path,
 ) -> None:
     m_env.return_value = MagicMock()
-    ct = ConfigTemplates("/tmp/t")
+    ct = ConfigTemplates(str(tmp_path))
     with patch.object(ct, "render_by_type", side_effect=ValueError("x")):
         with pytest.raises(TemplateError, match="Error in VPN profile rendering"):
             # No vpn_profiles key so map is skipped; failure comes from render_by_type

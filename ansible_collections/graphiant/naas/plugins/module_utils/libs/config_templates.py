@@ -27,7 +27,7 @@ def _jinja2_template_exception_types() -> Tuple[Type[Exception], Type[Exception]
 
 
 try:
-    from jinja2 import Environment, FileSystemLoader
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
 
     HAS_JINJA2 = True
 except ImportError:
@@ -82,7 +82,10 @@ class ConfigTemplates:
             TemplateError: If template directory cannot be accessed
         """
         try:
-            self.template_env = Environment(loader=FileSystemLoader(config_template_path))
+            self.template_env = Environment(
+                loader=FileSystemLoader(config_template_path),
+                autoescape=select_autoescape(["html", "xml"]),
+            )
             self.template_path = config_template_path
             LOG.debug("ConfigTemplates initialized with path: %s", config_template_path)
         except Exception as e:
