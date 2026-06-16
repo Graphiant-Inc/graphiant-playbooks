@@ -85,7 +85,7 @@ def find_module_references_in_doc(text: str, module_name: str) -> List[Tuple[int
 
     for line_num, line in enumerate(lines, 1):
         # Track if we're in DOCUMENTATION section
-        if "DOCUMENTATION =" in line or "DOCUMENTATION = r'''" in line:
+        if re.search(r'^\s*DOCUMENTATION\s*=\s*r?(?:"""|\'\'\')', line):
             in_documentation = True
             in_return = False
             in_seealso = False
