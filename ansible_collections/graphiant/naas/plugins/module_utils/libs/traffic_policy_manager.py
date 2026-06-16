@@ -139,7 +139,7 @@ class TrafficPolicyManager(BaseManager):
         if hasattr(obj, "to_dict"):
             try:
                 return cls._normalize(obj.to_dict())
-            except Exception:
+            except Exception:  # nosec B110 — to_dict() fallback; failure is non-fatal, obj normalised as-is
                 pass
         if isinstance(obj, dict):
             return {str(k): cls._normalize(v) for k, v in sorted(obj.items(), key=lambda kv: str(kv[0]))}

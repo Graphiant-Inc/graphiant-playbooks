@@ -1,0 +1,8 @@
+[bandit]
+# B101: assert is standard in pytest/unittest — all assert findings are in test files.
+# B404: subprocess import is informational only.
+# B105/B106: test fixture/credential values flagged as hardcoded credentials —
+#            all findings are in unit test files, no real credentials.
+# B603: subprocess without shell=True is the correct/safe pattern; findings in scripts
+#       invoke known CLI tools (ansible-lint, pip, ansible-doc) with fixed args.
+skips = B101,B404,B105,B106,B603

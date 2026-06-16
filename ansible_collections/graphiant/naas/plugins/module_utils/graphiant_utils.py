@@ -22,7 +22,7 @@ def ansible_module_log(module: Any, message: str) -> None:
         log = getattr(module, "log", None)
         if callable(log):
             log(f"[graphiant] {message}")
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # nosec B110
         pass  # best-effort logging; never raise into the caller
 
 
