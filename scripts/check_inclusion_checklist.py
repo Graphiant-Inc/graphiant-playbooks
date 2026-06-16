@@ -31,6 +31,8 @@ CHECK_MODE_LIMITATION_PATTERNS = (
     r"check\s*mode.*(?:may|might)\s+report\s+changed",
     r"check\s*mode.*(?:cannot|unable).*(?:determin|verify)",
 )
+STATE_CHANGING_OPERATIONS = frozenset({"configure", "deconfigure", "create", "delete"})
+QUERY_OPERATIONS = frozenset({"query", "get"})
 
 
 @lru_cache(maxsize=128)
@@ -495,13 +497,11 @@ def check_module_naming() -> Dict[str, List[str]]:
                             choice.lower() for choice in choices if isinstance(choice, str)
                         }
                         normalized_default = default.lower() if isinstance(default, str) else None
-                        state_changing_ops = {"configure", "deconfigure", "create", "delete"}
-                        query_ops = {"query", "get"}
-                        has_state_change = bool(normalized_choices & state_changing_ops) or (
-                            normalized_default in state_changing_ops
+                        has_state_change = bool(normalized_choices & STATE_CHANGING_OPERATIONS) or (
+                            normalized_default in STATE_CHANGING_OPERATIONS
                         )
-                        has_query_get = bool(normalized_choices & query_ops) or (
-                            normalized_default in query_ops
+                        has_query_get = bool(normalized_choices & QUERY_OPERATIONS) or (
+                            normalized_default in QUERY_OPERATIONS
                         )
 
                         if has_state_change and not has_query_get:
@@ -529,9 +529,9 @@ def check_module_naming() -> Dict[str, List[str]]:
                         choices = state_option.get("choices") or []
                         default = state_option.get("default")
                         has_query_get = any(
-                            isinstance(choice, str) and choice.lower() in {"query", "get"}
+                            isinstance(choice, str) and choice.lower() in QUERY_OPERATIONS
                             for choice in choices
-                        ) or (isinstance(default, str) and default.lower() in {"query", "get"})
+                        ) or (isinstance(default, str) and default.lower() in QUERY_OPERATIONS)
                         if has_query_get:
                             if module_name not in issues:
                                 issues[module_name] = []
