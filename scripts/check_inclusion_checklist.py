@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).parent.parent
 DOCUMENTATION_PATTERN = re.compile(r"DOCUMENTATION\s*=\s*r?([\"']{3})(.*?)\1", re.DOTALL)
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=128)
 def _extract_documentation_block(content: str) -> Optional[str]:
     """Extract DOCUMENTATION YAML text from module source content."""
     match = DOCUMENTATION_PATTERN.search(content)
