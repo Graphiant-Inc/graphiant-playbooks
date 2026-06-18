@@ -1155,6 +1155,587 @@ Read-only monitoring status per interface (`MACSEC_STATUS_SECURE`, `MACSEC_STATU
   register: lag_macsec_status
 ```
 
+## Prefix and Port Lists
+
+### Module: graphiant.naas.graphiant_prefix_port_list
+
+`graphiant_prefix_port_list` manages device-level prefix and port lists via `PUT /v1/devices/{id}/config`:
+
+- **Prefix lists** — `edge.trafficPolicy.networkLists` (named CIDR collections)
+- **Port lists** — `edge.trafficPolicy.portLists` (named port number collections)
+
+Create operations compare intended lists to live device state and skip the push when already matched. Delete operations remove only the list names listed in the YAML for each device. Check mode (`--check`) and diff mode (`--diff`) are supported — use `--check --diff` to preview `details.diff_plan` and Ansible `diff`.
+
+Use `configs/sample_prefix_and_port_list.yaml`. Top-level keys are `networkLists` and `portLists` (each a list of device entries). Under each device name, list entries use `name`, `networks` or `ports`, and optional `state: absent` on create operations to delete a single list (`list: null`) without removing other entries in the same file.
+
+**Prerequisite for:** traffic policy and security policy rules that reference custom applications often depend on edge services (DPI); prefix/port lists are used directly in policy match criteria and edge services where network/port list objects are required. Configure prefix/port lists before traffic or security policy when your design references those names.
+
+### Playbook
+
+Playbook file: `playbooks/prefix_port_list_mangement.yml` (note spelling).
+
+Tags: `create_prefix_port_lists`, `delete_prefix_port_lists`, `create_prefix_lists`, `delete_prefix_lists`, `create_port_lists`, `delete_port_lists`.
+
+```bash
+# Create prefix and port lists (dry run, then apply)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists
+
+# Delete prefix and port lists listed in the YAML
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_prefix_port_lists --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_prefix_port_lists
+
+# Prefix lists or port lists only
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_lists
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_prefix_lists
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_port_lists
+ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_port_lists
+```
+
+### Module task
+
+**Create prefix and port lists:**
+
+```yaml
+- name: Create prefix and port lists
+  graphiant.naas.graphiant_prefix_port_list:
+    <<: *graphiant_client_params
+    operation: create_prefix_port_lists
+    prefix_port_list_config_file: "sample_prefix_and_port_list.yaml"
+    detailed_logs: true
+    state: present
+  register: create_result
+  tags: ['create_prefix_port_lists']
+
+- name: Display create result
+  ansible.builtin.debug:
+    msg: |
+      {{ create_result.msg | trim }}
+      configured_devices={{ create_result.configured_devices | default([]) }}
+      skipped_devices={{ create_result.skipped_devices | default([]) }}
+  when: create_result is defined and create_result.msg is defined
+  tags: ['create_prefix_port_lists']
+```
+
+**Delete prefix and port lists** (removes every list name listed under each device in the YAML):
+
+```yaml
+- name: Delete prefix and port lists
+  graphiant.naas.graphiant_prefix_port_list:
+    <<: *graphiant_client_params
+    operation: delete_prefix_port_lists
+    prefix_port_list_config_file: "sample_prefix_and_port_list.yaml"
+    detailed_logs: true
+    state: absent
+  register: delete_result
+  tags: ['delete_prefix_port_lists']
+
+- name: Display delete result
+  ansible.builtin.debug:
+    msg: |
+      {{ delete_result.msg | trim }}
+      configured_devices={{ delete_result.configured_devices | default([]) }}
+      skipped_devices={{ delete_result.skipped_devices | default([]) }}
+  when: delete_result is defined and delete_result.msg is defined
+  tags: ['delete_prefix_port_lists']
+```
+
+**Create or delete prefix lists only** (`create_prefix_lists` / `delete_prefix_lists`) or **port lists only** (`create_port_lists` / `delete_port_lists`) — same YAML file; set `operation` accordingly and omit the other list type from the payload.
+
+### Config YAML (`configs/sample_prefix_and_port_list.yaml`)
+
+```yaml
+networkLists:
+  - edge-1-sdktest:
+    - name: graphiant_dia_prefix
+      networks:
+        - 1.1.1.1/32
+        - 8.8.8.8/32
+    - name: testing_prefix_list
+      networks:
+        - 10.1.1.0/24
+        - 10.1.2.0/24
+      state: absent          # on create_*: delete this list only (list: null)
+
+portLists:
+  - edge-1-sdktest:
+    - name: web_ports
+      ports:
+        - 80
+        - 443
+    - name: testing_port_list
+      ports:
+        - 123
+```
+
+**Per-list deletion on create** (under `create_*` operations; default is present):
+
+```yaml
+- name: old_prefix_list
+  networks:
+    - 10.0.0.0/8
+  state: absent
+```
+
+**Operations:**
+
+| Operation | Description |
+|-----------|-------------|
+| `create_prefix_port_lists` | Create or update both prefix and port lists in the YAML |
+| `delete_prefix_port_lists` | Delete all prefix and port list names listed per device |
+| `create_prefix_lists` | Create or update prefix lists only (`networkLists`) |
+| `delete_prefix_lists` | Delete listed prefix lists only |
+| `create_port_lists` | Create or update port lists only (`portLists`) |
+| `delete_port_lists` | Delete listed port lists only |
+
+When `operation` is omitted, `state: present` maps to `create_prefix_port_lists` and `state: absent` maps to `delete_prefix_port_lists`.
+
+## Traffic Policies
+
+### Module: graphiant.naas.graphiant_traffic_policy
+
+`graphiant_traffic_policy` manages device-level traffic policy rulesets and LAN segment attachments via `PUT /v1/devices/{id}/config` (`edge.trafficPolicy.trafficRulesets` and `edge.segments.<segment>.trafficRuleset`).
+
+- **Traffic rulesets** — named collections of rules with sequence numbers, match criteria (application, network/L4, DSCP), SLA class, and egress action (overlay, DIA, or IPsec circuit selection)
+- **LAN segment attachments** — map each segment name to a ruleset reference under `segments` in the YAML
+- **Rule shorthand** — match fields (`applicationBuiltin`, `ipProtocol`, `destinationNetwork`, and so on) may be listed at rule top level; the manager normalizes them to API shape on push
+- **Per-rule action** — optional `remarkCodePoint`, `primaryCircuitLabel`, and `backupCircuitLabel` (required for `dia` / `ipsec` egress when circuit labels apply)
+
+Configure-only operations require LAN segments to be attached separately (or use the `configure` tag, which runs both steps). Check mode (`--check`) is supported — nothing is pushed, and would-be payloads are logged with a `[check_mode]` prefix.
+
+Use `configs/sample_device_traffic_policies.yaml`. Top-level key is `trafficPolicyObject` (list of devices). Each device entry contains `trafficRulesets` (list of rulesets) and `segments` (map of segment name to ruleset name).
+
+**Prerequisites:** Configure prefix/port lists (`graphiant_prefix_port_list`) and edge services (DPI applications) before rules that reference `applicationCustom`. WAN circuits must exist before rules with `egress: dia` or `egress: ipsec` and circuit labels. Integration tests in `tests/test.py` run `test_configure_prefix_and_port_list` and `test_configure_edge_services` before traffic policy tests.
+
+### Playbook
+
+Tags: `configure` (configure rulesets + attach to LAN segments), `deconfigure` (detach from segments + delete rulesets), `attach_to_lan_segments`, `detach_from_lan_segments`.
+
+```bash
+# Configure (dry run, then apply)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure
+
+# Deconfigure (dry run, then apply)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure
+
+# Attach / detach LAN segments only
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags attach_to_lan_segments
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags detach_from_lan_segments
+```
+
+### Module task
+
+**Configure rulesets** (`configure` tag — runs configure then attach_to_lan_segments):
+
+```yaml
+- name: Configure device-level traffic policy rulesets
+  graphiant.naas.graphiant_traffic_policy:
+    <<: *graphiant_client_params
+    operation: configure
+    traffic_policy_config_file: "sample_device_traffic_policies.yaml"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure']
+
+- name: Display configure result
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['configure']
+```
+
+**Attach rulesets to LAN segments** (run after `configure`, or standalone to update segment assignments):
+
+```yaml
+- name: Attach traffic ruleset to LAN segments
+  graphiant.naas.graphiant_traffic_policy:
+    <<: *graphiant_client_params
+    operation: attach_to_lan_segments
+    traffic_policy_config_file: "sample_device_traffic_policies.yaml"
+    detailed_logs: true
+  register: attach_result
+  tags: ['configure', 'attach_to_lan_segments']
+
+- name: Display attach-to-segments result
+  ansible.builtin.debug:
+    msg: |
+      {{ attach_result.msg | trim }}
+      configured_devices={{ attach_result.configured_devices | default([]) }}
+      skipped_devices={{ attach_result.skipped_devices | default([]) }}
+  when: attach_result is defined and attach_result.msg is defined
+  tags: ['configure', 'attach_to_lan_segments']
+```
+
+**Detach rulesets from LAN segments** (run before `deconfigure` to clear segment references first):
+
+```yaml
+- name: Detach traffic ruleset from LAN segments
+  graphiant.naas.graphiant_traffic_policy:
+    <<: *graphiant_client_params
+    operation: detach_from_lan_segments
+    traffic_policy_config_file: "sample_device_traffic_policies.yaml"
+    detailed_logs: true
+  register: detach_result
+  tags: ['deconfigure', 'detach_from_lan_segments']
+
+- name: Display detach-from-segments result
+  ansible.builtin.debug:
+    msg: |
+      {{ detach_result.msg | trim }}
+      configured_devices={{ detach_result.configured_devices | default([]) }}
+      skipped_devices={{ detach_result.skipped_devices | default([]) }}
+  when: detach_result is defined and detach_result.msg is defined
+  tags: ['deconfigure', 'detach_from_lan_segments']
+```
+
+**Deconfigure rulesets** (run after `detach_from_lan_segments` — removes rulesets listed in the YAML):
+
+```yaml
+- name: Deconfigure device-level traffic policy rulesets
+  graphiant.naas.graphiant_traffic_policy:
+    <<: *graphiant_client_params
+    operation: deconfigure
+    traffic_policy_config_file: "sample_device_traffic_policies.yaml"
+    detailed_logs: true
+    state: absent
+  register: deconfigure_result
+  tags: ['deconfigure']
+
+- name: Display deconfigure result
+  ansible.builtin.debug:
+    msg: |
+      {{ deconfigure_result.msg | trim }}
+      configured_devices={{ deconfigure_result.configured_devices | default([]) }}
+      skipped_devices={{ deconfigure_result.skipped_devices | default([]) }}
+  when: deconfigure_result is defined and deconfigure_result.msg is defined
+  tags: ['deconfigure']
+```
+
+### Config YAML (`configs/sample_device_traffic_policies.yaml`)
+
+```yaml
+trafficPolicyObject:
+  - edge-1-sdktest:
+      trafficRulesets:
+        - name: Edge-1-Traffic-Policy
+          description: Application and network steering
+          rules:
+            - seq: 1
+              applicationBuiltin: Office 365
+              logging: true
+              slaClass: Gold                    # Default | Bronze | Silver | Gold
+              egress: overlay                   # overlay | dia | ipsec
+
+            - seq: 200
+              ipProtocol: udp                   # any | icmp | igmp | tcp | udp | esp | ah
+              destinationPort: 53
+              destinationNetwork: 0.0.0.0/0
+              logging: true
+              slaClass: Silver
+              egress: dia
+              primaryCircuitLabel: internet_dia_2   # required for dia egress
+
+            - seq: 300
+              applicationCustom: graphiant_dia_ping   # requires DPI app from edge_services
+              logging: true
+              slaClass: Gold
+              egress: ipsec
+              primaryCircuitLabel:
+                ipsecLabel: ipsec_label_1
+              backupCircuitLabel:
+                ipsecLabel: ipsec_label_2
+
+        - name: Edge-2-Traffic-Policy
+          description: Catch-all and remark example
+          rules:
+            - seq: 2000
+              sourceNetwork: 10.10.10.0/24
+              destinationNetwork: 20.20.20.0/24
+              dscpCodePoint: 1                      # match DSCP 0-63
+              logging: true
+              slaClass: Default
+              remarkCodePoint: 3                    # remark DSCP 0-63
+              egress: dia
+              primaryCircuitLabel: internet_dia_2
+
+      segments:
+        lan-1-test: Edge-2-Traffic-Policy          # segment name -> ruleset name
+```
+
+**Per-object deletion** (under `configure`; `state: absent` targets individual objects):
+
+```yaml
+# Delete one ruleset by name
+- name: My-Ruleset
+  state: absent
+
+# Delete one rule by seq (only seq required)
+- seq: 500
+  state: absent
+```
+
+**Required rule fields:**
+
+| Field | Description |
+|-------|-------------|
+| `seq` | Rule sequence number (unique within the ruleset) |
+| `logging` | `true` or `false` |
+| `slaClass` | `Default`, `Bronze`, `Silver`, or `Gold` |
+| `egress` | `overlay`, `dia`, or `ipsec` |
+
+**Optional match fields** (rule shorthand — may appear at rule top level):
+
+| Key | Description |
+|-----|-------------|
+| `applicationBuiltin` | Portal built-in application name |
+| `applicationCustom` | Custom DPI application name (configure via `graphiant_edge_services` first) |
+| `ipProtocol` | `any`, `icmp`, `igmp`, `tcp`, `udp`, `esp`, `ah` |
+| `sourceNetwork` / `destinationNetwork` | CIDR string |
+| `sourcePort` / `destinationPort` | Port number 1–65535 (meaningful for `tcp` / `udp`) |
+| `dscpCodePoint` | DSCP match value 0–63 |
+| `icmpType` | ICMP type when `ipProtocol` is `icmp` (see sample YAML comments for values) |
+
+**Optional action / egress fields:**
+
+| Key | Description |
+|-----|-------------|
+| `primaryCircuitLabel` | DIA circuit label string, or `{ipsecLabel: ...}` for IPsec |
+| `backupCircuitLabel` | Optional backup circuit (same shapes as primary) |
+| `remarkCodePoint` | DSCP remark value 0–63 |
+
+For `egress: overlay`, circuit labels are usually omitted. For `egress: dia`, set `primaryCircuitLabel` to an existing WAN circuit label. For `egress: ipsec`, use `ipsecLabel` objects under the circuit label fields.
+
+## Security Policies
+
+### Module: graphiant.naas.graphiant_security_policy
+
+`graphiant_security_policy` manages device-level security policy rulesets and zone pair attachments via `PUT /v1/devices/{id}/config` (`edge.trafficPolicy.securityRulesets` and `edge.trafficPolicy.zones`).
+
+- **Security rulesets** — named collections of rules with sequence numbers, actions (`accept`, `reject`, `inspect`, `drop`), and match criteria (application, network/L4, content filter, domain list)
+- **Zone pair attachments** — directional pairs (fromZone → toZone) that reference a named ruleset; optional `tcpProtection` flag per pair
+- **Meter rates** — per-rule uplink/downlink policing rates (`uplinkPolicerRate`, `uplinkBurstRate`, `downlinkPolicerRate`, `downlinkBurstRate`)
+- **Implicit rule action** — `implicitRuleAction` on the ruleset controls the default action for unmatched traffic (`accept` or `reject`)
+
+Configure-only operations require zone pairs to be attached separately (or use the `configure` tag which runs both steps). Check mode (`--check`) is supported — nothing is pushed, and would-be payloads are logged with a `[check_mode]` prefix.
+
+**Match type constraint:** Each rule uses one primary match type — application **or** network/L4, not both. Combining `applicationBuiltin` / `applicationCustom` with `ipProtocol`, `sourceNetwork`, `destinationNetwork`, or ports in the same rule is rejected at validation. You also cannot switch match type on an existing rule; delete it (`state: absent`) and add a new rule with the desired match type.
+
+Use `configs/sample_device_security_policies.yaml`. Top-level key is `SecurityPolicyObject` (list of devices). Each device entry contains `securityRulesets` (list of rulesets) and `zones` (list of zone pairs).
+
+**Prerequisites:** Configure prefix/port lists (`graphiant_prefix_port_list`) and edge services (DPI applications) before rules that reference `applicationCustom`. Integration tests in `tests/test.py` run `test_configure_prefix_and_port_list` and `test_configure_edge_services` before security policy tests.
+
+### Playbook
+
+Tags: `configure` (configure rulesets + attach zone pairs), `deconfigure` (detach zone pairs + delete rulesets), `attach_to_zone_pairs`, `detach_from_zone_pairs`.
+
+```bash
+# Configure (dry run, then apply)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure
+
+# Deconfigure (dry run, then apply)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure
+
+# Attach / detach zone pairs only
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags attach_to_zone_pairs
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags detach_from_zone_pairs
+```
+
+### Module task
+
+**Configure rulesets** (`configure` tag — runs configure then attach_to_zone_pairs):
+
+```yaml
+- name: Configure device-level security policy rulesets
+  graphiant.naas.graphiant_security_policy:
+    <<: *graphiant_client_params
+    operation: configure
+    security_policy_config_file: "sample_device_security_policies.yaml"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure']
+
+- name: Display configure result
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['configure']
+```
+
+**Attach rulesets to zone pairs** (run after `configure`, or standalone to update zone assignments):
+
+```yaml
+- name: Attach security ruleset to zone pairs
+  graphiant.naas.graphiant_security_policy:
+    <<: *graphiant_client_params
+    operation: attach_to_zone_pairs
+    security_policy_config_file: "sample_device_security_policies.yaml"
+    detailed_logs: true
+  register: attach_result
+  tags: ['configure', 'attach_to_zone_pairs']
+
+- name: Display attach-to-zone-pairs result
+  ansible.builtin.debug:
+    msg: |
+      {{ attach_result.msg | trim }}
+      configured_devices={{ attach_result.configured_devices | default([]) }}
+      skipped_devices={{ attach_result.skipped_devices | default([]) }}
+  when: attach_result is defined and attach_result.msg is defined
+  tags: ['configure', 'attach_to_zone_pairs']
+```
+
+**Detach rulesets from zone pairs** (run before `deconfigure` to clear zone references first):
+
+```yaml
+- name: Detach security ruleset from zone pairs
+  graphiant.naas.graphiant_security_policy:
+    <<: *graphiant_client_params
+    operation: detach_from_zone_pairs
+    security_policy_config_file: "sample_device_security_policies.yaml"
+    detailed_logs: true
+  register: detach_result
+  tags: ['deconfigure', 'detach_from_zone_pairs']
+
+- name: Display detach-from-zone-pairs result
+  ansible.builtin.debug:
+    msg: |
+      {{ detach_result.msg | trim }}
+      configured_devices={{ detach_result.configured_devices | default([]) }}
+      skipped_devices={{ detach_result.skipped_devices | default([]) }}
+  when: detach_result is defined and detach_result.msg is defined
+  tags: ['deconfigure', 'detach_from_zone_pairs']
+```
+
+**Deconfigure rulesets** (run after `detach_from_zone_pairs` — removes rulesets listed in the YAML):
+
+```yaml
+- name: Deconfigure device-level security policy rulesets
+  graphiant.naas.graphiant_security_policy:
+    <<: *graphiant_client_params
+    operation: deconfigure
+    security_policy_config_file: "sample_device_security_policies.yaml"
+    detailed_logs: true
+    state: absent
+  register: deconfigure_result
+  tags: ['deconfigure']
+
+- name: Display deconfigure result
+  ansible.builtin.debug:
+    msg: |
+      {{ deconfigure_result.msg | trim }}
+      configured_devices={{ deconfigure_result.configured_devices | default([]) }}
+      skipped_devices={{ deconfigure_result.skipped_devices | default([]) }}
+  when: deconfigure_result is defined and deconfigure_result.msg is defined
+  tags: ['deconfigure']
+```
+
+### Config YAML (`configs/sample_device_security_policies.yaml`)
+
+```yaml
+SecurityPolicyObject:
+  - edge-1-sdktest:
+      securityRulesets:
+        - name: Edge-1-Security-Policy-DIA-LAN-1
+          description: Security policy for DIA to LAN-1 traffic
+          implicitRuleAction: reject     # accept | reject (default for unmatched traffic)
+          rules:
+            - seq: 150
+              logging: true
+              match:
+                applicationBuiltin: WhatsApp    # built-in application match
+              action: accept                    # accept | reject | inspect | drop
+              uplinkPolicerRate: 5000           # kbps; optional meter rates
+              uplinkBurstRate: 10000
+
+        - name: Edge-1-Security-Policy-LAN-1-DIA
+          description: Security policy for LAN-1 to DIA traffic
+          implicitRuleAction: reject
+          rules:
+            - seq: 150
+              logging: true
+              match:
+                applicationCustom: graphiant_dia_ping   # custom application
+              action: reject
+            - seq: 160
+              logging: true
+              match:
+                ipProtocol: tcp                          # any | icmp | igmp | tcp | udp | esp | ah
+                destinationNetwork: 10.2.1.101/32        # CIDR string
+              action: reject
+              uplinkPolicerRate: 5000
+              uplinkBurstRate: 10000
+            - seq: 170
+              logging: true
+              match:
+                applicationBuiltin: Facebook
+              action: inspect                            # DPI / threat inspection
+              uplinkPolicerRate: 5000
+              uplinkBurstRate: 10000
+              downlinkPolicerRate: 5000
+              downlinkBurstRate: 10000
+
+      zones:
+        - fromZone: zone-DIA
+          toZone: zone-lan-1
+          ruleset: Edge-1-Security-Policy-DIA-LAN-1
+          tcpProtection: false          # optional; defaults to false
+        - fromZone: zone-lan-1
+          toZone: zone-DIA
+          ruleset: Edge-1-Security-Policy-LAN-1-DIA
+          tcpProtection: false
+```
+
+**Per-object deletion** (under `configure`; `state: absent` targets individual objects):
+
+```yaml
+# Delete one ruleset by name
+- name: My-Ruleset
+  state: absent
+
+# Delete one rule by seq
+- seq: 500
+  state: absent
+```
+
+**Rule actions** (per rule; normalized to lowercase on push):
+
+| Value | Description |
+|-------|-------------|
+| `accept` | Allow matching traffic |
+| `reject` | Deny matching traffic |
+| `inspect` | Allow and inspect matching traffic (DPI / threat inspection) |
+| `drop` | Silently deny matching traffic |
+
+`implicitRuleAction` on the ruleset (catch-all for unmatched traffic) accepts only `accept` or `reject`.
+
+**Match type reference:**
+
+| Key | Description |
+|-----|-------------|
+| `applicationBuiltin` | Portal built-in application name |
+| `applicationCustom` | Custom application name |
+| `ipProtocol` | `any`, `icmp`, `igmp`, `tcp`, `udp`, `esp`, `ah` |
+| `sourceNetwork` | CIDR string (e.g. `10.0.0.0/8`) |
+| `destinationNetwork` | CIDR string |
+| `sourcePort` | Port number 1–65535 |
+| `destinationPort` | Port number 1–65535 |
+| `contentFilter` | `domainCategoryIds` shorthand or full API shape |
+| `domainList` | `domainWildcards` shorthand or full API shape |
+
+Use exactly one primary match type per rule: **application** (`applicationBuiltin` / `applicationCustom`) **or** **network/L4** (`ipProtocol`, `sourceNetwork`, `destinationNetwork`, ports). Do not combine both in the same rule. You cannot switch match type on an existing rule — delete it (`state: absent`) and create a new rule with the desired type.
+
 ## BGP Configuration
 
 ```yaml
@@ -2134,6 +2715,9 @@ Sample configuration files are in the `configs/` directory:
 | `sample_static_route.yaml` | Static routes under edge segments |
 | `sample_macsec.yaml` | Interface MACsec (802.1AE) on ethernet or LAG main interfaces |
 | `sample_edge_services.yaml` | Edge services (DHCP, DNS, LLDP, LWS password) |
+| `sample_prefix_and_port_list.yaml` | Device-level prefix lists (`networkLists`) and port lists (`portLists`) under `edge.trafficPolicy` |
+| `sample_device_traffic_policies.yaml` | Device-level traffic policy rulesets and LAN segment attachments |
+| `sample_device_security_policies.yaml` | Device-level security policy rulesets and zone pair attachments |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
 

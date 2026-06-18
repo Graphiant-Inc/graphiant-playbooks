@@ -1177,6 +1177,63 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Detach traffic policy from LAN segments (idempotency check): %s", result2)
         assert result2['changed'] is False, "Detach LAN segment traffic policy idempotency failed"
 
+    def test_configure_device_security_policy(self):
+        """
+        Configure device-level security policy rulesets (edge.trafficPolicy.securityRulesets).
+
+        Second run should be idempotent (changed=False) if desired state already matches.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.security_policy.configure("sample_device_security_policies.yaml")
+        LOG.info("Configure device-level security policy result: %s", result)
+        result2 = graphiant_config.security_policy.configure("sample_device_security_policies.yaml")
+        LOG.info("Configure device-level security policy result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure device-level security policy idempotency failed"
+
+    def test_deconfigure_device_security_policy(self):
+        """
+        Deconfigure (delete) device-level security policy rulesets listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when rulesets are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.security_policy.deconfigure("sample_device_security_policies.yaml")
+        LOG.info("Deconfigure device-level security policy result: %s", result)
+        result2 = graphiant_config.security_policy.deconfigure("sample_device_security_policies.yaml")
+        LOG.info("Deconfigure device-level security policy result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure device-level security policy idempotency failed"
+
+    def test_attach_device_security_policy_zone_pairs(self):
+        """
+        Attach security ruleset on zone pairs (edge.trafficPolicy.zones).
+
+        Uses ``sample_device_security_policies.yaml``. Second run is idempotent when
+        the portal already shows the same ruleset on the zone pair.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.security_policy.attach_to_zone_pairs("sample_device_security_policies.yaml")
+        LOG.info("Attach security policy to zone pairs result: %s", result)
+        result2 = graphiant_config.security_policy.attach_to_zone_pairs("sample_device_security_policies.yaml")
+        LOG.info("Attach security policy to zone pairs (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Attach zone pair security policy idempotency failed"
+
+    def test_detach_device_security_policy_zone_pairs(self):
+        """
+        Clear security ruleset reference on zone pairs listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when references are already cleared.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.security_policy.detach_from_zone_pairs("sample_device_security_policies.yaml")
+        LOG.info("Detach security policy from zone pairs result: %s", result)
+        result2 = graphiant_config.security_policy.detach_from_zone_pairs("sample_device_security_policies.yaml")
+        LOG.info("Detach security policy from zone pairs (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Detach zone pair security policy idempotency failed"
+
     def test_configure_device_system(self):
         """
         Configure device system settings (edge/core name, regionName, site) from YAML.
@@ -1938,6 +1995,16 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_and_port_list'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_site_to_site_vpn'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
+
+    # Device Security Policy Management Tests
+    suite.addTest(TestGraphiantPlaybooks('test_configure_prefix_and_port_list'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_edge_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_security_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_attach_device_security_policy_zone_pairs'))
+    suite.addTest(TestGraphiantPlaybooks('test_detach_device_security_policy_zone_pairs'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_security_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_edge_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_and_port_list'))
 
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))

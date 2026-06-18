@@ -79,6 +79,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
 | `graphiant_ntp` | Manage NTP objects |
 | `graphiant_traffic_policy` | Manage device traffic policy rulesets and LAN segment attachments (configure workflow: rulesets + attach; deconfigure workflow: detach + delete) |
+| `graphiant_security_policy` | Manage device security policy rulesets and zone pair attachments (configure workflow: rulesets + attach_to_zone_pairs; deconfigure workflow: detach_from_zone_pairs + delete) |
 | `graphiant_prefix_port_list` | Manage Prefix & Port Lists on Edge devices | 
 
 ## Installation
@@ -356,6 +357,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `edge_services_management.yml` | Edge DHCP, DNS, LLDP, local web server password (Vault-supported) |
 | `test_collection.yml` | Collection validation and testing |
 | `traffic_policies_management.yml` | Traffic policies and LAN-segment attachments |
+| `security_policies_management.yml` | Security policies and zone-pair attachments |
 | `prefix_port_list_management.yml` | Prefix and port lists | 
 
 #### Data Exchange Workflows
@@ -386,6 +388,7 @@ ansible-doc graphiant.naas.graphiant_interfaces
 ansible-doc graphiant.naas.graphiant_static_routes
 ansible-doc graphiant.naas.graphiant_ntp
 ansible-doc graphiant.naas.graphiant_traffic_policy
+ansible-doc graphiant.naas.graphiant_security_policy
 ansible-doc graphiant.naas.graphiant_device_system
 ansible-doc graphiant.naas.graphiant_edge_services
 ansible-doc graphiant.naas.graphiant_vrrp
@@ -461,7 +464,7 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info`, `graphiant_prefix_port_list` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info`, `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
 | **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone`                                                                                                                                                                                                                                                                    | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
 | **Read-only** | `graphiant_macsec_info` | Always read-only; check mode has no side effects. |
 
@@ -517,6 +520,7 @@ Modules are designed to be idempotent where possible and to report `changed` acc
 - **Structured results**: Manager methods return results with `changed`, `created`, `skipped`, and `deleted` so playbooks can react to what actually happened.
 - **Interface and circuit modules**: Deconfigure logic (e.g. `deconfigure_lan_interfaces`, `deconfigure_circuits`, `deconfigure_wan_circuits_interfaces`) correctly reports `changed: false` when there is nothing to remove; static route cleanup and circuit removal order are handled so repeated runs stay safe.
 - **Configure operations**: Many configure operations (e.g. full interface or BGP push) do not perform a full state comparison before applying. They push the desired config and may report `changed: true` even if the device is already in that state. This is documented in the relevant modules.
+- **Traffic and security policies**: `graphiant_traffic_policy` and `graphiant_security_policy` compare intended rulesets (and segment or zone-pair attachments) to live device state and skip the push when already matched.
 
 **Summary:**
 - Run deconfigure tasks repeatedly without concern; they are idempotent.
@@ -604,6 +608,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_static_route.yaml` - Static routes (per-segment) configuration
 - `sample_device_ntp.yaml` - NTP objects under `edge.ntpGlobalObject`
 - `sample_device_traffic_policies.yaml` - Traffic rulesets under `edge.trafficPolicy` and LAN segment ruleset attachments under `edge.segments` (use configure + attach_to_lan_segments, or the `traffic_policies_management.yml` playbook `--tags configure`)
+- `sample_device_security_policies.yaml` - Security rulesets under `edge.trafficPolicy.securityRulesets` and zone pair ruleset attachments under `edge.trafficPolicy.zones` (use configure + attach_to_zone_pairs, or the `security_policies_management.yml` playbook `--tags configure`). Custom application matches (`applicationCustom`) require DPI applications from `graphiant_edge_services` / `sample_edge_services.yaml`.
 - `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
 - `sample_lag_interface_config.yaml` - LAG interface configurations
 - `sample_macsec.yaml` - Interface MACsec (PSK/SAK) configuration; CAK via `vault_devices_macsec_psk` in `vault_secrets.yml`

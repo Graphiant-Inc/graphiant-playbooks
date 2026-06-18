@@ -18,6 +18,7 @@ from .site_to_site_vpn_manager import SiteToSiteVpnManager
 from .static_routes_manager import StaticRoutesManager
 from .ntp_manager import NtpManager
 from .traffic_policy_manager import TrafficPolicyManager
+from .security_policy_manager import SecurityPolicyManager
 from .device_system_manager import DeviceSystemManager
 from .edge_services_manager import EdgeServicesManager
 from .prefix_and_port_list import PrefixAndPortListManager
@@ -89,6 +90,7 @@ class GraphiantConfig:
             self.static_routes = StaticRoutesManager(self.config_utils)
             self.ntp = NtpManager(self.config_utils)
             self.traffic_policy = TrafficPolicyManager(self.config_utils)
+            self.security_policy = SecurityPolicyManager(self.config_utils)
             self.device_system = DeviceSystemManager(self.config_utils)
             self.edge_services = EdgeServicesManager(self.config_utils)
             self.prefix_port_list = PrefixAndPortListManager(self.config_utils)
@@ -122,6 +124,7 @@ class GraphiantConfig:
             "static_routes": hasattr(self, "static_routes") and self.static_routes is not None,
             "ntp": hasattr(self, "ntp") and self.ntp is not None,
             "traffic_policy": hasattr(self, "traffic_policy") and self.traffic_policy is not None,
+            "security_policy": hasattr(self, "security_policy") and self.security_policy is not None,
             "device_system": hasattr(self, "device_system") and self.device_system is not None,
             "edge_services": hasattr(self, "edge_services") and self.edge_services is not None,
             "prefix_port_list": hasattr(self, "prefix_port_list") and self.prefix_port_list is not None,
