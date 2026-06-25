@@ -12,6 +12,8 @@
 #
 # Example:
 #   ansible-playbook security_policies_management.yml --tags configure
+#   ansible-playbook security_policies_management.yml --tags configure --check
+#   ansible-playbook security_policies_management.yml --tags configure --check --diff
 #   ansible-playbook security_policies_management.yml --tags deconfigure
 #
 - name: Manage Graphiant Device-level Security Policy Configuration

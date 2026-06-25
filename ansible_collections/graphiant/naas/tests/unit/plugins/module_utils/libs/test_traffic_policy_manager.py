@@ -532,3 +532,86 @@ def test_payload_differs_false_when_rule_already_absent() -> None:
     desired = _rulesets_payload({"rs1": _ruleset(name="rs1", rules={"500": {"rule": None}})})
     device_info = _device_rulesets_payload({"rs1": _ruleset(rules={"10": _rule()})})
     assert m._payload_differs(desired, device_info) is False
+
+
+def test_traffic_policy_diff_rulesets() -> None:
+    m = _mgr()
+    device_dict = {
+        "edge": {
+            "trafficPolicy": {
+                "trafficRulesets": [
+                    {
+                        "name": "rs1",
+                        "rules": [
+                            {"seq": 10, "match": {}, "action": {"primaryCircuitLabel": {"label": "dia"}}},
+                            {"seq": 20, "match": {}, "action": {"primaryCircuitLabel": {"label": "same"}}},
+                        ],
+                    }
+                ]
+            }
+        }
+    }
+    payload = _rulesets_payload(
+        {
+            "rs1": _ruleset(
+                rules={
+                    "10": _rule(
+                        match={},
+                        action={"primaryCircuitLabel": {"label": "internet_dia_1"}},
+                    ),
+                    "20": _rule(
+                        seq=20,
+                        match={},
+                        action={"primaryCircuitLabel": {"label": "same"}},
+                    ),
+                }
+            )
+        }
+    )
+    before, after, branch = m._traffic_policy_diff(device_dict, payload)
+    assert branch == "edge.trafficPolicy.trafficRulesets"
+    assert "10" in before["trafficRulesets"]["rs1"]["rules"]
+    assert "10" in after["trafficRulesets"]["rs1"]["rules"]
+    assert "20" not in before["trafficRulesets"]["rs1"]["rules"]
+    assert before["trafficRulesets"]["rs1"]["rules"]["10"]["action"]["primaryCircuitLabel"]["label"] == "dia"
+    assert (
+        after["trafficRulesets"]["rs1"]["rules"]["10"]["action"]["primaryCircuitLabel"]["label"]
+        == "internet_dia_1"
+    )
+
+
+def test_traffic_policy_diff_rulesets_rule_delete() -> None:
+    m = _mgr()
+    device_dict = {
+        "edge": {
+            "trafficPolicy": {
+                "trafficRulesets": [
+                    {
+                        "name": "rs1",
+                        "rules": [{"seq": 500, "match": {}, "action": {"primaryCircuitLabel": {"label": "dia"}}}],
+                    }
+                ]
+            }
+        }
+    }
+    payload = _rulesets_payload({"rs1": _ruleset(rules={"500": {"rule": None}})})
+    before, after, branch = m._traffic_policy_diff(device_dict, payload)
+    assert branch == "edge.trafficPolicy.trafficRulesets"
+    assert "500" in before["trafficRulesets"]["rs1"]["rules"]
+    assert after["trafficRulesets"]["rs1"]["rules"]["500"] is None
+
+
+def test_traffic_policy_diff_segments() -> None:
+    m = _mgr()
+    device_dict = {
+        "edge": {
+            "segments": {
+                "lan-1": {"trafficRuleset": {"ruleset": "G-100-rs1"}},
+            }
+        }
+    }
+    payload = {"edge": {"segments": {"lan-1": {"trafficRuleset": {"ruleset": "rs1"}}}}}
+    before, after, branch = m._traffic_policy_diff(device_dict, payload)
+    assert branch == "edge.segments"
+    assert before["segments"]["lan-1"]["ruleset"] == "G-100-rs1"
+    assert after["segments"]["lan-1"]["ruleset"] == "rs1"

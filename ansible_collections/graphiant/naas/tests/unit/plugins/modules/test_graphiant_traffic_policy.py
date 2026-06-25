@@ -118,3 +118,41 @@ def test_main_attach_to_lan_segments(mock_ansible_module, mock_get_connection) -
 
     tpm.attach_to_lan_segments.assert_called_once_with("sample_device_traffic_policies.yaml")
     assert mod.exit_json.call_args[1]["operation"] == "attach_to_lan_segments"
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_traffic_policy.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_traffic_policy.AnsibleModule")
+def test_main_configure_diff_mode(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod._diff = True
+    p = _base_params()
+    p["operation"] = "configure"
+    mod.params = p
+    mock_ansible_module.return_value = mod
+
+    diff_plan = [
+        {
+            "device": "edge-1",
+            "branch": "edge.trafficPolicy.trafficRulesets",
+            "before": {"trafficRulesets": {"rs1": {"rules": {"10": {"seq": 10, "action": "old"}}}}},
+            "after": {"trafficRulesets": {"rs1": {"rules": {"10": {"seq": 10, "action": "new"}}}}},
+        }
+    ]
+    tpm = MagicMock()
+    tpm.configure.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1"],
+        "skipped_devices": [],
+        "diff_plan": diff_plan,
+    }
+    gc = MagicMock()
+    gc.traffic_policy = tpm
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_traffic_policy.main()
+
+    kwargs = mod.exit_json.call_args[1]
+    assert "diff" in kwargs
+    assert '"10"' in kwargs["diff"]["after"]
+    assert kwargs["details"]["diff_plan"] == diff_plan

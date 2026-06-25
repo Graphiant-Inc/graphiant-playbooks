@@ -1302,7 +1302,7 @@ When `operation` is omitted, `state: present` maps to `create_prefix_port_lists`
 - **Rule shorthand** — match fields (`applicationBuiltin`, `ipProtocol`, `destinationNetwork`, and so on) may be listed at rule top level; the manager normalizes them to API shape on push
 - **Per-rule action** — optional `remarkCodePoint`, `primaryCircuitLabel`, and `backupCircuitLabel` (required for `dia` / `ipsec` egress when circuit labels apply)
 
-Configure-only operations require LAN segments to be attached separately (or use the `configure` tag, which runs both steps). Check mode (`--check`) is supported — nothing is pushed, and would-be payloads are logged with a `[check_mode]` prefix.
+Configure-only operations require LAN segments to be attached separately (or use the `configure` tag, which runs both steps). Check mode (`--check`) and diff mode (`--diff`) are supported — the module reads live device state, skips writes in check mode, and sets `changed` from whether an apply would update at least one device. Use `--check --diff` to preview `details.diff_plan` and Ansible `diff`. Ruleset diffs list only changed rules under `rules` (plus `_meta` when ruleset metadata changes); segment attach/detach diffs show per-segment ruleset references.
 
 Use `configs/sample_device_traffic_policies.yaml`. Top-level key is `trafficPolicyObject` (list of devices). Each device entry contains `trafficRulesets` (list of rulesets) and `segments` (map of segment name to ruleset name).
 
@@ -1315,10 +1315,12 @@ Tags: `configure` (configure rulesets + attach to LAN segments), `deconfigure` (
 ```bash
 # Configure (dry run, then apply)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure
 
 # Deconfigure (dry run, then apply)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure
 
 # Attach / detach LAN segments only
@@ -1512,6 +1514,44 @@ trafficPolicyObject:
 
 For `egress: overlay`, circuit labels are usually omitted. For `egress: dia`, set `primaryCircuitLabel` to an existing WAN circuit label. For `egress: ipsec`, use `ipsecLabel` objects under the circuit label fields.
 
+**Check and diff mode**
+
+With `--check`, nothing is pushed; the module reads live device state and sets `changed` from whether an apply would update at least one device. Would-be payloads are logged with a `[check_mode]` prefix when `detailed_logs: true`.
+
+With `--diff`, pending changes appear in Ansible `diff` (`before` / `after`) and `details.diff_plan`. Each `diff_plan` entry includes `device`, `branch`, and normalized snapshots:
+
+| Branch | Diff shape |
+|--------|------------|
+| `edge.trafficPolicy.trafficRulesets` | Per ruleset: changed rules only under `rules.<seq>`; metadata under `_meta` |
+| `edge.segments` | Per segment: `ruleset` reference before and after |
+
+Example `details.diff_plan` entry for a single rule update:
+
+```yaml
+- device: edge-1-sdktest
+  branch: edge.trafficPolicy.trafficRulesets
+  before:
+    trafficRulesets:
+      Edge-1-Traffic-Policy:
+        rules:
+          "200":
+            seq: 200
+            action:
+              primaryCircuitLabel:
+                label: internet_dia_1
+  after:
+    trafficRulesets:
+      Edge-1-Traffic-Policy:
+        rules:
+          "200":
+            seq: 200
+            action:
+              primaryCircuitLabel:
+                label: internet_dia_2
+```
+
+Unchanged rules are omitted from the diff. Rule deletions show the existing rule in `before` and `null` in `after` for that sequence key.
+
 ## Security Policies
 
 ### Module: graphiant.naas.graphiant_security_policy
@@ -1523,7 +1563,7 @@ For `egress: overlay`, circuit labels are usually omitted. For `egress: dia`, se
 - **Meter rates** — per-rule uplink/downlink policing rates (`uplinkPolicerRate`, `uplinkBurstRate`, `downlinkPolicerRate`, `downlinkBurstRate`)
 - **Implicit rule action** — `implicitRuleAction` on the ruleset controls the default action for unmatched traffic (`accept` or `reject`)
 
-Configure-only operations require zone pairs to be attached separately (or use the `configure` tag which runs both steps). Check mode (`--check`) is supported — nothing is pushed, and would-be payloads are logged with a `[check_mode]` prefix.
+Configure-only operations require zone pairs to be attached separately (or use the `configure` tag which runs both steps). Check mode (`--check`) and diff mode (`--diff`) are supported — the module reads live device state, skips writes in check mode, and sets `changed` from whether an apply would update at least one device. Use `--check --diff` to preview `details.diff_plan` and Ansible `diff`. Ruleset diffs list only changed rules under `rules` (plus `_meta` when ruleset metadata changes); zone pair attach/detach diffs show `ruleset` and `tcpProtection` per pair.
 
 **Match type constraint:** Each rule uses one primary match type — application **or** network/L4, not both. Combining `applicationBuiltin` / `applicationCustom` with `ipProtocol`, `sourceNetwork`, `destinationNetwork`, or ports in the same rule is rejected at validation. You also cannot switch match type on an existing rule; delete it (`state: absent`) and add a new rule with the desired match type.
 
@@ -1538,10 +1578,12 @@ Tags: `configure` (configure rulesets + attach zone pairs), `deconfigure` (detac
 ```bash
 # Configure (dry run, then apply)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure
 
 # Deconfigure (dry run, then apply)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure
 
 # Attach / detach zone pairs only
@@ -1639,6 +1681,38 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_
       skipped_devices={{ deconfigure_result.skipped_devices | default([]) }}
   when: deconfigure_result is defined and deconfigure_result.msg is defined
   tags: ['deconfigure']
+```
+
+**Check and diff mode**
+
+With `--check`, nothing is pushed; the module reads live device state and sets `changed` from whether an apply would update at least one device. Would-be payloads are logged with a `[check_mode]` prefix when `detailed_logs: true`.
+
+With `--diff`, pending changes appear in Ansible `diff` and `details.diff_plan`:
+
+| Branch | Diff shape |
+|--------|------------|
+| `edge.trafficPolicy.securityRulesets` | Per ruleset: changed rules only under `rules.<seq>`; metadata under `_meta` |
+| `edge.trafficPolicy.zones` | Per zone pair (`inside->outside`): `ruleset` and `tcpProtection` before and after |
+
+Example per-rule diff when changing a rule action:
+
+```yaml
+- device: edge-1-sdktest
+  branch: edge.trafficPolicy.securityRulesets
+  before:
+    securityRulesets:
+      Edge-1-Security-Policy-DIA-LAN-1:
+        rules:
+          "150":
+            seq: 150
+            action: reject
+  after:
+    securityRulesets:
+      Edge-1-Security-Policy-DIA-LAN-1:
+        rules:
+          "150":
+            seq: 150
+            action: accept
 ```
 
 ### Config YAML (`configs/sample_device_security_policies.yaml`)
