@@ -16,16 +16,20 @@
 # Only listed keys are merged onto current device state.
 
 device_system:
-  - edge-1-sdktest:
+  - edge-1-gsdktest:
       name: "edge-1-sdktest"
+      site:
+        name: "San Jose-sdktest"
 
-  - edge-2-sdktest:
-      regionName: "us-west-2 (San Jose)"
+  - edge-2-gsdktest:
+      name: "edge-2-sdktest"
+      site:
+        name: "New York-sdktest"
 
-  - edge-3-sdktest:
+  - edge-3-gsdktest:
       name: "edge-3-sdktest"
       regionName: "us-east-2 (Atlanta)"
-      site: 
+      site:
         name: "New York-sdktest"
 
 # Site definitions - prereq for device system settings if not already created

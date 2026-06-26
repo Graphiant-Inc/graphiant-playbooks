@@ -74,7 +74,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
 | `graphiant_sites` | Manage sites and site attachments |
-| `graphiant_data_exchange` | Manage Data Exchange workflows |
+| `graphiant_data_exchange` | Manage Data Exchange workflows (create/update/delete services and customers, match, accept invitation).|
 | `graphiant_data_exchange_info` | Query Data Exchange info (services summary, customers summary, service health) |
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
 | `graphiant_ntp` | Manage NTP objects |
@@ -367,12 +367,14 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 | Playbook | Description |
 |----------|-------------|
 | `00_dataex_*_prerequisites.yml` | Prerequisites setup (LAN interfaces, segments, VPN profiles) |
-| `01_dataex_create_services.yml` | Create Data Exchange services |
-| `02_dataex_create_customers.yml` | Create Data Exchange customers |
-| `03_dataex_match_services_to_customers.yml` | Match services to customers |
-| `04_dataex_delete_customers.yml` | Delete customers |
-| `05_dataex_delete_services.yml` | Delete services |
-| `07_dataex_accept_invitation.yml` | Accept service invitations |
+| `01_dataex_create_services.yml` | Create Data Exchange services. Supports `--check` and `--check --diff` |
+| `01b_dataex_update_services.yml` | Update `prefixTags` on existing services. Supports `--check --diff` |
+| `02_dataex_create_customers.yml` | Create Data Exchange customers. Supports `--check --diff` to detect `adminEmail` drift on existing customers. Custom config: `-e config_file=...` |
+| `02b_dataex_update_customers.yml` | Update `adminEmail` on existing customers. Supports `--check --diff` |
+| `03_dataex_match_services_to_customers.yml` | Match services to customers; saves match responses to `output/`. Custom config: `-e config_file=...` |
+| `04_dataex_delete_customers.yml` | Delete customers (idempotent — already-absent customers are skipped) |
+| `05_dataex_delete_services.yml` | Delete services (idempotent — already-absent services are skipped) |
+| `07_dataex_accept_invitation.yml` | Accept service invitations. Supports `--check`. Custom config: `-e config_file=...`. Optional matches file: `-e matches_file=...` (required when service is not yet visible via API in the consumer tenant) |
 | `08_dataex_query_service_health.yml` | Query service health monitoring |
 
 **Modules used:**
@@ -470,7 +472,7 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 **Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, and `graphiant_macsec` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list` and `graphiant_macsec` document `diff_mode`; use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan` when an edge branch would change.
+**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, and `graphiant_data_exchange` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmail` drift on existing customers with a hint to use `update_customers`.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -482,6 +484,12 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_mana
 # LWS via vault: use --tags configure and --vault-password-file (see edge_services_management.yml)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 # CAK via vault required for configure tag; use configure_without_vault only with plaintext cak in YAML (dev/local)
+
+# Data Exchange: check + diff to preview creates and detect adminEmail drift on existing customers
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
+# Data Exchange: validate accept_invitation before applying (provide matches_file if service not visible via API)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check \
+  -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
 ```
 
 **Example: single task in check mode**
@@ -521,9 +529,10 @@ Modules are designed to be idempotent where possible and to report `changed` acc
 - **Interface and circuit modules**: Deconfigure logic (e.g. `deconfigure_lan_interfaces`, `deconfigure_circuits`, `deconfigure_wan_circuits_interfaces`) correctly reports `changed: false` when there is nothing to remove; static route cleanup and circuit removal order are handled so repeated runs stay safe.
 - **Configure operations**: Many configure operations (e.g. full interface or BGP push) do not perform a full state comparison before applying. They push the desired config and may report `changed: true` even if the device is already in that state. This is documented in the relevant modules.
 - **Traffic and security policies**: `graphiant_traffic_policy` and `graphiant_security_policy` compare intended rulesets (and segment or zone-pair attachments) to live device state and skip the push when already matched.
+- **Data Exchange operations**: All Data Exchange operations are idempotent. `create_services` and `create_customers` skip already-existing resources (`changed: false`, `skipped` non-empty). `match_service_to_customers` skips already-matched pairs. `delete_customers` and `delete_services` skip already-absent resources. `accept_invitation` skips already-linked consumers. Re-running any workflow playbook is safe.
 
 **Summary:**
-- Run deconfigure tasks repeatedly without concern; they are idempotent.
+- Run deconfigure and Data Exchange delete tasks repeatedly without concern; they are idempotent.
 - For configure tasks, re-running may report `changed: true` depending on the module and operation; see module docs for details.
 
 ### Detailed Logging

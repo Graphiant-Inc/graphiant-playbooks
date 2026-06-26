@@ -14,7 +14,7 @@ data_exchange_services:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
       type: "peering_service"
       site:
-        - sites: ["Wales-sdktest", "Liverpool-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_101_description"
       prefixTags:
@@ -41,7 +41,7 @@ data_exchange_services:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
       type: "peering_service"
       site:
-        - sites: ["Wales-sdktest", "Liverpool-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_102_description"
       prefixTags:
@@ -68,7 +68,7 @@ data_exchange_services:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
       type: "peering_service"
       site:
-        - sites: ["Wales-sdktest", "Liverpool-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_103_description"
       prefixTags:
@@ -95,7 +95,7 @@ data_exchange_services:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
       type: "peering_service"
       site:
-        - sites: ["Wales-sdktest", "Liverpool-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_104_description"
       prefixTags:
@@ -122,7 +122,7 @@ data_exchange_services:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
       type: "peering_service"
       site:
-        - sites: ["Wales-sdktest", "Liverpool-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_105_description"
       prefixTags:
@@ -149,7 +149,7 @@ data_exchange_services:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
       type: "peering_service"
       site:
-        - sites: ["Wales-sdktest", "Liverpool-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_106_description"
       prefixTags:

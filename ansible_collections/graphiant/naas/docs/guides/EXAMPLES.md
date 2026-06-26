@@ -2508,9 +2508,21 @@ To list Data Exchange services
 ### Step 3: Create Data Exchange Customers
 
 ```bash
+# Dry-run (validates config)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check
+
+# Dry-run with diff: shows which customers would be created, and detects adminEmail drift on existing customers
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
+
+# Apply
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml
+
+# Custom config file
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml \
+  -e config_file=de_workflows_configs/sample_data_exchange_customers.yaml
 ```
+
+> **Drift detection**: running with `--check --diff` compares the desired `adminEmail` list against the current portal state for existing customers. If they differ, a diff is shown with a note to use `update_customers` to apply the change.
 
 To create Data Exchange Customers
 
@@ -2551,8 +2563,13 @@ To list Data Exchange Customers
 export GRAPHIANT_CONFIGS_PATH=$(pwd)/ansible_collections/graphiant/naas/configs/
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml --check
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml
+
+# Custom config file
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml \
+  -e config_file=de_workflows_configs/sample_data_exchange_matches.yaml
 ```
 
+> Match responses (including `match_id`) are automatically saved to `de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json`. This file is used in Step 5 when the service is not yet visible via API in the consumer tenant.
 
 ```yaml
 - name: Match Data Exchange services to customers
@@ -2570,17 +2587,33 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_da
     msg: "{{ match_result.msg }}"
 ```
 
-### Step 5: Accept Invitations (in the proxy tenant)
+### Step 5: Accept Invitations (in the proxy/consumer tenant)
+
+`matches_file` is **optional**:
+- **Omit it** when the service is already visible in the consumer tenant via API (e.g. after a previous acceptance or if the producer has already shared it). This is the common case for idempotent re-runs.
+- **Provide it** when the service is not yet visible via API — typically during a `--check` dry-run before the first acceptance, or in environments where the producer has not yet shared the service. The file is saved by Workflow 3 (Step 4) at `de_workflows_configs/output/<matches>_responses_latest.json`.
 
 ```bash
 export GRAPHIANT_USERNAME="proxy-tenant-username"
+
+# Dry-run without matches_file (works if service is already visible via API)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check
+
+# Dry-run with matches_file (required when service is not yet visible via API)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check \
+  -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
+
+# Apply (matches_file optional; omit to use API lookup, or provide explicitly)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
+  -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
+
+# Custom config file
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
+  -e config_file=de_workflows_configs/sample_data_exchange_acceptance.yaml \
+  -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
 ```
 
-```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml
-```
-
+> **Tip**: if the `--check` run fails with "Service not found via API", the error message shows the exact `-e matches_file=...` path to pass. The matches file is saved by Step 4 in the `output/` subdirectory next to your config file.
 
 ```yaml
 - name: Accept Data Exchange service invitation
@@ -2588,9 +2621,11 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_da
     <<: *graphiant_client_params
     operation: accept_invitation
     config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
-    # matches_file is optional - if provided, uses service_id to lookup match_id via API if missing
-    # If not provided, attempts API lookup (works if service is visible to consumer tenant)
-    matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+    # matches_file is optional. When provided, match_id is resolved from the file (with API
+    # fallback if the entry is missing). When omitted, match_id is resolved entirely via API
+    # (works as long as the service is visible to the consumer tenant).
+    # Pass via: -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
+    matches_file: "{{ matches_file | default(omit) }}"
     # Scale testing
     # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale.yaml"
     # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_scale_responses_latest.json"
