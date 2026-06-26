@@ -108,17 +108,19 @@ class DataExchangeManager(BaseManager):
         LOG.info("Data Exchange deconfiguration completed (changed: %s)", result["changed"])
         return result
 
-    def create_services(self, config_yaml_file: str) -> dict:
+    def create_services(self, config_yaml_file: str, diff_mode: bool = False) -> dict:
         """
         Create new Data Exchange services from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+            diff_mode (bool): When True, fetch existing service details to detect prefixTags
+                drift and populate diff_plan. Only set when the caller requested --diff output.
 
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result: Dict[str, Any] = {"changed": False, "created": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "created": [], "skipped": [], "drifted": [], "diff_plan": []}
 
         try:
             LOG.info("Creating Data Exchange service from %s", config_yaml_file)
@@ -160,6 +162,37 @@ class DataExchangeManager(BaseManager):
                     LOG.info(
                         "Service '%s' already exists (ID: %s), skipping creation", service_name, existing_service.id
                     )
+                    # Drift detection: only when --diff requested (avoids extra API call otherwise)
+                    desired_prefix_tags = (service_config.get("policy") or {}).get("prefixTags") or []
+                    if diff_mode and desired_prefix_tags:
+                        try:
+                            current_details_dict = self.gsdk.get_data_exchange_service_details(existing_service.id)
+                            current_prefix_tags = (
+                                (current_details_dict.get("policy") or {})
+                                .get("policy", {})
+                                .get("prefixTags") or []
+                            )
+
+                            def _norm(tags):
+                                return sorted(
+                                    [{"prefix": t.get("prefix", ""), "tag": t.get("tag", "") or ""} for t in tags],
+                                    key=lambda x: x["prefix"],
+                                )
+
+                            if _norm(current_prefix_tags) != _norm(desired_prefix_tags):
+                                LOG.info(
+                                    "Service '%s' has drifted prefixTags (use update_services to apply)",
+                                    service_name,
+                                )
+                                result["diff_plan"].append({
+                                    "device": service_name,
+                                    "branch": "prefixTags (existing - use update_services to apply)",
+                                    "before": {"prefixTags": current_prefix_tags},
+                                    "after": {"prefixTags": desired_prefix_tags},
+                                })
+                                result["drifted"].append(service_name)
+                        except Exception as e:
+                            LOG.warning("Could not fetch details for drift detection on '%s': %s", service_name, e)
                     result["skipped"].append(service_name)
                     continue
 
@@ -189,6 +222,12 @@ class DataExchangeManager(BaseManager):
                 # Create service directly
                 LOG.info("Service configuration: %s", service_config)
                 LOG.info("create_data_exchange_services: Creating service '%s'", service_name)
+                result["diff_plan"].append({
+                    "device": service_name,
+                    "branch": "create",
+                    "before": {},
+                    "after": service_config,
+                })
                 self.gsdk.create_data_exchange_services(service_config)
                 LOG.info("Successfully created service '%s'", service_name)
                 result["created"].append(service_name)
@@ -207,6 +246,140 @@ class DataExchangeManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to create Data Exchange service: %s", e)
             raise ConfigurationError(f"Data Exchange service creation failed: {e}")
+
+    def update_services(self, config_yaml_file: str) -> dict:
+        """
+        Update existing Data Exchange services from YAML configuration.
+
+        Only ``prefixTags`` can be updated. The service must already exist.
+        At least one prefix must remain after the update.
+
+        Args:
+            config_yaml_file (str): Path to the YAML configuration file.
+                Each service entry requires ``serviceName`` and ``policy.prefixTags``.
+
+        Returns:
+            dict: Result with 'changed' status and lists of updated/skipped items
+        """
+        result: Dict[str, Any] = {"changed": False, "updated": [], "skipped": [], "diff_plan": []}
+
+        try:
+            LOG.info("Updating Data Exchange services from %s", config_yaml_file)
+            config_data = self.render_config_file(config_yaml_file)
+
+            if not config_data or "data_exchange_services" not in config_data:
+                LOG.info("No data_exchange_services configuration found in YAML file")
+                return result
+
+            services = config_data["data_exchange_services"]
+            if not isinstance(services, list):
+                raise ConfigurationError("Configuration error: 'data_exchange_services' must be a list.")
+
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
+
+            for service_config in services:
+                service_name = service_config.get("serviceName")
+                LOG.info("--------------------------------")
+                LOG.info("update_services: Updating service '%s'", service_name)
+                if not service_name:
+                    raise ConfigurationError("Configuration error: Each service must have a 'serviceName' field.")
+
+                # Service must exist to be updated
+                existing_service = self.gsdk.get_data_exchange_service_by_name(service_name)
+                if not existing_service:
+                    raise ConfigurationError(
+                        f"Service '{service_name}' not found. "
+                        "Use create_services to create new services."
+                    )
+                service_id = existing_service.id
+
+                # Get current service details for comparison and payload construction
+                current_details_dict = self.gsdk.get_data_exchange_service_details(service_id)
+                current_outer_policy = current_details_dict.get("policy") or {}
+                current_inner_policy = current_outer_policy.get("policy") or {}
+                current_prefix_tags = current_inner_policy.get("prefixTags") or []
+
+                # Desired prefixTags from config
+                desired_prefix_tags = (service_config.get("policy") or {}).get("prefixTags") or []
+
+                if not desired_prefix_tags:
+                    raise ConfigurationError(
+                        f"Service '{service_name}': 'policy.prefixTags' is required for update_services "
+                        "and must contain at least one entry."
+                    )
+
+                # Validate: at least one prefix must remain
+                if len(desired_prefix_tags) == 0:
+                    raise ConfigurationError(
+                        f"Service '{service_name}': At least one prefix must remain after update. "
+                        "Removing all prefixes is not allowed."
+                    )
+
+                # Normalize for idempotency comparison
+                def _norm(tags):
+                    return sorted(
+                        [{"prefix": t.get("prefix", ""), "tag": t.get("tag", "") or ""} for t in tags],
+                        key=lambda x: x["prefix"],
+                    )
+
+                if _norm(current_prefix_tags) == _norm(desired_prefix_tags):
+                    LOG.info(
+                        "Service '%s' prefixTags unchanged, skipping update", service_name
+                    )
+                    result["skipped"].append(service_name)
+                    continue
+
+                # Record diff for --diff mode
+                result["diff_plan"].append({
+                    "device": service_name,
+                    "branch": "prefixTags",
+                    "before": {"prefixTags": current_prefix_tags},
+                    "after": {"prefixTags": desired_prefix_tags},
+                })
+
+                # Build PUT payload using current service state + desired prefixTags
+                # GET returns "sites" key; PUT expects "site" key (same inner structure)
+                current_sites = current_inner_policy.get("sites") or []
+                site_for_put = [
+                    {"sites": s.get("sites") or [], "siteLists": s.get("siteLists") or []}
+                    for s in current_sites
+                ]
+
+                update_payload = {
+                    "id": service_id,
+                    "policy": {
+                        "serviceLanSegment": current_inner_policy.get("serviceLanSegment"),
+                        "type": current_inner_policy.get("type", "peering_service"),
+                        "site": site_for_put,
+                        "description": current_inner_policy.get("description", ""),
+                        "prefixTags": desired_prefix_tags,
+                        "globalObjectOps": {},
+                    },
+                }
+
+                LOG.info(
+                    "update_services: Update payload for '%s': %s", service_name, update_payload
+                )
+                self.gsdk.edit_data_exchange_service(service_id, update_payload)
+                LOG.info(
+                    "Successfully updated service '%s' (ID: %s)", service_name, service_id
+                )
+                result["updated"].append(service_name)
+                result["changed"] = True
+
+            LOG.info(
+                "Data Exchange service update completed: %s updated, %s skipped (changed: %s)",
+                len(result["updated"]),
+                len(result["skipped"]),
+                result["changed"],
+            )
+            return result
+
+        except ConfigurationError:
+            raise
+        except Exception as e:
+            LOG.error("Failed to update Data Exchange service: %s", e)
+            raise ConfigurationError(f"Data Exchange service update failed: {e}")
 
     def _resolve_site_ids(self, policy_config: dict, service_name: str) -> None:
         """
@@ -383,17 +556,19 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to retrieve service '%s': %s", service_name, e)
             raise ConfigurationError(f"Failed to retrieve service '{service_name}': {e}")
 
-    def create_customers(self, config_yaml_file: str) -> dict:
+    def create_customers(self, config_yaml_file: str, diff_mode: bool = False) -> dict:
         """
         Create a new Data Exchange customer from YAML configuration.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file
+            diff_mode (bool): When True, fetch existing customer details to detect email
+                drift and populate diff_plan. Only set when the caller requested --diff output.
 
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
         """
-        result: Dict[str, Any] = {"changed": False, "created": [], "skipped": []}
+        result: Dict[str, Any] = {"changed": False, "created": [], "skipped": [], "drifted": [], "diff_plan": []}
 
         try:
             LOG.info("Creating Data Exchange customer from %s", config_yaml_file)
@@ -423,12 +598,40 @@ class DataExchangeManager(BaseManager):
                     LOG.info(
                         "Customer '%s' already exists (ID: %s), skipping creation", customer_name, existing_customer.id
                     )
+                    # Drift detection: only when --diff requested (avoids extra API call otherwise)
+                    desired_emails = (customer_config.get("invite") or {}).get("adminEmail") or []
+                    if diff_mode and desired_emails:
+                        try:
+                            current_details = self.gsdk.get_data_exchange_customer_details(existing_customer.id)
+                            current_emails = current_details.get("emails") or []
+                            if sorted(current_emails) != sorted(desired_emails):
+                                LOG.info(
+                                    "Customer '%s' has drifted emails (use update_customers to apply)",
+                                    customer_name,
+                                )
+                                result["diff_plan"].append({
+                                    "device": customer_name,
+                                    "branch": "adminEmail (existing - use update_customers to apply)",
+                                    "before": {"adminEmail": current_emails},
+                                    "after": {"adminEmail": desired_emails},
+                                })
+                                result["drifted"].append(customer_name)
+                        except Exception as e:
+                            LOG.warning(
+                                "Could not fetch details for drift detection on '%s': %s", customer_name, e
+                            )
                     result["skipped"].append(customer_name)
                     continue
 
                 # Create customer directly
                 LOG.info("Customer configuration: %s", customer_config)
                 LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_name)
+                result["diff_plan"].append({
+                    "device": customer_name,
+                    "branch": "create",
+                    "before": {},
+                    "after": customer_config,
+                })
                 self.gsdk.create_data_exchange_customers(customer_config)
                 LOG.info("Successfully created customer '%s'", customer_name)
                 result["created"].append(customer_name)
@@ -447,6 +650,113 @@ class DataExchangeManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to create Data Exchange customer: %s", e)
             raise ConfigurationError(f"Data Exchange customer creation failed: {e}")
+
+    def update_customers(self, config_yaml_file: str) -> dict:
+        """
+        Update existing Data Exchange customers from YAML configuration.
+
+        Only ``invite.adminEmail`` (the email list) can be updated. The customer must
+        already exist. Supports check mode and diff output.
+
+        Args:
+            config_yaml_file (str): Path to the YAML configuration file.
+                Each customer entry requires ``name`` and ``invite.adminEmail``.
+
+        Returns:
+            dict: Result with 'changed' status and lists of updated/skipped items
+        """
+        result: Dict[str, Any] = {"changed": False, "updated": [], "skipped": [], "diff_plan": []}
+
+        try:
+            LOG.info("Updating Data Exchange customers from %s", config_yaml_file)
+            config_data = self.render_config_file(config_yaml_file)
+
+            if not config_data or "data_exchange_customers" not in config_data:
+                LOG.info("No data_exchange_customers configuration found in YAML file")
+                return result
+
+            customers = config_data["data_exchange_customers"]
+            if not isinstance(customers, list):
+                raise ConfigurationError("Configuration error: 'data_exchange_customers' must be a list.")
+
+            LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
+
+            for customer_config in customers:
+                customer_name = customer_config.get("name")
+                LOG.info("--------------------------------")
+                LOG.info("update_customers: Updating customer '%s'", customer_name)
+                if not customer_name:
+                    raise ConfigurationError("Configuration error: Each customer must have a 'name' field.")
+
+                # Customer must exist to be updated
+                existing_customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
+                if not existing_customer:
+                    raise ConfigurationError(
+                        f"Customer '{customer_name}' not found. "
+                        "Use create_customers to create new customers."
+                    )
+                customer_id = existing_customer.id
+
+                # Desired emails from config
+                desired_emails = (customer_config.get("invite") or {}).get("adminEmail") or []
+                if not desired_emails:
+                    raise ConfigurationError(
+                        f"Customer '{customer_name}': 'invite.adminEmail' is required for "
+                        "update_customers and must contain at least one email address."
+                    )
+
+                # Get current customer details for comparison
+                current_details = self.gsdk.get_data_exchange_customer_details(customer_id)
+                current_emails = current_details.get("emails") or []
+                num_sites = current_details.get("numSites", 0)
+
+                # Normalize for idempotency comparison
+                if sorted(current_emails) == sorted(desired_emails):
+                    LOG.info("Customer '%s' emails unchanged, skipping update", customer_name)
+                    result["skipped"].append(customer_name)
+                    continue
+
+                # Record diff
+                result["diff_plan"].append({
+                    "device": customer_name,
+                    "branch": "adminEmail",
+                    "before": {"adminEmail": current_emails},
+                    "after": {"adminEmail": desired_emails},
+                })
+
+                # Build PUT payload
+                update_payload = {
+                    "id": customer_id,
+                    "status": "",
+                    "invite": {
+                        "adminEmail": desired_emails,
+                        "maximumNumberOfSites": num_sites,
+                    },
+                }
+
+                LOG.info(
+                    "update_customers: Update payload for '%s': %s", customer_name, update_payload
+                )
+                self.gsdk.edit_data_exchange_customer(customer_id, update_payload)
+                LOG.info(
+                    "Successfully updated customer '%s' (ID: %s)", customer_name, customer_id
+                )
+                result["updated"].append(customer_name)
+                result["changed"] = True
+
+            LOG.info(
+                "Data Exchange customer update completed: %s updated, %s skipped (changed: %s)",
+                len(result["updated"]),
+                len(result["skipped"]),
+                result["changed"],
+            )
+            return result
+
+        except ConfigurationError:
+            raise
+        except Exception as e:
+            LOG.error("Failed to update Data Exchange customer: %s", e)
+            raise ConfigurationError(f"Data Exchange customer update failed: {e}")
 
     def get_customers_summary(self) -> Dict[str, Any]:
         if not HAS_TABULATE:
@@ -981,7 +1291,7 @@ class DataExchangeManager(BaseManager):
             self._validate_vpn_profiles_for_acceptances(acceptances)
 
             # Process acceptances and log results
-            result = self._process_multiple_acceptances(acceptances, matches_file)
+            result = self._process_multiple_acceptances(acceptances, matches_file, config_yaml_file=config_yaml_file)
 
             # Log summary like other operations
             total_processed = result.get("total_processed", 0)
@@ -1180,13 +1490,14 @@ class DataExchangeManager(BaseManager):
             LOG.warning("_validate_vpn_profiles_for_acceptances: VPN profile validation failed: %s", e)
             raise
 
-    def _process_multiple_acceptances(self, acceptances_config, matches_file=None):
+    def _process_multiple_acceptances(self, acceptances_config, matches_file=None, config_yaml_file=None):
         """
         Process multiple invitation acceptances from configuration.
 
         Args:
             acceptances_config (list): List of acceptance configurations
             matches_file (str, optional): Path to matches responses JSON file for match ID lookup
+            config_yaml_file (str, optional): Path to the acceptance config file (used for error hints)
 
         Returns:
             dict: Combined results from all acceptances
@@ -1245,6 +1556,7 @@ class DataExchangeManager(BaseManager):
                         site_lists_lookup=site_lists_lookup,
                         regions_lookup=regions_lookup,
                         lan_segments_lookup=lan_segments_lookup,
+                        config_yaml_file=config_yaml_file,
                     )
 
                     # Extract service ID and match ID from resolved configuration
@@ -1458,6 +1770,7 @@ class DataExchangeManager(BaseManager):
         site_lists_lookup=None,
         regions_lookup=None,
         lan_segments_lookup=None,
+        config_yaml_file=None,
     ):
         """
         Resolve names to IDs for acceptance configuration.
@@ -1469,6 +1782,7 @@ class DataExchangeManager(BaseManager):
             site_lists_lookup (dict, optional): Pre-fetched dictionary mapping site list names to IDs
             regions_lookup (dict, optional): Pre-fetched dictionary mapping region names to IDs
             lan_segments_lookup (dict, optional): Pre-fetched dictionary mapping LAN segment names to IDs
+            config_yaml_file (str, optional): Path to acceptance config file (used for error hints)
 
         Returns:
             dict: Resolved configuration with IDs
@@ -1491,6 +1805,37 @@ class DataExchangeManager(BaseManager):
             match_data = self._get_match_id_from_customer_service(customer_name, service_name, matches_file)
 
             if not match_data:
+                if not matches_file:
+                    import glob
+                    import os
+
+                    config_dir = os.path.dirname(config_yaml_file) if config_yaml_file else None
+                    resolved_config_dir = (
+                        os.path.join(self.config_utils.config_path, config_dir) if config_dir else None
+                    )
+                    suggested_dir = os.path.join(config_dir, "output") if config_dir else None
+                    # Look for existing *_responses_latest.json files to give a concrete suggestion
+                    existing_files = (
+                        glob.glob(os.path.join(resolved_config_dir, "output", "*_responses_latest.json"))
+                        if resolved_config_dir
+                        else []
+                    )
+                    if existing_files:
+                        # Show relative paths (relative to config_dir) for brevity
+                        file_suggestions = ", ".join(
+                            os.path.join(suggested_dir, os.path.basename(f)) for f in sorted(existing_files)
+                        )
+                        matches_hint = f"-e matches_file={file_suggestions}"
+                    elif suggested_dir:
+                        matches_hint = f"-e matches_file={suggested_dir}/<matches>_responses_latest.json"
+                    else:
+                        matches_hint = "-e matches_file=<path_to_matches_responses_latest.json>"
+                    raise ConfigurationError(
+                        f"No match found for customer '{customer_name}' and service '{service_name}'. "
+                        f"The service is not visible via API in this tenant (it may not have been shared yet "
+                        f"or match_id lookup requires the matches file). "
+                        f"Provide the matches file saved by the match_service_to_customers step: {matches_hint}"
+                    )
                 raise ConfigurationError(f"No match found for customer '{customer_name}' and service '{service_name}'")
 
             match_id = match_data.get("match_id")

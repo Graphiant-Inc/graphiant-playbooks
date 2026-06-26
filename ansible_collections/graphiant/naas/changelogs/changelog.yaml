@@ -5,6 +5,11 @@
 
 ancestor: null
 releases:
+  "26.6.0":
+    release_date: "2026-06-25"
+    changes:
+      minor_changes:
+        - "``graphiant_data_exchange``: ``create_customers`` drift detection with ``--check --diff`` (reports ``adminEmail`` drift and suggests ``update_customers``); ``accept_invitation`` ``matches_file`` is now optional with actionable error hint when match cannot be resolved via API; ``--check`` mode natively replaces the removed ``06_dataex_accept_invitation_dry_run.yml`` playbook; playbooks 02, 03, 07 accept ``-e config_file=`` to override the default config YAML; idempotency integration tests added for all five Data Exchange operations"
   "26.5.0":
     release_date: "2026-06-10"
     changes:

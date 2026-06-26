@@ -1631,9 +1631,103 @@ class GraphiantPortalClient:
             )
             raise e
 
-    def get_data_exchange_service_details(self, service_id: int, type: str = "peering_service"):
+    def get_data_exchange_customer_details(self, customer_id: int) -> dict:
+        """
+        Get detailed information about a specific Data Exchange customer.
+
+        GET /v1/extranets-b2b-peering/customer/{id}
+        Returns: {customerName, type, emails, numSites}
+
+        Args:
+            customer_id (int): ID of the customer to retrieve
+
+        Returns:
+            dict: Customer details response
+        """
+        try:
+            LOG.info("get_data_exchange_customer_details: Retrieving customer details for ID: %s", customer_id)
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "GET",
+                "/v1/extranets-b2b-peering/customer/{id}",
+                path_params={"id": customer_id},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Accept": "application/json",
+                },
+                body=None,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            LOG.info(
+                "get_data_exchange_customer_details: Successfully retrieved customer details for ID: %s", customer_id
+            )
+            return json.loads(response_data.data)
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer/{customer_id}"
+            self._log_api_error(
+                method_name="get_data_exchange_customer_details",
+                api_url=api_url,
+                path_params={"customer_id": customer_id},
+                exception=e,
+            )
+            raise e
+
+    def edit_data_exchange_customer(self, customer_id: int, update_payload: dict):
+        """
+        Edit an existing Data Exchange customer (update adminEmail list).
+
+        PUT /v1/extranets-b2b-peering/customer/{id}
+
+        Args:
+            customer_id (int): ID of the customer to update
+            update_payload (dict): Payload: {"id": id, "status": "", "invite": {"adminEmail": [...], "maximumNumberOfSites": n}}
+
+        Returns:
+            RESTResponse or MockResponse in check mode
+        """
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] edit_data_exchange_customer would update customer ID %s: %s",
+                customer_id,
+                json.dumps(update_payload, indent=2),
+            )
+            return type("MockResponse", (), {"id": customer_id})()
+        try:
+            LOG.info("edit_data_exchange_customer: Updating customer ID: %s", customer_id)
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "PUT",
+                "/v1/extranets-b2b-peering/customer/{id}",
+                path_params={"id": customer_id},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body=update_payload,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            LOG.info("edit_data_exchange_customer: Successfully updated customer ID: %s", customer_id)
+            return response_data
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer/{customer_id}"
+            self._log_api_error(
+                method_name="edit_data_exchange_customer",
+                api_url=api_url,
+                path_params={"customer_id": customer_id},
+                request_body=update_payload,
+                exception=e,
+            )
+            raise e
+
+    def get_data_exchange_service_details(self, service_id: int, type: str = "peering_service") -> dict:
         """
         Get detailed information about a specific Data Exchange service.
+
+        Uses a raw API call to avoid pydantic validation errors on optional fields
+        (natPools, servicePrefixes) that the API may return as null.
 
         Args:
             service_id (int): ID of the service to retrieve
@@ -1644,19 +1738,78 @@ class GraphiantPortalClient:
         """
         try:
             LOG.info("get_data_exchange_service_details: Retrieving service details for ID: %s", service_id)
-            response = self.api.v1_extranets_b2b_id_producer_get(
-                authorization=self.bearer_token, id=service_id, type=type
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "GET",
+                "/v1/extranets-b2b/{id}/producer",
+                path_params={"id": service_id},
+                query_params={"type": type},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Accept": "application/json",
+                },
+                body=None,
             )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
             LOG.info("get_data_exchange_service_details: Successfully retrieved service details for ID: %s", service_id)
-            return response
+            return json.loads(response_data.data)
         except ApiException as e:
-            # Log the actual API endpoint URL with path and query parameters for debugging
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b/{service_id}/producer"
             self._log_api_error(
                 method_name="get_data_exchange_service_details",
                 api_url=api_url,
                 path_params={"service_id": service_id},
                 query_params={"type": type},
+                exception=e,
+            )
+            raise e
+
+    def edit_data_exchange_service(self, service_id: int, update_payload: dict):
+        """
+        Edit an existing Data Exchange peering service (e.g., update prefixTags).
+
+        PUT /v1/extranets-b2b-peering/producer/{id}
+
+        Args:
+            service_id (int): ID of the service to update
+            update_payload (dict): Update payload containing 'id' and 'policy' fields
+
+        Returns:
+            RESTResponse or MockResponse in check mode
+        """
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] edit_data_exchange_service would update service ID %s: %s",
+                service_id,
+                json.dumps(update_payload, indent=2),
+            )
+            return type("MockResponse", (), {"id": service_id})()
+        try:
+            LOG.info("edit_data_exchange_service: Updating service ID: %s", service_id)
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "PUT",
+                "/v1/extranets-b2b-peering/producer/{id}",
+                path_params={"id": service_id},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body=update_payload,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            LOG.info("edit_data_exchange_service: Successfully updated service ID: %s", service_id)
+            return response_data
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/producer/{service_id}"
+            self._log_api_error(
+                method_name="edit_data_exchange_service",
+                api_url=api_url,
+                path_params={"service_id": service_id},
+                request_body=update_payload,
                 exception=e,
             )
             raise e

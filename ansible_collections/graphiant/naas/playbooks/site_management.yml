@@ -46,7 +46,7 @@
 #   - info: Display operation info only
 #
 
-- name: Site Management Operations
+- name: Site Management Operations 
   hosts: localhost
   connection: local
   gather_facts: false
