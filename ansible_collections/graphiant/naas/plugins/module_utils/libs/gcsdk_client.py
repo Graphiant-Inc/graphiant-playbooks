@@ -1681,7 +1681,8 @@ class GraphiantPortalClient:
 
         Args:
             customer_id (int): ID of the customer to update
-            update_payload (dict): Payload: {"id": id, "status": "", "invite": {"adminEmail": [...], "maximumNumberOfSites": n}}
+            update_payload (dict): Payload: {"id": id, "status": "",
+                "invite": {"adminEmail": [...], "maximumNumberOfSites": n}}
 
         Returns:
             RESTResponse or MockResponse in check mode

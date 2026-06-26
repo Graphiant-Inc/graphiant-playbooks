@@ -167,11 +167,9 @@ class DataExchangeManager(BaseManager):
                     if diff_mode and desired_prefix_tags:
                         try:
                             current_details_dict = self.gsdk.get_data_exchange_service_details(existing_service.id)
-                            current_prefix_tags = (
-                                (current_details_dict.get("policy") or {})
-                                .get("policy", {})
-                                .get("prefixTags") or []
-                            )
+                            current_prefix_tags = (current_details_dict.get("policy") or {}).get("policy", {}).get(
+                                "prefixTags"
+                            ) or []
 
                             def _norm(tags):
                                 return sorted(
@@ -184,12 +182,14 @@ class DataExchangeManager(BaseManager):
                                     "Service '%s' has drifted prefixTags (use update_services to apply)",
                                     service_name,
                                 )
-                                result["diff_plan"].append({
-                                    "device": service_name,
-                                    "branch": "prefixTags (existing - use update_services to apply)",
-                                    "before": {"prefixTags": current_prefix_tags},
-                                    "after": {"prefixTags": desired_prefix_tags},
-                                })
+                                result["diff_plan"].append(
+                                    {
+                                        "device": service_name,
+                                        "branch": "prefixTags (existing - use update_services to apply)",
+                                        "before": {"prefixTags": current_prefix_tags},
+                                        "after": {"prefixTags": desired_prefix_tags},
+                                    }
+                                )
                                 result["drifted"].append(service_name)
                         except Exception as e:
                             LOG.warning("Could not fetch details for drift detection on '%s': %s", service_name, e)
@@ -222,12 +222,14 @@ class DataExchangeManager(BaseManager):
                 # Create service directly
                 LOG.info("Service configuration: %s", service_config)
                 LOG.info("create_data_exchange_services: Creating service '%s'", service_name)
-                result["diff_plan"].append({
-                    "device": service_name,
-                    "branch": "create",
-                    "before": {},
-                    "after": service_config,
-                })
+                result["diff_plan"].append(
+                    {
+                        "device": service_name,
+                        "branch": "create",
+                        "before": {},
+                        "after": service_config,
+                    }
+                )
                 self.gsdk.create_data_exchange_services(service_config)
                 LOG.info("Successfully created service '%s'", service_name)
                 result["created"].append(service_name)
@@ -288,8 +290,7 @@ class DataExchangeManager(BaseManager):
                 existing_service = self.gsdk.get_data_exchange_service_by_name(service_name)
                 if not existing_service:
                     raise ConfigurationError(
-                        f"Service '{service_name}' not found. "
-                        "Use create_services to create new services."
+                        f"Service '{service_name}' not found. " "Use create_services to create new services."
                     )
                 service_id = existing_service.id
 
@@ -323,26 +324,25 @@ class DataExchangeManager(BaseManager):
                     )
 
                 if _norm(current_prefix_tags) == _norm(desired_prefix_tags):
-                    LOG.info(
-                        "Service '%s' prefixTags unchanged, skipping update", service_name
-                    )
+                    LOG.info("Service '%s' prefixTags unchanged, skipping update", service_name)
                     result["skipped"].append(service_name)
                     continue
 
                 # Record diff for --diff mode
-                result["diff_plan"].append({
-                    "device": service_name,
-                    "branch": "prefixTags",
-                    "before": {"prefixTags": current_prefix_tags},
-                    "after": {"prefixTags": desired_prefix_tags},
-                })
+                result["diff_plan"].append(
+                    {
+                        "device": service_name,
+                        "branch": "prefixTags",
+                        "before": {"prefixTags": current_prefix_tags},
+                        "after": {"prefixTags": desired_prefix_tags},
+                    }
+                )
 
                 # Build PUT payload using current service state + desired prefixTags
                 # GET returns "sites" key; PUT expects "site" key (same inner structure)
                 current_sites = current_inner_policy.get("sites") or []
                 site_for_put = [
-                    {"sites": s.get("sites") or [], "siteLists": s.get("siteLists") or []}
-                    for s in current_sites
+                    {"sites": s.get("sites") or [], "siteLists": s.get("siteLists") or []} for s in current_sites
                 ]
 
                 update_payload = {
@@ -357,13 +357,9 @@ class DataExchangeManager(BaseManager):
                     },
                 }
 
-                LOG.info(
-                    "update_services: Update payload for '%s': %s", service_name, update_payload
-                )
+                LOG.info("update_services: Update payload for '%s': %s", service_name, update_payload)
                 self.gsdk.edit_data_exchange_service(service_id, update_payload)
-                LOG.info(
-                    "Successfully updated service '%s' (ID: %s)", service_name, service_id
-                )
+                LOG.info("Successfully updated service '%s' (ID: %s)", service_name, service_id)
                 result["updated"].append(service_name)
                 result["changed"] = True
 
@@ -609,29 +605,31 @@ class DataExchangeManager(BaseManager):
                                     "Customer '%s' has drifted emails (use update_customers to apply)",
                                     customer_name,
                                 )
-                                result["diff_plan"].append({
-                                    "device": customer_name,
-                                    "branch": "adminEmail (existing - use update_customers to apply)",
-                                    "before": {"adminEmail": current_emails},
-                                    "after": {"adminEmail": desired_emails},
-                                })
+                                result["diff_plan"].append(
+                                    {
+                                        "device": customer_name,
+                                        "branch": "adminEmail (existing - use update_customers to apply)",
+                                        "before": {"adminEmail": current_emails},
+                                        "after": {"adminEmail": desired_emails},
+                                    }
+                                )
                                 result["drifted"].append(customer_name)
                         except Exception as e:
-                            LOG.warning(
-                                "Could not fetch details for drift detection on '%s': %s", customer_name, e
-                            )
+                            LOG.warning("Could not fetch details for drift detection on '%s': %s", customer_name, e)
                     result["skipped"].append(customer_name)
                     continue
 
                 # Create customer directly
                 LOG.info("Customer configuration: %s", customer_config)
                 LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_name)
-                result["diff_plan"].append({
-                    "device": customer_name,
-                    "branch": "create",
-                    "before": {},
-                    "after": customer_config,
-                })
+                result["diff_plan"].append(
+                    {
+                        "device": customer_name,
+                        "branch": "create",
+                        "before": {},
+                        "after": customer_config,
+                    }
+                )
                 self.gsdk.create_data_exchange_customers(customer_config)
                 LOG.info("Successfully created customer '%s'", customer_name)
                 result["created"].append(customer_name)
@@ -692,8 +690,7 @@ class DataExchangeManager(BaseManager):
                 existing_customer = self.gsdk.get_data_exchange_customer_by_name(customer_name)
                 if not existing_customer:
                     raise ConfigurationError(
-                        f"Customer '{customer_name}' not found. "
-                        "Use create_customers to create new customers."
+                        f"Customer '{customer_name}' not found. " "Use create_customers to create new customers."
                     )
                 customer_id = existing_customer.id
 
@@ -717,12 +714,14 @@ class DataExchangeManager(BaseManager):
                     continue
 
                 # Record diff
-                result["diff_plan"].append({
-                    "device": customer_name,
-                    "branch": "adminEmail",
-                    "before": {"adminEmail": current_emails},
-                    "after": {"adminEmail": desired_emails},
-                })
+                result["diff_plan"].append(
+                    {
+                        "device": customer_name,
+                        "branch": "adminEmail",
+                        "before": {"adminEmail": current_emails},
+                        "after": {"adminEmail": desired_emails},
+                    }
+                )
 
                 # Build PUT payload
                 update_payload = {
@@ -734,13 +733,9 @@ class DataExchangeManager(BaseManager):
                     },
                 }
 
-                LOG.info(
-                    "update_customers: Update payload for '%s': %s", customer_name, update_payload
-                )
+                LOG.info("update_customers: Update payload for '%s': %s", customer_name, update_payload)
                 self.gsdk.edit_data_exchange_customer(customer_id, update_payload)
-                LOG.info(
-                    "Successfully updated customer '%s' (ID: %s)", customer_name, customer_id
-                )
+                LOG.info("Successfully updated customer '%s' (ID: %s)", customer_name, customer_id)
                 result["updated"].append(customer_name)
                 result["changed"] = True
 

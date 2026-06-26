@@ -121,7 +121,8 @@ options:
       - Configuration files support Jinja2 templating syntax for dynamic generation.
       - For V(create_services), file must contain I(data_exchange_services) list. Optional I(policy.globalObjectOps)
       - per service attaches Graphiant routing policies to devices (device names resolved to IDs).
-      - For V(create_customers), V(update_customers), or V(delete_customers), file must contain I(data_exchange_customers) list.
+      - For V(create_customers), V(update_customers), or V(delete_customers), file must contain
+        I(data_exchange_customers) list.
       - For V(match_service_to_customers), file must contain I(data_exchange_matches) list.
       - For V(accept_invitation), file must contain I(data_exchange_acceptances) list. Optional I(globalObjectOps)
       - per acceptance attaches Graphiant routing policies to gateway devices (device names resolved to IDs).
@@ -605,8 +606,7 @@ def main():
             success_msg = f"Successfully updated Data Exchange services from {config_file}"
             if module.check_mode:
                 success_msg = (
-                    f"Check mode: validated Data Exchange service updates from {config_file} "
-                    "(API calls skipped)"
+                    f"Check mode: validated Data Exchange service updates from {config_file} " "(API calls skipped)"
                 )
             result = execute_with_logging(
                 module,
@@ -653,8 +653,7 @@ def main():
             success_msg = f"Successfully updated Data Exchange customers from {config_file}"
             if module.check_mode:
                 success_msg = (
-                    f"Check mode: validated Data Exchange customer updates from {config_file} "
-                    "(API calls skipped)"
+                    f"Check mode: validated Data Exchange customer updates from {config_file} " "(API calls skipped)"
                 )
             result = execute_with_logging(
                 module,

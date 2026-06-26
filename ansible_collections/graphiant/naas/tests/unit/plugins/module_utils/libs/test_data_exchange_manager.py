@@ -324,7 +324,8 @@ def test_update_customers_preserves_num_sites() -> None:
 
     mgr.update_customers("dummy.yaml")
 
-    _, payload = mgr.gsdk.edit_data_exchange_customer.call_args[0]
+    call_args = mgr.gsdk.edit_data_exchange_customer.call_args[0]
+    payload = call_args[1]
     assert payload["invite"]["maximumNumberOfSites"] == 5
 
 
@@ -430,7 +431,8 @@ def test_update_services_preserves_site_structure_in_payload() -> None:
 
     mgr.update_services("dummy.yaml")
 
-    _, payload = mgr.gsdk.edit_data_exchange_service.call_args[0]
+    call_args = mgr.gsdk.edit_data_exchange_service.call_args[0]
+    payload = call_args[1]
     # GET returns "sites" key; PUT must use "site" key
     assert "site" in payload["policy"]
     assert "sites" not in payload["policy"]
