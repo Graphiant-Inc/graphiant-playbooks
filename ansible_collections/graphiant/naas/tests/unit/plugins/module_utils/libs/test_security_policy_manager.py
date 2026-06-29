@@ -558,3 +558,127 @@ def test_ruleset_idempotency_generated_name_and_meter_rates() -> None:
         }
     }
     assert m._security_rulesets_need_update(desired_rs, device) is False
+
+
+def test_security_policy_diff_rulesets() -> None:
+    m = _mgr()
+    device_dict = {
+        "trafficPolicy": {
+            "securityRulesets": [
+                {
+                    "name": "rs1",
+                    "rules": [
+                        {
+                            "seq": 10,
+                            "logging": True,
+                            "match": {"application": {"match": {"builtin": "Facebook"}}},
+                            "action": "reject",
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    payload = {
+        "edge": {
+            "trafficPolicy": {
+                "securityRulesets": {
+                    "rs1": {
+                        "ruleset": {
+                            "name": "rs1",
+                            "rules": {
+                                "10": {
+                                    "rule": {
+                                        "seq": 10,
+                                        "logging": True,
+                                        "match": {"applicationBuiltin": "Facebook"},
+                                        "action": "accept",
+                                    }
+                                }
+                            },
+                        }
+                    }
+                }
+            }
+        }
+    }
+    before, after, branch = m._security_policy_diff(device_dict, payload)
+    assert branch == "edge.trafficPolicy.securityRulesets"
+    assert "10" in before["securityRulesets"]["rs1"]["rules"]
+    assert "10" in after["securityRulesets"]["rs1"]["rules"]
+    assert before["securityRulesets"]["rs1"]["rules"]["10"]["action"] == "reject"
+    assert after["securityRulesets"]["rs1"]["rules"]["10"]["action"] == "accept"
+
+
+def test_security_policy_diff_rulesets_rule_delete() -> None:
+    m = _mgr()
+    device_dict = {
+        "trafficPolicy": {
+            "securityRulesets": [
+                {
+                    "name": "rs1",
+                    "rules": [
+                        {
+                            "seq": 500,
+                            "logging": True,
+                            "match": {"application": {"match": {"builtin": "Facebook"}}},
+                            "action": "reject",
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    payload = {
+        "edge": {
+            "trafficPolicy": {
+                "securityRulesets": {
+                    "rs1": {"ruleset": {"name": "rs1", "rules": {"500": {"rule": None}}}}
+                }
+            }
+        }
+    }
+    before, after, branch = m._security_policy_diff(device_dict, payload)
+    assert branch == "edge.trafficPolicy.securityRulesets"
+    assert "500" in before["securityRulesets"]["rs1"]["rules"]
+    assert after["securityRulesets"]["rs1"]["rules"]["500"] is None
+
+
+def test_security_policy_diff_zones() -> None:
+    m = _mgr()
+    device_dict = {
+        "trafficPolicy": {
+            "zonePairs": [
+                {
+                    "inside": "zone-DIA",
+                    "outside": "zone-lan-1",
+                    "ruleset": "G-100-My-Ruleset",
+                    "tcpProtection": False,
+                }
+            ]
+        }
+    }
+    payload = {
+        "edge": {
+            "trafficPolicy": {
+                "zones": {
+                    "zone-DIA": {
+                        "zone": {
+                            "pairs": {
+                                "zone-lan-1": {
+                                    "pair": {
+                                        "ruleset": "My-Ruleset",
+                                        "tcpProtection": False,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    before, after, branch = m._security_policy_diff(device_dict, payload)
+    assert branch == "edge.trafficPolicy.zones"
+    assert before["zones"]["zone-DIA->zone-lan-1"]["ruleset"] == "G-100-My-Ruleset"
+    assert after["zones"]["zone-DIA->zone-lan-1"]["ruleset"] == "My-Ruleset"

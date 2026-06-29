@@ -8,6 +8,8 @@
 #
 # Example:
 #   ansible-playbook traffic_policies_management.yml --tags configure
+#   ansible-playbook traffic_policies_management.yml --tags configure --check
+#   ansible-playbook traffic_policies_management.yml --tags configure --check --diff
 #   ansible-playbook traffic_policies_management.yml --tags deconfigure
 #
 - name: Manage Graphiant Device-level Traffic Policy Configuration

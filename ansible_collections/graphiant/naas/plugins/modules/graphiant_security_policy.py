@@ -41,7 +41,10 @@ description:
     to C(ipProtocol) / C(destinationNetwork), or the reverse). The device API merges rule updates
     and leaves stale match criteria. Delete the rule (C(state: absent)) and add a new rule with
     the desired match instead.
-  - "Attach/detach operations compare each listed segment's ruleset reference to the device and skip when unchanged."
+  - "Attach/detach operations compare each listed zone pair's ruleset reference to the device and skip when unchanged."
+  - >-
+    With C(ansible-playbook --check), writes are skipped but C(changed) reflects whether an apply would update
+    at least one device. Use C(--diff) to preview C(details.diff_plan) and Ansible C(diff).
 notes:
   - >-
     One YAML file may define both C(securityRulesets) and C(zones). C(configure)/C(deconfigure) read
@@ -49,6 +52,14 @@ notes:
     Run both steps for a full security policy lifecycle, or use the sample playbook tags C(configure) and
     C(deconfigure).
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
+  - >-
+    Check mode (C(--check)) reads live device state, skips writes, sets C(changed) from whether an apply
+    would update at least one device, and logs would-be payloads with a C([check_mode]) prefix when
+    O(detailed_logs) is enabled.
+  - >-
+    Diff mode (C(--diff)) adds Ansible C(diff) (C(before) / C(after) strings) and C(details.diff_plan).
+    Ruleset entries list only changed rules under C(rules) (plus C(_meta) when ruleset metadata changes).
+    Zone pair attach/detach diffs show per-pair ruleset references under C(zones).
 version_added: "26.5.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
@@ -91,6 +102,17 @@ attributes:
   check_mode:
     description: Supports check mode.
     support: full
+    details: >
+      In check mode, no configuration is pushed to devices, but the module still reads current
+      device state to determine whether changes would be made. Payloads that would be pushed are
+      logged with a C([check_mode]) prefix.
+  diff_mode:
+    description: Supports Ansible's C(--diff) for pending security policy updates.
+    support: full
+    details: >
+      When the playbook runs with C(--diff) and a device would change, the module returns a C(diff)
+      dictionary (C(before) / C(after) strings). Structured entries are also in C(details.diff_plan).
+      Ruleset diffs list only changed rules under C(rules) (plus C(_meta) when ruleset metadata changes).
 requirements:
   - python >= 3.7
   - graphiant-sdk >= 25.12.1
@@ -116,6 +138,30 @@ EXAMPLES = r"""
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
     detailed_logs: true
+
+# Preview pending changes without pushing (check mode)
+- name: Preview security policy configure (dry run)
+  graphiant.naas.graphiant_security_policy:
+    operation: configure
+    security_policy_config_file: "sample_device_security_policies.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+  check_mode: true
+  register: security_policy_preview
+
+# Preview per-rule diffs (run playbook with --diff or set diff: true on the task)
+- name: Preview security policy rule changes
+  graphiant.naas.graphiant_security_policy:
+    operation: configure
+    security_policy_config_file: "sample_device_security_policies.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+  diff: true
+  register: security_policy_diff
+  # details.diff_plan[].before/after.securityRulesets.<name>.rules.<seq> — changed rules only
 """
 
 RETURN = r"""
@@ -124,7 +170,9 @@ msg:
   type: str
   returned: always
 changed:
-  description: Whether the operation would push config to at least one device.
+  description:
+    - Whether the operation would push config to at least one device.
+    - In check mode (C(--check)), no configuration is pushed, but V(changed) reflects whether changes would be made.
   type: bool
   returned: always
 operation:
@@ -145,6 +193,22 @@ skipped_devices:
   type: list
   elements: str
   returned: when supported
+details:
+  description:
+    - Raw manager result details (includes C(diff_plan), configured/skipped device lists).
+    - >-
+      Each C(diff_plan) entry has C(device), C(branch) (for example
+      C(edge.trafficPolicy.securityRulesets) or C(edge.trafficPolicy.zones)), and normalized C(before) /
+      C(after) snapshots. Ruleset branches list only changed rules under C(rules); ruleset metadata
+      changes appear under C(_meta). Zone pair branches list C(ruleset) and C(tcpProtection) per pair.
+  type: dict
+  returned: when supported
+diff:
+  description:
+    - Ansible diff output when the playbook runs with C(--diff) and at least one device would change.
+    - Built from C(details.diff_plan) as JSON C(before) / C(after) strings per device and branch.
+  type: dict
+  returned: when diff mode is enabled and C(details.diff_plan) is non-empty
 """
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
@@ -154,6 +218,9 @@ from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils imp
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
+)
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
+    ansible_diff_from_plan,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs,
@@ -269,15 +336,20 @@ def main():
             )
             return
 
-        module.exit_json(
+        details = result.get("details") or {}
+        exit_payload = dict(
             changed=result["changed"],
             msg=result["result_msg"],
             operation=operation,
             security_policy_config_file=cfg_file,
             configured_devices=result.get("configured_devices", []),
             skipped_devices=result.get("skipped_devices", []),
-            details=result.get("details", {}),
+            details=details,
         )
+        diff_plan = details.get("diff_plan") or []
+        if getattr(module, "_diff", False) and diff_plan:
+            exit_payload["diff"] = ansible_diff_from_plan(diff_plan)
+        module.exit_json(**exit_payload)
 
     except Exception as e:
         ansible_module_log(

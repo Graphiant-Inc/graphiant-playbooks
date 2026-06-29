@@ -76,3 +76,40 @@ def test_main_state_absent_defaults_to_deconfigure(mock_ansible_module, mock_get
     spm.deconfigure.assert_called_once_with("sample_device_security_policies.yaml")
     mod.exit_json.assert_called_once()
     assert mod.exit_json.call_args[1]["operation"] == "deconfigure"
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_security_policy.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_security_policy.AnsibleModule")
+def test_main_configure_diff_mode(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod._diff = True
+    mod.params = _base_params()
+    mod.params["operation"] = "configure"
+    mock_ansible_module.return_value = mod
+
+    diff_plan = [
+        {
+            "device": "edge-1-sdktest",
+            "branch": "edge.trafficPolicy.securityRulesets",
+            "before": {"securityRulesets": {"rs1": {"rules": {"10": {"seq": 10, "action": "reject"}}}}},
+            "after": {"securityRulesets": {"rs1": {"rules": {"10": {"seq": 10, "action": "accept"}}}}},
+        }
+    ]
+    spm = MagicMock()
+    spm.configure.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "skipped_devices": [],
+        "diff_plan": diff_plan,
+    }
+    gc = MagicMock()
+    gc.security_policy = spm
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_security_policy.main()
+
+    kwargs = mod.exit_json.call_args[1]
+    assert "diff" in kwargs
+    assert '"10"' in kwargs["diff"]["after"]
+    assert kwargs["details"]["diff_plan"] == diff_plan

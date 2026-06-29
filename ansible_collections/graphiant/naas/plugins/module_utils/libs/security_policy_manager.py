@@ -6,6 +6,7 @@ Manages device-level security policy objects under:
   edge.trafficPolicy.zones
 - Build raw device-config payload in Python from a structured YAML file
 - Idempotency: compare intended rulesets to current device state; skip push when already matched
+- Check mode: read device state, skip writes, accurate ``changed``; ``diff_plan`` for ``--diff`` (per-rule)
 - Deconfigure: delete only the rulesets listed in the YAML by setting ruleset=null per key
 - Per-object state in YAML: ruleset or rule ``state: absent`` sends ``ruleset: null`` or ``rule: null``
   under ``configure``
@@ -1452,6 +1453,139 @@ class SecurityPolicyManager(BaseManager):
 
         return False
 
+    def _snapshot_rule_for_diff(self, rule: Any) -> Any:
+        if rule is None:
+            return None
+        return self._normalize_rule_for_compare(rule)
+
+    def _ruleset_meta_for_diff(self, ruleset: Any) -> Dict[str, Any]:
+        if not isinstance(ruleset, dict):
+            return {}
+        meta = {k: v for k, v in ruleset.items() if k != "rules" and k not in GET_COMPARE_SKIP_KEYS}
+        return self._normalize(meta)
+
+    def _ruleset_rules_snapshot(self, ruleset: Any) -> Dict[str, Any]:
+        if not isinstance(ruleset, dict):
+            return {}
+        rules = ruleset.get("rules") or {}
+        if not isinstance(rules, dict):
+            rules = self._coerce_existing_rules_map(rules)
+        out_rules: Dict[str, Any] = {}
+        for rule_key, entry in sorted(rules.items(), key=lambda kv: str(kv[0])):
+            rule_body = self._existing_rule_from_entry(entry)
+            out_rules[str(rule_key)] = self._snapshot_rule_for_diff(rule_body)
+        snapshot: Dict[str, Any] = {"rules": out_rules}
+        meta = self._ruleset_meta_for_diff(ruleset)
+        if meta:
+            snapshot["_meta"] = meta
+        return snapshot
+
+    def _ruleset_diff_entry(
+        self,
+        desired_ruleset: Any,
+        existing_ruleset: Any,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """Build per-rule before/after for one ruleset (changed rules and metadata only)."""
+        if desired_ruleset is None:
+            if existing_ruleset is None:
+                return None, None
+            return self._ruleset_rules_snapshot(existing_ruleset), None
+
+        if existing_ruleset is None:
+            return None, self._ruleset_rules_snapshot(desired_ruleset)
+
+        before: Dict[str, Any] = {}
+        after: Dict[str, Any] = {}
+        before_rules: Dict[str, Any] = {}
+        after_rules: Dict[str, Any] = {}
+
+        desired_rules = desired_ruleset.get("rules") if isinstance(desired_ruleset, dict) else None
+        existing_rules = (existing_ruleset or {}).get("rules") or {}
+        if not isinstance(existing_rules, dict):
+            existing_rules = self._coerce_existing_rules_map(existing_rules)
+
+        if isinstance(desired_rules, dict):
+            for rule_key, desired_entry in sorted(desired_rules.items(), key=lambda kv: str(kv[0])):
+                if not isinstance(desired_entry, dict):
+                    continue
+                desired_rule = desired_entry.get("rule")
+                existing_entry = existing_rules.get(rule_key) if isinstance(existing_rules, dict) else None
+                existing_rule = self._existing_rule_from_entry(existing_entry)
+
+                if desired_rule is None:
+                    if existing_rule is not None:
+                        before_rules[str(rule_key)] = self._snapshot_rule_for_diff(existing_rule)
+                        after_rules[str(rule_key)] = None
+                elif existing_rule is None or not self._desired_matches_existing(
+                    self._normalize_rule_for_compare(desired_rule),
+                    self._normalize_rule_for_compare(existing_rule),
+                ):
+                    before_rules[str(rule_key)] = self._snapshot_rule_for_diff(existing_rule) if existing_rule else None
+                    after_rules[str(rule_key)] = self._snapshot_rule_for_diff(desired_rule)
+
+        if before_rules or after_rules:
+            before["rules"] = before_rules
+            after["rules"] = after_rules
+
+        if not self._ruleset_metadata_matches(desired_ruleset, existing_ruleset):
+            before["_meta"] = self._ruleset_meta_for_diff(existing_ruleset)
+            after["_meta"] = self._ruleset_meta_for_diff(desired_ruleset)
+
+        if not before and not after:
+            return None, None
+        return before or None, after or None
+
+    def _security_policy_diff(
+        self, device_dict: Dict[str, Any], payload: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], str]:
+        """Build before/after snapshots and branch label for ``diff_plan`` / ``--diff``."""
+        desired_edge = as_dict(payload.get("edge"))
+        desired_tp = as_dict(desired_edge.get(EDGE_POLICY_KEY))
+        before: Dict[str, Any] = {}
+        after: Dict[str, Any] = {}
+
+        desired_zones = desired_tp.get("zones")
+        if isinstance(desired_zones, dict) and desired_zones:
+            existing_pairs = self._extract_zone_pairs_from_device({"device": device_dict})
+            before_pairs: Dict[str, Any] = {}
+            after_pairs: Dict[str, Any] = {}
+            for inside, outside, ruleset, tcp_prot in self._iter_zone_pairs_from_zones_map(desired_zones):
+                pair_key = f"{inside}->{outside}"
+                existing = self._lookup_zone_pair(existing_pairs, inside, outside)
+                before_pairs[pair_key] = {
+                    "ruleset": self._coerce_ruleset_ref((existing or {}).get("ruleset")),
+                    "tcpProtection": bool((existing or {}).get("tcpProtection", False)),
+                }
+                after_pairs[pair_key] = {
+                    "ruleset": self._coerce_ruleset_ref(ruleset),
+                    "tcpProtection": tcp_prot,
+                }
+            before["zones"] = before_pairs
+            after["zones"] = after_pairs
+            return before, after, "edge.trafficPolicy.zones"
+
+        desired_rs = desired_tp.get("securityRulesets")
+        if isinstance(desired_rs, dict) and desired_rs:
+            existing_rs = self._extract_rulesets_from_device({"device": device_dict})
+            before_rs: Dict[str, Any] = {}
+            after_rs: Dict[str, Any] = {}
+            for key in sorted(desired_rs.keys()):
+                existing_entry = self._find_existing_ruleset_entry(existing_rs, str(key))
+                existing_ruleset = self._existing_ruleset_from_entry(existing_entry)
+                existing_ruleset = self._coerce_existing_ruleset_body(existing_ruleset, str(key))
+
+                desired_entry = as_dict(desired_rs[key])
+                desired_ruleset = desired_entry.get("ruleset")
+                before_entry, after_entry = self._ruleset_diff_entry(desired_ruleset, existing_ruleset)
+                if before_entry is not None or after_entry is not None:
+                    before_rs[key] = before_entry
+                    after_rs[key] = after_entry
+            before["securityRulesets"] = before_rs
+            after["securityRulesets"] = after_rs
+            return before, after, "edge.trafficPolicy.securityRulesets"
+
+        return before, after, "edge"
+
     def _iter_device_payloads(
         self, config_yaml_file: str, operation: str
     ) -> Iterator[Tuple[int, str, Dict[str, Any], Dict[str, Any]]]:
@@ -1500,6 +1634,7 @@ class SecurityPolicyManager(BaseManager):
         result = new_apply_result()
         to_push: Dict[int, Dict[str, Any]] = {}
         configured_devices: List[str] = []
+        diff_plan: List[Dict[str, Any]] = []
         for device_id, device_name, payload, device_dict in self._iter_device_payloads(
             config_yaml_file, operation=operation
         ):
@@ -1517,9 +1652,12 @@ class SecurityPolicyManager(BaseManager):
                 result["skipped_devices"].append(device_name)
                 continue
 
+            before, after, branch = self._security_policy_diff(device_dict, payload)
             to_push[device_id] = {"device_id": device_id, "payload": payload}
             configured_devices.append(device_name)
+            diff_plan.append({"device": device_name, "branch": branch, "before": before, "after": after})
 
+        result["diff_plan"] = diff_plan
         if not to_push:
             return result
 
