@@ -1436,7 +1436,14 @@ class DataExchangeManager(BaseManager):
             for acceptance in acceptances:
                 if "siteToSiteVpn" in acceptance:
                     site_to_site_vpn = acceptance["siteToSiteVpn"]
-                    if "ipsecGatewayDetails" in site_to_site_vpn:
+                    if "ipsecGatewayPeers" in site_to_site_vpn:
+                        # New multi-peer structure: vpnProfile is per remote peer
+                        for peer in site_to_site_vpn["ipsecGatewayPeers"].get("remotePeers", []):
+                            vpn_profile_name = peer.get("vpnProfile")
+                            if vpn_profile_name:
+                                vpn_profiles_to_validate.add(vpn_profile_name)
+                    elif "ipsecGatewayDetails" in site_to_site_vpn:
+                        # Legacy single-peer structure
                         ipsec_gateway_details = site_to_site_vpn["ipsecGatewayDetails"]
                         if "vpnProfile" in ipsec_gateway_details:
                             vpn_profile_name = ipsec_gateway_details["vpnProfile"]
@@ -1709,47 +1716,30 @@ class DataExchangeManager(BaseManager):
         """
         try:
             site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {})
-            ipsec_gateway_details = site_to_site_vpn.get("ipsecGatewayDetails", {})
 
-            # Fill in missing tunnel1 values
-            tunnel1 = ipsec_gateway_details.get("tunnel1", {})
-            if "insideIpv4Cidr" in tunnel1 and tunnel1["insideIpv4Cidr"] is None:
-                ipv4_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, "ipv4")
-                if ipv4_subnet:
-                    tunnel1["insideIpv4Cidr"] = ipv4_subnet
-                    LOG.info("_fill_missing_tunnel_values: Filled tunnel1 insideIpv4Cidr: %s", ipv4_subnet)
+            if "ipsecGatewayPeers" in site_to_site_vpn:
+                peers = site_to_site_vpn["ipsecGatewayPeers"].get("remotePeers", [])
+                tunnels = [(peer.get(k, {}), k) for peer in peers for k in ("tunnel1", "tunnel2")]
+            else:
+                gw = site_to_site_vpn.get("ipsecGatewayDetails", {})
+                tunnels = [(gw.get(k, {}), k) for k in ("tunnel1", "tunnel2")]
 
-            if "insideIpv6Cidr" in tunnel1 and tunnel1["insideIpv6Cidr"] is None:
-                ipv6_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, "ipv6")
-                if ipv6_subnet:
-                    tunnel1["insideIpv6Cidr"] = ipv6_subnet
-                    LOG.info("_fill_missing_tunnel_values: Filled tunnel1 insideIpv6Cidr: %s", ipv6_subnet)
-
-            if tunnel1.get("psk") is None:
-                psk = self.gsdk.get_preshared_key()
-                if psk:
-                    tunnel1["psk"] = psk
-                    LOG.info("_fill_missing_tunnel_values: Filled tunnel1 psk")
-
-            # Fill in missing tunnel2 values
-            tunnel2 = ipsec_gateway_details.get("tunnel2", {})
-            if "insideIpv4Cidr" in tunnel2 and tunnel2["insideIpv4Cidr"] is None:
-                ipv4_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, "ipv4")
-                if ipv4_subnet:
-                    tunnel2["insideIpv4Cidr"] = ipv4_subnet
-                    LOG.info("_fill_missing_tunnel_values: Filled tunnel2 insideIpv4Cidr: %s", ipv4_subnet)
-
-            if "insideIpv6Cidr" in tunnel2 and tunnel2["insideIpv6Cidr"] is None:
-                ipv6_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, "ipv6")
-                if ipv6_subnet:
-                    tunnel2["insideIpv6Cidr"] = ipv6_subnet
-                    LOG.info("_fill_missing_tunnel_values: Filled tunnel2 insideIpv6Cidr: %s", ipv6_subnet)
-
-            if tunnel2.get("psk") is None:
-                psk = self.gsdk.get_preshared_key()
-                if psk:
-                    tunnel2["psk"] = psk
-                    LOG.info("_fill_missing_tunnel_values: Filled tunnel2 psk")
+            for tunnel, tunnel_key in tunnels:
+                if "insideIpv4Cidr" in tunnel and tunnel["insideIpv4Cidr"] is None:
+                    ipv4_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, "ipv4")
+                    if ipv4_subnet:
+                        tunnel["insideIpv4Cidr"] = ipv4_subnet
+                        LOG.info("_fill_missing_tunnel_values: Filled %s ipv4Cidr", tunnel_key)
+                if "insideIpv6Cidr" in tunnel and tunnel["insideIpv6Cidr"] is None:
+                    ipv6_subnet = self.gsdk.get_ipsec_inside_subnet(region_id, lan_segment_id, "ipv6")
+                    if ipv6_subnet:
+                        tunnel["insideIpv6Cidr"] = ipv6_subnet
+                        LOG.info("_fill_missing_tunnel_values: Filled %s ipv6Cidr", tunnel_key)
+                if tunnel.get("psk") is None:
+                    psk = self.gsdk.get_preshared_key()
+                    if psk:
+                        tunnel["psk"] = psk
+                        LOG.info("_fill_missing_tunnel_values: Filled %s psk", tunnel_key)
 
             return acceptance_config
 

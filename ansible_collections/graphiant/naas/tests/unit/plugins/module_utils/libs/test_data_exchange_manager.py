@@ -528,3 +528,167 @@ def test_create_services_no_diff_plan_when_existing_matches() -> None:
     assert result["changed"] is False
     assert "de-service-1" in result["skipped"]
     assert result["diff_plan"] == []
+
+
+# ---- delete_customers tests ----
+
+
+def _delete_customers_config(*names: str) -> dict:
+    return {"data_exchange_customers": [{"name": n} for n in names]}
+
+
+def test_delete_customers_found_is_deleted() -> None:
+    """Customer that exists in portal is deleted and reported as changed."""
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file.return_value = _delete_customers_config("FinanceInc")
+    customer = MagicMock()
+    customer.id = 42
+    mgr.gsdk.get_data_exchange_customer_by_name.return_value = customer
+
+    result = mgr.delete_customers("dummy.yaml")
+
+    assert result["changed"] is True
+    assert "FinanceInc" in result["deleted"]
+    assert result["skipped"] == []
+    mgr.gsdk.delete_data_exchange_customer.assert_called_once_with(42)
+
+
+def test_delete_customers_not_found_is_skipped() -> None:
+    """Customer absent from portal is skipped; changed remains False."""
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file.return_value = _delete_customers_config("FinanceInc")
+    mgr.gsdk.get_data_exchange_customer_by_name.return_value = None
+
+    result = mgr.delete_customers("dummy.yaml")
+
+    assert result["changed"] is False
+    assert result["deleted"] == []
+    assert "FinanceInc" in result["skipped"]
+    mgr.gsdk.delete_data_exchange_customer.assert_not_called()
+
+
+def test_delete_customers_mixed_found_and_missing() -> None:
+    """Only present customers are deleted; missing ones are skipped."""
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file.return_value = _delete_customers_config("CustomerA", "CustomerB")
+    found = MagicMock()
+    found.id = 10
+    mgr.gsdk.get_data_exchange_customer_by_name.side_effect = [found, None]
+
+    result = mgr.delete_customers("dummy.yaml")
+
+    assert result["changed"] is True
+    assert result["deleted"] == ["CustomerA"]
+    assert result["skipped"] == ["CustomerB"]
+
+
+def test_delete_customers_empty_config_returns_unchanged() -> None:
+    """Missing data_exchange_customers key returns unchanged result."""
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file.return_value = {}
+
+    result = mgr.delete_customers("dummy.yaml")
+
+    assert result["changed"] is False
+    assert result["deleted"] == []
+    mgr.gsdk.delete_data_exchange_customer.assert_not_called()
+
+
+# ---- _validate_vpn_profiles_for_acceptances: ipsecGatewayPeers tests ----
+
+
+def _make_acceptance_with_peers(*vpn_profiles: str) -> dict:
+    """Build a minimal acceptance config using ipsecGatewayPeers."""
+    return {
+        "siteToSiteVpn": {
+            "ipsecGatewayPeers": {
+                "remotePeers": [{"name": f"peer-{i}", "vpnProfile": vp} for i, vp in enumerate(vpn_profiles, 1)]
+            }
+        }
+    }
+
+
+def test_validate_vpn_profiles_ipsec_gateway_peers_all_present() -> None:
+    """ipsecGatewayPeers: all per-peer VPN profiles found in portal — no error."""
+    mgr = _make_manager()
+    mgr.gsdk.get_global_ipsec_profiles.return_value = {"vpnprofile-global-test": MagicMock()}
+    acceptances = [_make_acceptance_with_peers("vpnprofile-global-test", "vpnprofile-global-test")]
+
+    mgr._validate_vpn_profiles_for_acceptances(acceptances)  # pylint: disable=protected-access
+    mgr.gsdk.get_global_ipsec_profiles.assert_called_once()
+
+
+def test_validate_vpn_profiles_ipsec_gateway_peers_missing_raises() -> None:
+    """ipsecGatewayPeers: unknown VPN profile raises ConfigurationError."""
+    mgr = _make_manager()
+    mgr.gsdk.get_global_ipsec_profiles.return_value = {"other-profile": MagicMock()}
+    acceptances = [_make_acceptance_with_peers("vpnprofile-global-test")]
+
+    with pytest.raises(ConfigurationError, match="vpnprofile-global-test"):
+        mgr._validate_vpn_profiles_for_acceptances(acceptances)  # pylint: disable=protected-access
+
+
+def test_validate_vpn_profiles_deduplicates_across_peers() -> None:
+    """Same VPN profile used by multiple peers triggers only one portal lookup."""
+    mgr = _make_manager()
+    mgr.gsdk.get_global_ipsec_profiles.return_value = {"shared-profile": MagicMock()}
+    acceptances = [_make_acceptance_with_peers("shared-profile", "shared-profile")]
+
+    mgr._validate_vpn_profiles_for_acceptances(acceptances)  # pylint: disable=protected-access
+    mgr.gsdk.get_global_ipsec_profiles.assert_called_once()
+
+
+# ---- _fill_missing_tunnel_values: multi-peer tests ----
+
+
+def _peer(name: str) -> dict:
+    return {
+        "name": name,
+        "tunnel1": {"insideIpv4Cidr": None, "insideIpv6Cidr": None, "psk": None},
+        "tunnel2": {"insideIpv4Cidr": None, "insideIpv6Cidr": None, "psk": None},
+    }
+
+
+def test_fill_missing_tunnel_values_multi_peer_fills_all_peers() -> None:
+    """All tunnels across N peers are filled when values are null."""
+    mgr = _make_manager()
+    mgr.gsdk.get_ipsec_inside_subnet.side_effect = lambda r, s, proto: "10.0.0.0/30" if proto == "ipv4" else "::1/127"
+    mgr.gsdk.get_preshared_key.return_value = "secret"
+
+    config = {
+        "siteToSiteVpn": {
+            "ipsecGatewayPeers": {"remotePeers": [_peer("peer-1"), _peer("peer-2")]}
+        }
+    }
+    mgr._fill_missing_tunnel_values(config, region_id=1, lan_segment_id=2)  # pylint: disable=protected-access
+
+    peers = config["siteToSiteVpn"]["ipsecGatewayPeers"]["remotePeers"]
+    for peer in peers:
+        for tunnel_key in ("tunnel1", "tunnel2"):
+            assert peer[tunnel_key]["insideIpv4Cidr"] == "10.0.0.0/30"
+            assert peer[tunnel_key]["psk"] == "secret"
+
+
+def test_fill_missing_tunnel_values_already_set_not_overwritten() -> None:
+    """Pre-filled tunnel values are preserved when not null; no portal calls made."""
+    mgr = _make_manager()
+    config = {
+        "siteToSiteVpn": {
+            "ipsecGatewayPeers": {
+                "remotePeers": [
+                    {
+                        "name": "peer-1",
+                        "tunnel1": {"insideIpv4Cidr": "192.168.1.0/30", "insideIpv6Cidr": "::1/127", "psk": "existing"},
+                        "tunnel2": {"insideIpv4Cidr": "192.168.2.0/30", "insideIpv6Cidr": "::2/127", "psk": "existing"},
+                    }
+                ]
+            }
+        }
+    }
+    mgr._fill_missing_tunnel_values(config, region_id=1, lan_segment_id=2)  # pylint: disable=protected-access
+
+    peer = config["siteToSiteVpn"]["ipsecGatewayPeers"]["remotePeers"][0]
+    assert peer["tunnel1"]["insideIpv4Cidr"] == "192.168.1.0/30"
+    assert peer["tunnel1"]["psk"] == "existing"
+    mgr.gsdk.get_ipsec_inside_subnet.assert_not_called()
+    mgr.gsdk.get_preshared_key.assert_not_called()

@@ -6,10 +6,12 @@
 ancestor: null
 releases:
   "26.6.0":
-    release_date: "2026-06-25"
+    release_date: "2026-07-10"
     changes:
       minor_changes:
-        - "``graphiant_data_exchange``: ``create_customers`` drift detection with ``--check --diff`` (reports ``adminEmail`` drift and suggests ``update_customers``); ``accept_invitation`` ``matches_file`` is now optional with actionable error hint when match cannot be resolved via API; ``--check`` mode natively replaces the removed ``06_dataex_accept_invitation_dry_run.yml`` playbook; playbooks 02, 03, 07 accept ``-e config_file=`` to override the default config YAML; idempotency integration tests added for all five Data Exchange operations"
+        - "``graphiant_data_exchange``: all Data Exchange workflow playbooks (02–05, 07) support ``-e config_file=`` to override the default config YAML; ``create_customers`` detects ``adminEmail`` drift via ``--check --diff``; ``accept_invitation`` ``matches_file`` is now optional; ``--check`` mode replaces the removed dry-run playbook; idempotency integration tests added for all five operations"
+        - "``graphiant_data_exchange`` ``accept_invitation``: new ``ipsecGatewayPeers`` config key replaces ``ipsecGatewayDetails`` to support multiple remote VPN peers; requires ``graphiant_sdk >= 26.6.0``"
+        - "``gcsdk_client``: bug fix — ``get_matched_services_for_customer`` no longer raises ``TypeError`` when API returns ``None``"
         - "New ``graphiant_traffic_policy`` module and ``traffic_policies_management.yml`` playbook for device-level traffic rulesets (``edge.trafficPolicy.trafficRulesets``) and LAN segment ruleset attachments (``edge.segments``); sample ``sample_device_traffic_policies.yaml``; operations ``configure`` / ``deconfigure`` / ``attach_to_lan_segments`` / ``detach_from_lan_segments``; idempotent comparison to live device state; full check mode and diff mode (``--check --diff`` returns accurate ``changed``, ``details.diff_plan``, and Ansible ``diff`` with per-rule ``before``/``after`` for pending ruleset, segment, and metadata changes)"
         - "New ``graphiant_security_policy`` module and ``security_policies_management.yml`` playbook for device-level security rulesets (``edge.trafficPolicy.securityRulesets``) and zone pair attachments (``edge.trafficPolicy.zones``); sample ``sample_device_security_policies.yaml``; operations ``configure`` / ``deconfigure`` / ``attach_to_zone_pairs`` / ``detach_from_zone_pairs``; idempotent comparison to live device state; full check mode and diff mode (``--check --diff`` returns accurate ``changed``, ``details.diff_plan``, and Ansible ``diff`` with per-rule ``before``/``after`` for pending ruleset, zone-pair, and metadata changes)"
   "26.5.0":
