@@ -1,73 +1,82 @@
 ---
 # Sample Data Exchange Service Acceptance Configuration
-# This file demonstrates the configuration structure for accepting Data Exchange service invitations
-# Used in Workflow 4: Data Exchange - Accept Invitation (Non-Graphiant Customer)
+# Used in Workflow 7: Data Exchange - Accept Invitation (Non-Graphiant Customer)
+#
+# Flow:
+#   Producer (MSP) creates a Data Exchange service and matches it to a customer.
+#   Consumer (this side) calls POST v1/extranets-b2b-peering/consumer/{match_id} to accept.
+#   The playbook resolves all human-readable names (site, region, LAN segment, device) to IDs.
+#
+# Key: data_exchange_acceptances  — always a list, even for a single acceptance.
 
-# All configurations are under 'data_exchange_acceptances' key
-# Each acceptance uses human-readable names that will be resolved to IDs by the data exchange manager
-# POST to v1/extranets-b2b-peering/consumer/{match_id}
+# ── ipsecGatewayPeers vs ipsecGatewayDetails ───────────────────────────────────
+# ipsecGatewayPeers  (NEW — use for all new configs; requires graphiant_sdk >= 26.6.0)
+#   Supports N remote peers (one entry per customer VPN device). BGP routing is shared
+#   across all peers. Tunnel values (insideIpv4Cidr, psk) are auto-filled by the playbook.
+# ipsecGatewayDetails  (LEGACY — single peer, backward compat only)
+#
+# Troubleshooting — HTTP 500 "must include IPSec gateway details":
+#   1. Old SDK (graphiant_sdk <= 26.5.0): ipsecGatewayPeers is silently dropped by
+#      .to_dict(). Fix: upgrade to graphiant_sdk >= 26.6.0. Confirm by checking the
+#      "SDK-serialized payload" log — if siteToSiteVpn shows only "emails"/"regionId",
+#      the SDK is stripping the field.
+#   2. Config missing both keys: add ipsecGatewayPeers or ipsecGatewayDetails.
+#
+# ── Tunnel topology ────────────────────────────────────────────────────────────
+# Each remotePeers entry = one customer VPN device. Graphiant creates one IPSec
+# interface per peer on EACH gateway device:
+#   peer-1: tunnel1 → gw-device-1, tunnel2 → gw-device-2
+#   peer-2: tunnel1 → gw-device-1, tunnel2 → gw-device-2  (HA; both tunnels active)
+# Interface naming: {ipsecGatewayPeers.name}-{peer.name}
+#   e.g. "s2s-FinanceInc-peer-1" on both gw-device-1 and gw-device-2
+# localIkePeerIdentity: null → auto-set to each gateway's WAN IP per tunnel
+# ──────────────────────────────────────────────────────────────────────────────
 
-# List format (always a list, even for single acceptance):
 data_exchange_acceptances:
-  - customerName: "FinanceInc"             # Customer name and service name combination will be used to lookup matchId
-    serviceName: "de-service-1"        # Service name (will be used to lookup serviceId)
-    
-    # Site Information Configuration (by name)
+  - customerName: "FinanceInc"    # Resolved to customer ID via Data Exchange customers API
+    serviceName: "de-service-1"   # Resolved to service ID and match ID via matches file
+
+    # Site Information — where this service is terminated (by name, resolved to ID)
     siteInformation:
-      - sites: ["site-sjc-sdktest"]            # List of site names (will be resolved to site IDs)
-        siteLists: []                          # Optional site list names (empty for direct site selection)
-    
+      - sites: ["site-sjc-sdktest"]   # One or more site names
+        siteLists: []                 # Optional: site list names (empty = direct site selection)
+
     # NAT Configuration (optional)
-    # Lists producer service prefixes (optionally NAT them to avoid overlap with customer network)
+    # Maps producer service prefixes to optional translated prefixes.
+    # Use translatedPrefix if the producer prefix overlaps with the consumer network.
     nat:
-      - prefix: "10.1.1.0/24"                    # Producer service prefix
-        tag: "s-1-prefix1"                       # Corresponding tag from service prefixes
-        # translatedPrefix: null                 # Optional: NAT producer prefix if needed to avoid overlap
-        # outsideNatPrefix: null                 # Optional: Outside NAT prefix
-             
-    
-    # Policy Configuration (by name)
+      - prefix: "10.1.1.0/24"         # Producer service prefix (from the Data Exchange service)
+        tag: "s-1-prefix1"            # Corresponding tag from the service prefix definitions
+        # translatedPrefix: null      # Optional: NAT the producer prefix to avoid overlap
+        # outsideNatPrefix: null      # Optional: outside NAT prefix
+
+    # Policy — LAN segments and the consumer prefixes advertised into each segment
     policy:
-      - lanSegment: "customer-1-segment"  # LAN segment name (will be resolved to ID)
-        consumerPrefixes:                      # Customer/Consumer's own prefixes that will be advertised
-          - "10.101.0.0/24"                    # Customer's own /24 network
+      - lanSegment: "customer-1-segment"   # LAN segment name (resolved to segment ID)
+        consumerPrefixes:
+          - "10.101.0.0/24"               # Consumer's own prefixes advertised over BGP
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceInc"                 # Gateway name
-        destinationAddress: "0.0.0.0"          # Customer's external IP
-        mtu: null                              # Optional MTU setting
-        tcpMss: null                           # Optional TCP MSS setting
-        remoteIkePeerIdentity: "0.0.0.0"       # Optional remote IKE peer identity
-        ikeInitiator: false                    # IKE initiation mode (false = responder)
-        
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.108/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::108/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: null                             # Optional Preshared key for tunnel 1 (will be auto filled by Graphiant portal APIs)
-        
-        # Tunnel 2 Configuration  
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: null                  # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: null                  # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: null                             # Optional Preshared key for tunnel 2 (will be auto filled by Graphiant portal APIs)
-      
-        # BGP Routing Configuration
+
+      # ── Multi-peer IPSec gateway (ipsecGatewayPeers) ─────────────────────────
+      # Use this for all new configurations. Supports 1..N remote peers.
+      # Do NOT mix with ipsecGatewayDetails in the same acceptance.
+      ipsecGatewayPeers:
+
+        name: "s2s-FinanceInc"   # prefix for interface names: {name}-{peer.name}
+
+        # Routing shared across all peers (one BGP neighbor per peer per tunnel per gateway)
         routing:
           # static:
           #   destinationPrefix:
           #     - "10.101.0.0/24"                    # Customer's own /24 network
           bgp:
             peerAsn: 65501
-            holdTimer: 180
+            holdTimer: 180        # portal default: 90s
             keepaliveTimer: 60
             md5Password: {"md5_password": "bgppassword"}
-            sendCommunity: true
+            sendCommunity: true   # portal default: false
             addressFamilies:
               ipv4:
                 family:
@@ -82,29 +91,70 @@ data_exchange_acceptances:
                   inboundPolicy: {}
                   outboundPolicy: {}
 
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"  # System VPN profile name
+        # One entry per customer VPN device. Add peer-3, peer-4, ... as needed.
+        remotePeers:
 
-      # Selected Region (by name)
-      region: "us-central-1 (Chicago)"       # Region name (will be resolved to regionId)
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
+            mtu: 1400                        # standard for IPSec over 1500-byte internet
+            tcpMss: 1360                     # MTU - 40 bytes IP/TCP headers
+            remoteIkePeerIdentity: "0.0.0.0" # customer IKE identity (WAN IP or FQDN)
+            ikeInitiator: false              # customer device initiates IKE
+            # insideIpv4Cidr, insideIpv6Cidr, psk: auto-filled by playbook (leave null)
+            # localIkePeerIdentity: auto-set to each gateway's WAN IP (leave null)
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
 
-      # Email notifications
-      emails: ["finance@financeinc.com"]       # Email addresses for notifications
+          - name: "peer-2"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "0.0.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
 
-    # Optional Graphiant Routing Policy: Attach global object Graphiant filters to Graphiant gateway devices involved in the acceptance
+      # Graphiant region where the gateway devices are located (resolved to regionId).
+      region: "us-central-1 (Chicago)"
+
+      # Email addresses for service notifications.
+      emails: ["finance@financeinc.com"]
+
+    # Optional: attach routing policies to specific gateway devices involved in the acceptance.
+    # Device names are resolved to device IDs by the playbook.
     globalObjectOps:
-      "gw-2-sdktest":   # Device name will be resolved to device ID
+      "gw-2-sdktest":
         routingPolicyOps:
           "Policy-Clt1-Primary": "Attach"
-      "gw-4-sdktest":   # Device name will be resolved to device ID
+      "gw-4-sdktest":
         routingPolicyOps:
           "Policy-Clt1-Primary": "Attach"
 
-# Multiple acceptance format (alternative):
+# ── Multiple acceptances ───────────────────────────────────────────────────────
+# To accept multiple invitations in one playbook run, add more entries to the list:
+#
 # data_exchange_acceptances:
 #   - customerName: "FinanceBank-001"
 #     serviceName: "de-service-scale-001"
-#     # ... (same structure as above)
+#     # ... same structure as above
 #   - customerName: "AnotherCustomer"
 #     serviceName: "de-service-scale-002"
-#     # ... (same structure as above)
+#     # ... same structure as above

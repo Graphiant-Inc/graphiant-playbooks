@@ -374,7 +374,7 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 | `03_dataex_match_services_to_customers.yml` | Match services to customers; saves match responses to `output/`. Custom config: `-e config_file=...` |
 | `04_dataex_delete_customers.yml` | Delete customers (idempotent — already-absent customers are skipped) |
 | `05_dataex_delete_services.yml` | Delete services (idempotent — already-absent services are skipped) |
-| `07_dataex_accept_invitation.yml` | Accept service invitations. Supports `--check`. Custom config: `-e config_file=...`. Optional matches file: `-e matches_file=...` (required when service is not yet visible via API in the consumer tenant) |
+| `07_dataex_accept_invitation.yml` | Accept service invitations. Supports `--check`. Configures multi-peer IPSec gateways via `ipsecGatewayPeers` (requires `graphiant_sdk >= 26.6.0`). Custom config: `-e config_file=...`. Optional matches file: `-e matches_file=...` (required when service is not yet visible via API in the consumer tenant) |
 | `08_dataex_query_service_health.yml` | Query service health monitoring |
 
 **Modules used:**

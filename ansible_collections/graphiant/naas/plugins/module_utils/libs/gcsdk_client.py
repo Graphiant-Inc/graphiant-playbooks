@@ -1534,13 +1534,14 @@ class GraphiantPortalClient:
                 authorization=self.bearer_token, id=customer_id
             )
 
-            if response and hasattr(response, "services"):
+            services = getattr(response, "services", None) if response else None
+            if services:
                 LOG.info(
                     "get_matched_services_for_customer: Found %s matched services for customer %s",
-                    len(response.services),
+                    len(services),
                     customer_id,
                 )
-                return response.services
+                return services
             else:
                 LOG.info("get_matched_services_for_customer: No matched services found for customer %s", customer_id)
                 return []
@@ -1889,15 +1890,36 @@ class GraphiantPortalClient:
         Returns:
             API response object
         """
+        try:
+            sdk_request = graphiant_sdk.V1ExtranetsB2bPeeringConsumerMatchIdPostRequest(
+                id=acceptance_payload.get("id"),
+                customer_id=acceptance_payload.get("customerId"),
+                site_information=acceptance_payload.get("siteInformation"),
+                nat=acceptance_payload.get("nat"),
+                policy=acceptance_payload.get("policy"),
+                site_to_site_vpn=acceptance_payload.get("siteToSiteVpn"),
+                global_object_ops=acceptance_payload.get("globalObjectOps"),
+            )
+            sdk_serialized = json.dumps(sdk_request.to_dict(), indent=2)
+        except Exception as sdk_e:
+            LOG.warning("accept_data_exchange_service: Could not construct SDK model for logging: %s", sdk_e)
+            sdk_serialized = None
+
         if getattr(self, "check_mode", False):
             LOG.info(
                 "[check_mode] accept_data_exchange_service would accept match_id=%s: %s",
                 match_id,
-                json.dumps(acceptance_payload, indent=2),
+                sdk_serialized if sdk_serialized is not None else json.dumps(acceptance_payload, indent=2),
             )
             return type("MockResponse", (), {})()
         try:
             LOG.info("accept_data_exchange_service: Accepting match %s", match_id)
+            if sdk_serialized is not None:
+                LOG.info(
+                    "accept_data_exchange_service: SDK-serialized payload for match %s:\n%s",
+                    match_id,
+                    sdk_serialized,
+                )
             # Use the correct method with match_id as path parameter
             response = self.api.v1_extranets_b2b_peering_consumer_match_id_post(
                 authorization=self.bearer_token,
@@ -1912,6 +1934,7 @@ class GraphiantPortalClient:
                 method_name="accept_data_exchange_service",
                 api_url=api_url,
                 path_params={"match_id": match_id},
+                request_body=acceptance_payload,
                 exception=e,
             )
             raise e

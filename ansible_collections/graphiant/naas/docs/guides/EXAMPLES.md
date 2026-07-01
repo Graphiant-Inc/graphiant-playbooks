@@ -2714,11 +2714,52 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_da
     msg: "{{ accept_result.result_msg }}"
 ```
 
+> **After acceptance**: Graphiant automatically emails the non-Graphiant end customer with a temporary password and a security profile download (their VPN tunnel credentials). No further action is needed from the proxy tenant.
+
+#### Config file: Site-to-Site VPN with `ipsecGatewayPeers`
+
+Use `ipsecGatewayPeers` for all new configs (requires `graphiant_sdk >= 26.6.0`); the legacy `ipsecGatewayDetails` key is still accepted for single-peer backward compatibility.
+
+Each `remotePeers` entry is one customer VPN device. Graphiant provisions one IPSec interface per peer on **every** gateway device at the site (`tunnel1` → gw-device-1, `tunnel2` → gw-device-2). Interface naming: `{ipsecGatewayPeers.name}-{peer.name}`. Leave `insideIpv4Cidr`, `psk`, and `localIkePeerIdentity` as `null` — the playbook auto-fills them from the portal APIs.
+
+```yaml
+siteToSiteVpn:
+  ipsecGatewayPeers:
+    name: "s2s-FinanceInc"      # prefix for interface names: s2s-FinanceInc-peer-1, ...
+    routing:
+      bgp:                       # shared across all peers
+        peerAsn: 65501
+        # ... see sample_data_exchange_acceptance.yaml for full BGP config
+    remotePeers:
+      - name: "peer-1"
+        destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
+        mtu: 1400
+        tcpMss: 1360
+        remoteIkePeerIdentity: "0.0.0.0"
+        ikeInitiator: false
+        tunnel1: { insideIpv4Cidr: null, insideIpv6Cidr: null, psk: null, localIkePeerIdentity: null }
+        tunnel2: { insideIpv4Cidr: null, insideIpv6Cidr: null, psk: null, localIkePeerIdentity: null }
+        vpnProfile: "vpnprofile-global-test"
+      - name: "peer-2"           # add peer-3, peer-4, ... as needed
+        # ... same structure as peer-1
+  region: "us-central-1 (Chicago)"
+  emails: ["finance@financeinc.com"]
+```
+
+> **HTTP 500 "must include IPSec gateway details"** — two causes: (1) **Old SDK** (`<= 26.5.0`): `ipsecGatewayPeers` is silently dropped by `.to_dict()` — upgrade to `graphiant_sdk >= 26.6.0` and check the `SDK-serialized payload` log to confirm. (2) **Config missing both keys**: add `ipsecGatewayPeers` or `ipsecGatewayDetails` under `siteToSiteVpn`.
+
 ### Cleanup - Delete Data Exchange Customers
 
 ```bash
+# Dry-run (validates config)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml --check
+
+# Apply
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml
+
+# Custom config file
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml \
+  -e config_file=de_workflows_configs/sample_data_exchange_customers.yaml
 ```
 
 ```yaml
@@ -2726,9 +2767,7 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_da
   graphiant.naas.graphiant_data_exchange:
     <<: *graphiant_client_params
     operation: delete_customers
-    config_file: "de_workflows_configs/sample_data_exchange_customers.yaml"
-    # config_file: "de_workflows_configs/sample_data_exchange_customers_scale.yaml" # Scale testing
-    # config_file: "de_workflows_configs/sample_data_exchange_customers_scale2.yaml" # Scale testing2
+    config_file: "{{ config_file | default('de_workflows_configs/sample_data_exchange_customers.yaml') }}"
     detailed_logs: true
   register: delete_customers_result
 

@@ -88,7 +88,10 @@ options:
       - "in the consumer tenant). When the service is not visible via API, provide O(matches_file) saved"
       - "by Workflow 3 (V(match_service_to_customers)) with C(-e matches_file=...)."
       - "Supports dry-run mode for validation without API calls."
-      - "Configures full IPSec gateway deployment with dual tunnels, static routing, and VPN profiles."
+      - "Use I(ipsecGatewayPeers) (recommended, multi-peer, requires C(graphiant_sdk >= 26.6.0)) or"
+      - "I(ipsecGatewayDetails) (legacy, single-peer) under I(siteToSiteVpn) in the config file."
+      - "Each I(remotePeers) entry provisions one IPSec interface pair per gateway device; BGP routing"
+      - "is shared across peers; tunnel null fields are auto-filled by the playbook before the API call."
       - "For query operations (get_services_summary, get_customers_summary, get_service_health),"
       - "use M(graphiant.naas.graphiant_data_exchange_info) module instead."
     type: str

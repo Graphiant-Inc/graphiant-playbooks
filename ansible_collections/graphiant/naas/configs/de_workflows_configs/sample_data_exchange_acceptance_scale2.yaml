@@ -48,38 +48,31 @@ data_exchange_acceptances:
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceBank-{{ 100 + i }}"                 # Gateway name
-        destinationAddress: "0.0.0.0"                         # Customer's external IP
-        mtu: null                                             # Optional MTU setting
-        tcpMss: null                                          # Optional TCP MSS setting
-        remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"         # Optional remote IKE peer identity
-        ikeInitiator: false                                   # IKE initiation mode (false = responder)
-
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.100/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::100/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel1 (will be auto filled by Graphiant portal APIs)
-
-        # Tunnel 2 Configuration
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.104/30"    # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::104/126"       # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel2 (will be auto filled by Graphiant portal APIs)
-
-        # BGP Routing Configuration
+      # Multi-peer IPSec gateway (ipsecGatewayPeers)
+      ipsecGatewayPeers:
+        name: "s2s-FinanceBank-{{ 100 + i }}"
         routing:
           static:
             destinationPrefix:
               - "10.{{ 100 + i }}.0.0/24"                     # Customer's own /24 network
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"                  # System VPN profile name
-
-      # Selected Region (by name)
+        remotePeers:
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
       region: "us-central-1 (Chicago)"                        # Region name (will be resolved to regionId)
 
       # Email notifications
@@ -129,38 +122,31 @@ data_exchange_acceptances:
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceBank-{{ 100 + i }}"                 # Gateway name
-        destinationAddress: "0.0.0.0"                         # Customer's external IP
-        mtu: null                                             # Optional MTU setting
-        tcpMss: null                                          # Optional TCP MSS setting
-        remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"         # Optional remote IKE peer identity
-        ikeInitiator: false                                   # IKE initiation mode (false = responder)
-
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.100/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::100/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel1 (will be auto filled by Graphiant portal APIs)
-
-        # Tunnel 2 Configuration
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.104/30"    # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::104/126"       # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel2 (will be auto filled by Graphiant portal APIs)
-
-        # BGP Routing Configuration
+      # Multi-peer IPSec gateway (ipsecGatewayPeers)
+      ipsecGatewayPeers:
+        name: "s2s-FinanceBank-{{ 100 + i }}"
         routing:
           static:
             destinationPrefix:
               - "10.{{ 100 + i }}.0.0/24"                    # Customer's own /24 network
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"  # System VPN profile name
-
-      # Selected Region (by name)
+        remotePeers:
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
       region: "us-central-1 (Chicago)"       # Region name (will be resolved to regionId)
 
       # Email notifications
@@ -212,38 +198,31 @@ data_exchange_acceptances:
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceBank-{{ 100 + i }}"                 # Gateway name
-        destinationAddress: "0.0.0.0"                         # Customer's external IP
-        mtu: null                                             # Optional MTU setting
-        tcpMss: null                                          # Optional TCP MSS setting
-        remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"         # Optional remote IKE peer identity
-        ikeInitiator: false                                   # IKE initiation mode (false = responder)
-
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.100/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::100/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel1 (will be auto filled by Graphiant portal APIs)
-
-        # Tunnel 2 Configuration
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.104/30"    # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::104/126"       # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel2 (will be auto filled by Graphiant portal APIs)
-
-        # BGP Routing Configuration
+      # Multi-peer IPSec gateway (ipsecGatewayPeers)
+      ipsecGatewayPeers:
+        name: "s2s-FinanceBank-{{ 100 + i }}"
         routing:
           static:
             destinationPrefix:
               - "10.{{ 100 + i }}.0.0/24"                    # Customer's own /24 network
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"  # System VPN profile name
-
-      # Selected Region (by name)
+        remotePeers:
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
       region: "us-central-1 (Chicago)"       # Region name (will be resolved to regionId)
 
       # Email notifications
@@ -295,38 +274,31 @@ data_exchange_acceptances:
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceBank-{{ 100 + i }}"                 # Gateway name
-        destinationAddress: "0.0.0.0"                         # Customer's external IP
-        mtu: null                                             # Optional MTU setting
-        tcpMss: null                                          # Optional TCP MSS setting
-        remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"         # Optional remote IKE peer identity
-        ikeInitiator: false                                   # IKE initiation mode (false = responder)
-
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.100/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::100/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel1 (will be auto filled by Graphiant portal APIs)
-
-        # Tunnel 2 Configuration
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.104/30"    # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::104/126"       # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel2 (will be auto filled by Graphiant portal APIs)
-
-        # BGP Routing Configuration
+      # Multi-peer IPSec gateway (ipsecGatewayPeers)
+      ipsecGatewayPeers:
+        name: "s2s-FinanceBank-{{ 100 + i }}"
         routing:
           static:
             destinationPrefix:
               - "10.{{ 100 + i }}.0.0/24"                    # Customer's own /24 network
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"  # System VPN profile name
-
-      # Selected Region (by name)
+        remotePeers:
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
       region: "us-central-1 (Chicago)"       # Region name (will be resolved to regionId)
 
       # Email notifications
@@ -378,38 +350,31 @@ data_exchange_acceptances:
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceBank-{{ 100 + i }}"                 # Gateway name
-        destinationAddress: "0.0.0.0"                         # Customer's external IP
-        mtu: null                                             # Optional MTU setting
-        tcpMss: null                                          # Optional TCP MSS setting
-        remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"         # Optional remote IKE peer identity
-        ikeInitiator: false                                   # IKE initiation mode (false = responder)
-
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.100/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::100/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel1 (will be auto filled by Graphiant portal APIs)
-
-        # Tunnel 2 Configuration
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.104/30"    # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::104/126"       # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel2 (will be auto filled by Graphiant portal APIs)
-
-        # BGP Routing Configuration
+      # Multi-peer IPSec gateway (ipsecGatewayPeers)
+      ipsecGatewayPeers:
+        name: "s2s-FinanceBank-{{ 100 + i }}"
         routing:
           static:
             destinationPrefix:
               - "10.{{ 100 + i }}.0.0/24"                    # Customer's own /24 network
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"  # System VPN profile name
-
-      # Selected Region (by name)
+        remotePeers:
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
       region: "us-central-1 (Chicago)"       # Region name (will be resolved to regionId)
 
       # Email notifications
@@ -461,38 +426,31 @@ data_exchange_acceptances:
 
     # Site-to-Site VPN Configuration
     siteToSiteVpn:
-      # IPSec Gateway Details
-      ipsecGatewayDetails:
-        name: "s2s-FinanceBank-{{ 100 + i }}"                 # Gateway name
-        destinationAddress: "0.0.0.0"                         # Customer's external IP
-        mtu: null                                             # Optional MTU setting
-        tcpMss: null                                          # Optional TCP MSS setting
-        remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"         # Optional remote IKE peer identity
-        ikeInitiator: false                                   # IKE initiation mode (false = responder)
-
-        # Tunnel 1 Configuration
-        tunnel1:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.100/30"    # Optional Inside IPv4 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::100/126"       # Optional Inside IPv6 subnet for tunnel 1 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel1 (will be auto filled by Graphiant portal APIs)
-
-        # Tunnel 2 Configuration
-        tunnel2:
-          localIkePeerIdentity: "0.0.0.0"       # Optional local IKE peer identity
-          insideIpv4Cidr: "169.254.0.104/30"    # Optional Inside IPv4 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          insideIpv6Cidr: "fe80::104/126"       # Optional Inside IPv6 subnet for tunnel 2 (will be auto filled by Graphiant portal APIs)
-          psk: changemeOrKeepnull               # Optional Preshared key for tunnel2 (will be auto filled by Graphiant portal APIs)
-
-        # BGP Routing Configuration
+      # Multi-peer IPSec gateway (ipsecGatewayPeers)
+      ipsecGatewayPeers:
+        name: "s2s-FinanceBank-{{ 100 + i }}"
         routing:
           static:
             destinationPrefix:
               - "10.{{ 100 + i }}.0.0/24"                    # Customer's own /24 network
-        # VPN Profile Selection
-        vpnProfile: "vpnprofile-global-test"  # System VPN profile name
-
-      # Selected Region (by name)
+        remotePeers:
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "10.{{ 100 + i }}.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
       region: "us-central-1 (Chicago)"       # Region name (will be resolved to regionId)
 
       # Email notifications

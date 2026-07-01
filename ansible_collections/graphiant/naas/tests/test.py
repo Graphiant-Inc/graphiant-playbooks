@@ -1065,7 +1065,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         # Test accept_invitation with configuration file (check mode skips API calls)
         config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
         matches_file = (
-            "de_workflows/output/sample_data_exchange_matches_responses_latest.json"
+            "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
         )
 
         LOG.info("Testing accept_invitation (check mode) with config: %s", config_file)
@@ -1871,7 +1871,7 @@ if __name__ == '__main__':
     # Authentication Tests
     suite.addTest(TestGraphiantPlaybooks('test_get_login_token'))
     suite.addTest(TestGraphiantPlaybooks('test_get_enterprise_id'))
-    '''
+
     suite.addTest(TestGraphiantPlaybooks('test_auth_double_failure_access_token_then_password'))
     suite.addTest(TestGraphiantPlaybooks('test_auth_invalid_token_fallback_to_valid_password'))
 
@@ -2036,10 +2036,11 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_syslog_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_ipfix_service'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_ntp'))
-    '''
+
     # Data Exchange Tests
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))  # Pre-req: prefix lists
     # Pre-req: Graphiant filters
+
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_graphiant_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
@@ -2056,7 +2057,7 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_graphiant_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
-    '''
+
     # Static Routes Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
@@ -2120,5 +2121,5 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_direct_peer_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_syslog_targets'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_syslog_targets'))
-    '''
+
     unittest.TextTestRunner(verbosity=2).run(suite)

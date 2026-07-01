@@ -1,9 +1,18 @@
 ---
-# Data Exchange Management Playbook
-# This playbook demonstrates how to use the graphiant_data_exchange and
-# graphiant_data_exchange_info modules for managing Data Exchange customers.
+# Data Exchange - Delete Customers Playbook (Workflow 4)
+# Deletes Data Exchange customers listed in the config file.
+#
+# Usage:
+#   Preview changes (dry run):
+#     ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml --check
+#
+#   Apply changes:
+#     ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml
+#
+#   Custom config file:
+#     ansible-playbook ... -e config_file=de_workflows_configs/sample_data_exchange_customers.yaml
 
-- name: Data Exchange Management
+- name: Data Exchange - Delete Customers
   hosts: localhost
   gather_facts: false
   vars:
@@ -39,9 +48,7 @@
       graphiant.naas.graphiant_data_exchange:
         <<: *graphiant_client_params
         operation: delete_customers
-        config_file: "de_workflows_configs/sample_data_exchange_customers.yaml"
-        # config_file: "de_workflows_configs/sample_data_exchange_customers_scale.yaml" # Scale testing
-        # config_file: "de_workflows_configs/sample_data_exchange_customers_scale2.yaml" # Scale testing2
+        config_file: "{{ config_file | default('de_workflows_configs/sample_data_exchange_customers.yaml') }}"
         detailed_logs: true
       register: delete_customers_result
 
