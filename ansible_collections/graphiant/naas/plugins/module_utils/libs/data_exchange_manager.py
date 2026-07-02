@@ -30,6 +30,7 @@ except ImportError:
 from .base_manager import BaseManager
 from .logger import setup_logger
 from .exceptions import ConfigurationError
+from .device_config_common import redact_sensitive_for_log
 
 # Required dependencies - checked when functions are called
 # Don't raise at module level to allow import test to pass
@@ -1250,13 +1251,15 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to match Data Exchange services to customers: %s", e)
             raise ConfigurationError(f"Data Exchange service to customer matching failed: {e}")
 
-    def accept_invitation(self, config_yaml_file: str, matches_file=None) -> None:
+    def accept_invitation(self, config_yaml_file: str, matches_file=None, vault_bgp_md5=None, vault_psk=None) -> None:
         """
         Accept Data Exchange service invitation (Workflow 4).
 
         Args:
             config_yaml_file (str): Path to YAML configuration file containing acceptance details
             matches_file (str, optional): Path to matches responses JSON file for match ID lookup
+            vault_bgp_md5 (dict, optional): BGP MD5 passwords keyed by customerName (from Ansible Vault)
+            vault_psk (dict, optional): IPSec PSKs keyed by customerName → peer name → tunnel (from Ansible Vault)
         """
         try:
             LOG.info("accept_invitation: Loading configuration from %s", config_yaml_file)
@@ -1286,7 +1289,13 @@ class DataExchangeManager(BaseManager):
             self._validate_vpn_profiles_for_acceptances(acceptances)
 
             # Process acceptances and log results
-            result = self._process_multiple_acceptances(acceptances, matches_file, config_yaml_file=config_yaml_file)
+            result = self._process_multiple_acceptances(
+                acceptances,
+                matches_file,
+                config_yaml_file=config_yaml_file,
+                vault_bgp_md5=vault_bgp_md5 or {},
+                vault_psk=vault_psk or {},
+            )
 
             # Log summary like other operations
             total_processed = result.get("total_processed", 0)
@@ -1492,7 +1501,9 @@ class DataExchangeManager(BaseManager):
             LOG.warning("_validate_vpn_profiles_for_acceptances: VPN profile validation failed: %s", e)
             raise
 
-    def _process_multiple_acceptances(self, acceptances_config, matches_file=None, config_yaml_file=None):
+    def _process_multiple_acceptances(
+        self, acceptances_config, matches_file=None, config_yaml_file=None, vault_bgp_md5=None, vault_psk=None
+    ):
         """
         Process multiple invitation acceptances from configuration.
 
@@ -1500,6 +1511,8 @@ class DataExchangeManager(BaseManager):
             acceptances_config (list): List of acceptance configurations
             matches_file (str, optional): Path to matches responses JSON file for match ID lookup
             config_yaml_file (str, optional): Path to the acceptance config file (used for error hints)
+            vault_bgp_md5 (dict, optional): BGP MD5 passwords keyed by customerName
+            vault_psk (dict, optional): IPSec PSKs keyed by customerName → peer name → tunnel
 
         Returns:
             dict: Combined results from all acceptances
@@ -1550,6 +1563,10 @@ class DataExchangeManager(BaseManager):
                         acceptance_config.get("customerName"),
                         acceptance_config.get("serviceName"),
                     )
+                    # Inject vault secrets (md5Password, psk) before resolving names to IDs
+                    self._inject_vault_secrets(acceptance_config, vault_bgp_md5, vault_psk)
+                    # Normalize md5Password to API dict shape {"md5_password": value}
+                    self._normalize_bgp_md5_password(acceptance_config)
                     # Resolve names to IDs (returns direct API payload structure)
                     resolved_config = self._resolve_acceptance_names_to_ids(
                         acceptance_config,
@@ -1620,7 +1637,7 @@ class DataExchangeManager(BaseManager):
                         "_process_multiple_acceptances: Acceptance payload for '%s' and '%s': %s",
                         acceptance_config.get("customerName"),
                         acceptance_config.get("serviceName"),
-                        acceptance_payload,
+                        redact_sensitive_for_log(acceptance_payload),
                     )
 
                     # Call the acceptance API (gsdk no-ops and logs payload when check_mode is True)
@@ -1701,6 +1718,68 @@ class DataExchangeManager(BaseManager):
         except Exception as e:
             LOG.error("Failed to process multiple acceptances: %s", e)
             raise ConfigurationError(f"Multiple acceptance processing failed: {e}")
+
+    def _inject_vault_secrets(self, acceptance_config, vault_bgp_md5, vault_psk):
+        """
+        Inject md5Password and psk from vault when YAML value is null/absent.
+        Precedence: YAML non-null wins; vault fills null/absent; API auto-fills any psk still null after.
+        Lookup key = customerName.
+        """
+        customer_name = acceptance_config.get("customerName", "")
+        site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {})
+        ipsec_peers = site_to_site_vpn.get("ipsecGatewayPeers", {})
+
+        # md5Password: YAML wins if non-null, vault fills null/absent
+        routing = ipsec_peers.get("routing", {}) if isinstance(ipsec_peers, dict) else {}
+        bgp = routing.get("bgp") if isinstance(routing, dict) else None
+        if isinstance(bgp, dict) and bgp.get("md5Password") is None:
+            vault_md5 = (vault_bgp_md5 or {}).get(customer_name)
+            if vault_md5:
+                bgp["md5Password"] = {"md5_password": vault_md5}
+                LOG.debug("_inject_vault_secrets: Injected md5Password for customer '%s' from vault", customer_name)
+
+        # psk: YAML wins if non-null, vault fills null (API auto-fills remaining nulls via _fill_missing_tunnel_values)
+        vault_psk_customer = (vault_psk or {}).get(customer_name, {})
+        if vault_psk_customer and isinstance(ipsec_peers, dict):
+            for peer in ipsec_peers.get("remotePeers", []):
+                peer_name = peer.get("name", "")
+                peer_vault = vault_psk_customer.get(peer_name, {})
+                for tunnel_key in ("tunnel1", "tunnel2"):
+                    tunnel = peer.get(tunnel_key, {})
+                    if isinstance(tunnel, dict) and tunnel.get("psk") is None:
+                        psk_val = peer_vault.get(tunnel_key)
+                        if psk_val:
+                            tunnel["psk"] = psk_val
+                            LOG.debug(
+                                "_inject_vault_secrets: Injected psk for customer '%s' peer '%s' %s from vault",
+                                customer_name,
+                                peer_name,
+                                tunnel_key,
+                            )
+
+    def _normalize_bgp_md5_password(self, acceptance_config):
+        """
+        Normalize md5Password to the API dict shape {"md5_password": value}.
+
+        Accepts a plain string (from YAML) or a dict with either "md5_password" or
+        "md5Password" as the key; leaves None untouched.
+        """
+        site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {})
+        ipsec_peers = site_to_site_vpn.get("ipsecGatewayPeers", {})
+        routing = ipsec_peers.get("routing", {}) if isinstance(ipsec_peers, dict) else {}
+        bgp = routing.get("bgp") if isinstance(routing, dict) else None
+        if not isinstance(bgp, dict):
+            return
+        md5_val = bgp.get("md5Password")
+        if md5_val is None:
+            return
+        if isinstance(md5_val, str):
+            bgp["md5Password"] = {"md5_password": md5_val}
+        elif isinstance(md5_val, dict) and "md5_password" not in md5_val:
+            # Normalize camelCase key → snake_case
+            plain = md5_val.get("md5Password")
+            if plain is not None:
+                bgp["md5Password"] = {"md5_password": plain}
 
     def _fill_missing_tunnel_values(self, acceptance_config, region_id, lan_segment_id):
         """

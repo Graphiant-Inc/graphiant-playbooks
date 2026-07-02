@@ -16,17 +16,17 @@
 # Only listed keys are merged onto current device state.
 
 device_system:
-  - edge-1-gsdktest:
+  - edge-1-sdktest:
       name: "edge-1-sdktest"
       site:
         name: "San Jose-sdktest"
 
-  - edge-2-gsdktest:
+  - edge-2-sdktest:
       name: "edge-2-sdktest"
       site:
         name: "New York-sdktest"
 
-  - edge-3-gsdktest:
+  - edge-3-sdktest:
       name: "edge-3-sdktest"
       regionName: "us-east-2 (Atlanta)"
       site:

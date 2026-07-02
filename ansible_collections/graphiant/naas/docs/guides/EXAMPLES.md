@@ -2372,7 +2372,15 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.ym
 
 ### Module: graphiant.naas.graphiant_site_to_site_vpn
 
-Site-to-Site VPN supports static and BGP routing. Preshared keys and BGP MD5 passwords are supplied via Ansible Vault; the vault key must match the VPN `name` in the config. See `configs/vault_secrets.yml.example` and `configs/sample_site_to_site_vpn.yaml`.
+Site-to-Site VPN supports static and BGP routing. Preshared keys and BGP MD5 passwords follow a unified vault precedence: **YAML non-null wins; vault fills `null`/absent fields**.
+
+| Source | `presharedKey` | `md5Password` |
+|---|---|---|
+| YAML non-null | Used as-is (dev/local only; do not commit) | Used as-is |
+| YAML `null` or absent + vault key found | Injected from vault | Injected from vault |
+| YAML `null` or absent + no vault key | **ConfigurationError** (required) | `None` (no MD5 auth) |
+
+Vault keys match the VPN `name` field. Set `presharedKey: null` and `md5Password: null` in the YAML for production configs. See `configs/vault_secrets.yml.example` and `configs/sample_site_to_site_vpn.yaml`.
 
 #### Vault setup
 
@@ -2667,6 +2675,38 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_da
 - **Omit it** when the service is already visible in the consumer tenant via API (e.g. after a previous acceptance or if the producer has already shared it). This is the common case for idempotent re-runs.
 - **Provide it** when the service is not yet visible via API — typically during a `--check` dry-run before the first acceptance, or in environments where the producer has not yet shared the service. The file is saved by Workflow 3 (Step 4) at `de_workflows_configs/output/<matches>_responses_latest.json`.
 
+**Secrets setup** (for BGP MD5 password and custom PSKs):
+
+Secrets are passed to the module in memory only (`no_log: true`) — never written to disk.
+Use any secrets store: fetch the values and pass them as module params. See
+`configs/vault_secrets.yml.example` for the expected dict structure.
+
+Vault is **optional** — if the vault file is absent the task is skipped gracefully:
+`md5Password` stays `null` (no BGP MD5 auth); PSKs are auto-filled by the API.
+
+**Ansible Vault** (built-in option):
+
+```bash
+# The playbook looks for the vault file at configs/de_workflows_configs/vault_secrets.yml by default.
+# Override with: -e vault_secrets_file=/path/to/your/vault_secrets.yml
+cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example \
+   ansible_collections/graphiant/naas/configs/de_workflows_configs/vault_secrets.yml
+# Edit vault_secrets.yml: set vault_data_exchange_bgp_md5_passwords and vault_data_exchange_psk
+export ANSIBLE_VAULT_PASSPHRASE="your-passphrase"
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/de_workflows_configs/vault_secrets.yml \
+  --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+```
+
+**Other secrets stores** (HashiCorp Vault, AWS Secrets Manager, etc.): pre-fetch secrets and pass
+`vault_data_exchange_bgp_md5_passwords` / `vault_data_exchange_psk` as extra vars to the playbook.
+
+Secrets precedence: **YAML non-null wins; secrets store fills `null`/absent fields**:
+
+| Field | YAML non-null | YAML `null` + vault key found | YAML `null` + no vault key |
+|---|---|---|---|
+| `md5Password` | Used as-is | Injected from vault | `None` (no MD5 auth) |
+| `psk` (per tunnel) | Used as-is | Injected from vault | API auto-fills |
+
 ```bash
 export GRAPHIANT_USERNAME="proxy-tenant-username"
 
@@ -2680,6 +2720,11 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_da
 # Apply (matches_file optional; omit to use API lookup, or provide explicitly)
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
   -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
+
+# Apply with vault secrets (BGP MD5, custom PSKs)
+ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
+  -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json \
+  --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 
 # Custom config file
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \

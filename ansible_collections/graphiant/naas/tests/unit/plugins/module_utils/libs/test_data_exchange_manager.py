@@ -692,3 +692,147 @@ def test_fill_missing_tunnel_values_already_set_not_overwritten() -> None:
     assert peer["tunnel1"]["psk"] == "existing"
     mgr.gsdk.get_ipsec_inside_subnet.assert_not_called()
     mgr.gsdk.get_preshared_key.assert_not_called()
+
+
+# ---- _inject_vault_secrets tests ----
+
+
+def _acceptance_with_bgp(customer_name: str, md5_password=None) -> dict:
+    return {
+        "customerName": customer_name,
+        "siteToSiteVpn": {
+            "ipsecGatewayPeers": {
+                "routing": {"bgp": {"md5Password": md5_password}},
+                "remotePeers": [
+                    {
+                        "name": "peer-1",
+                        "tunnel1": {"psk": None},
+                        "tunnel2": {"psk": None},
+                    }
+                ],
+            }
+        },
+    }
+
+
+def test_inject_vault_md5_fills_null() -> None:
+    """Vault md5Password is injected as dict {"md5_password": value} when YAML has null."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password=None)
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance, vault_bgp_md5={"FinanceInc": "secret-md5"}, vault_psk={}
+    )
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] == {"md5_password": "secret-md5"}
+
+
+def test_inject_vault_md5_yaml_wins_if_non_null() -> None:
+    """YAML md5Password takes precedence over vault when non-null."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5_password": "yaml-value"})
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance, vault_bgp_md5={"FinanceInc": "vault-value"}, vault_psk={}
+    )
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] == {"md5_password": "yaml-value"}
+
+
+# ---- _normalize_bgp_md5_password tests ----
+
+
+def test_normalize_md5_plain_string_wrapped() -> None:
+    """Plain string md5Password from YAML is normalized to {"md5_password": value}."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password="plain-secret")
+    mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] == {"md5_password": "plain-secret"}
+
+
+def test_normalize_md5_camel_key_converted() -> None:
+    """Dict with camelCase key is normalized to snake_case key."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5Password": "camel-secret"})
+    mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] == {"md5_password": "camel-secret"}
+
+
+def test_normalize_md5_snake_key_unchanged() -> None:
+    """Dict already in snake_case form is left as-is."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5_password": "snake-secret"})
+    mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] == {"md5_password": "snake-secret"}
+
+
+def test_normalize_md5_null_unchanged() -> None:
+    """None md5Password is left untouched."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password=None)
+    mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] is None
+
+
+def test_inject_vault_md5_no_vault_key_stays_null() -> None:
+    """When YAML is null and vault has no key, md5Password stays null (no error; BGP without MD5)."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password=None)
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance, vault_bgp_md5={}, vault_psk={}
+    )
+    bgp = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
+    assert bgp["md5Password"] is None
+
+
+def test_inject_vault_psk_fills_null_tunnels() -> None:
+    """Vault PSK is injected into null tunnels for matching peer."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc")
+    vault_psk = {"FinanceInc": {"peer-1": {"tunnel1": "psk-t1", "tunnel2": "psk-t2"}}}
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance, vault_bgp_md5={}, vault_psk=vault_psk
+    )
+    peer = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["remotePeers"][0]
+    assert peer["tunnel1"]["psk"] == "psk-t1"
+    assert peer["tunnel2"]["psk"] == "psk-t2"
+
+
+def test_inject_vault_psk_yaml_wins_if_non_null() -> None:
+    """YAML psk is preserved when non-null; vault not applied."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc")
+    acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["remotePeers"][0]["tunnel1"]["psk"] = "yaml-psk"
+    vault_psk = {"FinanceInc": {"peer-1": {"tunnel1": "vault-psk", "tunnel2": "vault-psk"}}}
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance, vault_bgp_md5={}, vault_psk=vault_psk
+    )
+    peer = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["remotePeers"][0]
+    assert peer["tunnel1"]["psk"] == "yaml-psk"   # YAML wins
+    assert peer["tunnel2"]["psk"] == "vault-psk"  # null → vault fills
+
+
+def test_inject_vault_psk_no_vault_key_stays_null_for_api_fill() -> None:
+    """When YAML psk is null and vault has no key, psk stays null (API auto-fills later)."""
+    mgr = _make_manager()
+    acceptance = _acceptance_with_bgp("FinanceInc")
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance, vault_bgp_md5={}, vault_psk={}
+    )
+    peer = acceptance["siteToSiteVpn"]["ipsecGatewayPeers"]["remotePeers"][0]
+    assert peer["tunnel1"]["psk"] is None
+    assert peer["tunnel2"]["psk"] is None
+
+
+def test_inject_vault_no_op_when_no_ipsec_peers() -> None:
+    """No error and no changes when acceptance has no ipsecGatewayPeers."""
+    mgr = _make_manager()
+    acceptance = {"customerName": "Acme", "siteToSiteVpn": {}}
+    mgr._inject_vault_secrets(  # pylint: disable=protected-access
+        acceptance,
+        vault_bgp_md5={"Acme": "md5"},
+        vault_psk={"Acme": {"peer-1": {"tunnel1": "psk"}}},
+    )
+    assert acceptance["siteToSiteVpn"] == {}
