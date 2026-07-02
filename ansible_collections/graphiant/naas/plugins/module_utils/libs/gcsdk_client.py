@@ -74,7 +74,7 @@ PydanticValidationError = _pydantic_validation_error_type()
 
 from .logger import setup_logger  # noqa: E402
 from .poller import poller  # noqa: E402
-from .exceptions import APIError  # noqa: E402
+from .exceptions import APIError, ValidationError  # noqa: E402
 from .device_config_common import format_config_payload_for_log  # noqa: E402
 
 LOG = setup_logger()
@@ -597,16 +597,22 @@ class GraphiantPortalClient:
         edge = payload.get("edge")
         core = payload.get("core")
 
-        device_config_put_request = graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
+        try:
+            device_config_put_request = graphiant_sdk.V1DevicesDeviceIdConfigPutRequest(core=core, edge=edge)
 
-        # Add optional fields if present in payload
-        if "description" in payload:
-            device_config_put_request.description = payload["description"]
-        if "configurationMetadata" in payload:
-            device_config_put_request.configuration_metadata = payload["configurationMetadata"]
+            # Add optional fields if present in payload
+            if "description" in payload:
+                device_config_put_request.description = payload["description"]
+            if "configurationMetadata" in payload:
+                device_config_put_request.configuration_metadata = payload["configurationMetadata"]
 
-        # Convert to dict to validate structure
-        validated_payload_dict = device_config_put_request.to_dict()
+            # Convert to dict to validate structure
+            validated_payload_dict = device_config_put_request.to_dict()
+        except Exception as sdk_e:
+            raise ValidationError(
+                f"show_validated_payload: Payload failed SDK schema validation for device_id={device_id}: {sdk_e}"
+            ) from sdk_e
+
         LOG.info(
             "show_validated_payload : validated config for %s: \n%s",
             device_id,
@@ -1902,14 +1908,23 @@ class GraphiantPortalClient:
             )
             sdk_serialized = json.dumps(sdk_request.to_dict(), indent=2)
         except Exception as sdk_e:
-            LOG.warning("accept_data_exchange_service: Could not construct SDK model for logging: %s", sdk_e)
+            if getattr(self, "check_mode", False):
+                raise ValidationError(
+                    f"accept_data_exchange_service: Payload failed SDK schema validation "
+                    f"for match_id={match_id}: {sdk_e}"
+                ) from sdk_e
+            LOG.error("accept_data_exchange_service: Could not construct SDK model for logging: %s", sdk_e)
             sdk_serialized = None
 
         if getattr(self, "check_mode", False):
             LOG.info(
                 "[check_mode] accept_data_exchange_service would accept match_id=%s: %s",
                 match_id,
-                sdk_serialized if sdk_serialized is not None else json.dumps(acceptance_payload, indent=2),
+                (
+                    format_config_payload_for_log(json.loads(sdk_serialized))
+                    if sdk_serialized is not None
+                    else format_config_payload_for_log(acceptance_payload)
+                ),
             )
             return type("MockResponse", (), {})()
         try:
@@ -1918,7 +1933,7 @@ class GraphiantPortalClient:
                 LOG.info(
                     "accept_data_exchange_service: SDK-serialized payload for match %s:\n%s",
                     match_id,
-                    sdk_serialized,
+                    format_config_payload_for_log(json.loads(sdk_serialized)),
                 )
             # Use the correct method with match_id as path parameter
             response = self.api.v1_extranets_b2b_peering_consumer_match_id_post(

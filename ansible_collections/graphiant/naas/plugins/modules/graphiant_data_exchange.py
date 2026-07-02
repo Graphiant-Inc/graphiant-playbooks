@@ -149,6 +149,42 @@ options:
       - "  3. If I(matches_file) provided but no entry found - attempts API lookup using service name"
       - "  4. If I(matches_file) not provided - attempts API lookup (works if service is visible to consumer)"
     type: str
+  vault_data_exchange_bgp_md5_passwords:
+    description:
+      - >-
+        Dict of customer name to BGP MD5 password for V(accept_invitation).
+        Key must match the C(customerName) field in the acceptance config.
+        Precedence{{ ":" }} YAML C(md5Password) non-null wins; secrets store fills C(null)/absent;
+        absent from both means no MD5 auth (optional field).
+      - >-
+        Fetch from your organization's secrets store and pass as a module param.
+        Secrets are never written to disk — passed in memory only (C(no_log: true)).
+      - >-
+        Ansible Vault{{ ":" }} load with M(ansible.builtin.include_vars) (C(no_log: true)) and pass via
+        C(vault_data_exchange_bgp_md5_passwords{{ ":" }} "{{ vault_data_exchange_bgp_md5_passwords | default({}) }}").
+        Other secrets stores (HashiCorp Vault, AWS Secrets Manager, etc.){{ ":" }} pre-fetch and pass as an extra var.
+        See I(configs/vault_secrets.yml.example) for the expected dict structure.
+    type: dict
+    default: {}
+    required: false
+  vault_data_exchange_psk:
+    description:
+      - >-
+        Nested dict of IPSec tunnel preshared keys for V(accept_invitation) C(ipsecGatewayPeers)
+        configs. Structure{{ ":" }} C(customerName → peer name → tunnel1/tunnel2 → psk string).
+        Precedence{{ ":" }} YAML C(psk) non-null wins; secrets store fills C(null)/absent;
+        if both are null the API auto-fills the PSK (recommended fallback when vault is omitted).
+      - >-
+        Fetch from your organization's secrets store and pass as a module param.
+        Secrets are never written to disk — passed in memory only (C(no_log: true)).
+      - >-
+        Ansible Vault{{ ":" }} load with M(ansible.builtin.include_vars) (C(no_log: true)) and pass via
+        C(vault_data_exchange_psk{{ ":" }} "{{ vault_data_exchange_psk | default({}) }}").
+        Other secrets stores (HashiCorp Vault, AWS Secrets Manager, etc.){{ ":" }} pre-fetch and pass as an extra var.
+        See I(configs/vault_secrets.yml.example) for the expected dict structure.
+    type: dict
+    default: {}
+    required: false
   detailed_logs:
     description:
       - Enable detailed logging output for troubleshooting and monitoring.
@@ -318,6 +354,25 @@ EXAMPLES = r"""
   ansible.builtin.debug:
     msg: "{{ accept_result.msg }}"
 
+- name: Workflow 4 - Accept invitation with secrets (BGP MD5 password and custom PSKs)
+  # Secrets are fetched from your secrets store and passed as module params (never written to disk).
+  # Ansible Vault: load vault_secrets.yml with include_vars (no_log: true) before this task,
+  #   then run the playbook with --vault-password-file configs/vault-password-file.sh.
+  # Other secrets stores (HashiCorp Vault, AWS Secrets Manager, etc.): pre-fetch and pass as extra vars.
+  # See configs/vault_secrets.yml.example for the expected dict structure.
+  graphiant.naas.graphiant_data_exchange:
+    operation: accept_invitation
+    config_file: "de_workflows_configs/sample_data_exchange_acceptance.yaml"
+    matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+    vault_data_exchange_bgp_md5_passwords: "{{ vault_data_exchange_bgp_md5_passwords | default({}) }}"
+    vault_data_exchange_psk: "{{ vault_data_exchange_psk | default({}) }}"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+  no_log: true
+  register: accept_result
+
 - name: Delete Data Exchange customers (must be deleted before services)
   graphiant.naas.graphiant_data_exchange:
     operation: delete_customers
@@ -437,7 +492,7 @@ operation:
   description:
     - The operation that was performed.
     - One of V(create_services), V(update_services), V(delete_services), V(create_customers),
-      V(delete_customers), V(match_service_to_customers), or V(accept_invitation).
+      V(update_customers), V(delete_customers), V(match_service_to_customers), or V(accept_invitation).
   type: str
   returned: always
   sample: "create_services"
@@ -534,6 +589,8 @@ def main():
         state=dict(type="str", choices=["present", "absent"], default="present"),
         config_file=dict(type="str", required=False),
         matches_file=dict(type="str", required=False),
+        vault_data_exchange_bgp_md5_passwords=dict(type="dict", required=False, default={}, no_log=True),
+        vault_data_exchange_psk=dict(type="dict", required=False, default={}, no_log=True),
         detailed_logs=dict(type="bool", default=False),
     )
 
@@ -694,6 +751,8 @@ def main():
                 module.fail_json(msg="accept_invitation operation requires config_file parameter")
 
             matches_file = params.get("matches_file")
+            vault_bgp_md5 = params.get("vault_data_exchange_bgp_md5_passwords") or {}
+            vault_psk = params.get("vault_data_exchange_psk") or {}
 
             success_msg = f"Successfully accepted Data Exchange service invitation from {config_file}"
             if module.check_mode:
@@ -706,6 +765,8 @@ def main():
                 graphiant_config.data_exchange.accept_invitation,
                 config_file,
                 matches_file,
+                vault_bgp_md5,
+                vault_psk,
                 success_msg=success_msg,
             )
 

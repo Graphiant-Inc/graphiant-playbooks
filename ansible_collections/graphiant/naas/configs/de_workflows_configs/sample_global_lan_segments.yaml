@@ -1,5 +1,7 @@
 # Sample Global LAN Segments Configuration
 lan_segments:
+  - name: "customer-1-segment"
+    description: "customer-1-segment"
   - name: "FinanceBank-001-lan-segment"
     description: "LAN segment for customer FinanceBank-001"
   - name: "FinanceBank-002-lan-segment"

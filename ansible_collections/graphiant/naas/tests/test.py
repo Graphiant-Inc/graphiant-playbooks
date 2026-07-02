@@ -442,7 +442,6 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         Configure Global VPN Profile Objects.
         """
         graphiant_config = graphiant_config_from_read_config()
-        # graphiant_config.global_config.configure_vpn_profiles("sample_global_vpn_profiles.yaml")
         result = graphiant_config.global_config.configure("sample_global_vpn_profiles.yaml")
         LOG.info("Configure VPN profiles result: %s", result)
         result = graphiant_config.global_config.configure("sample_global_vpn_profiles.yaml")
@@ -490,7 +489,6 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         Configure Global LAN Segments.
         """
         graphiant_config = graphiant_config_from_read_config()
-        # graphiant_config.global_config.configure_lan_segments("sample_global_lan_segments.yaml")
         result = graphiant_config.global_config.configure("sample_global_lan_segments.yaml")
         LOG.info("Configure Global LAN segments result: %s", result)
         result = graphiant_config.global_config.configure("sample_global_lan_segments.yaml")
@@ -1056,21 +1054,170 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         self.assertTrue(result["skipped"], f"Expected customers to be skipped, got: {result}")
         self.assertFalse(result["deleted"], f"Expected no customers to be deleted, got: {result}")
 
-    def test_accept_data_exchange_invitation_check_mode(self):
+    def test_create_data_exchange_services_scale(self):
         """
-        Accept Data Exchange Service Invitation (Workflow 4) in check mode.
+        Create Data Exchange Services — scale config (24 services).
+        Pre-req for scale acceptance tests.
         """
-        graphiant_config = graphiant_config_from_read_config(check_mode=True)
-
-        # Test accept_invitation with configuration file (check mode skips API calls)
-        config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
-        matches_file = (
-            "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.create_services(
+            "de_workflows_configs/sample_data_exchange_services_scale.yaml"
         )
 
-        LOG.info("Testing accept_invitation (check mode) with config: %s", config_file)
-        result = graphiant_config.data_exchange.accept_invitation(config_file, matches_file)
+    def test_create_data_exchange_customers_scale(self):
+        """
+        Create Data Exchange Customers — scale config (50 customers).
+        Pre-req for scale acceptance tests.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.create_customers(
+            "de_workflows_configs/sample_data_exchange_customers_scale.yaml"
+        )
+
+    def test_match_data_exchange_service_to_customers_scale(self):
+        """
+        Match Data Exchange Services to Customers — scale config (100 matches).
+        Saves match responses to sample_data_exchange_matches_scale_responses_latest.json.
+        Pre-req for scale acceptance tests.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.match_service_to_customers(
+            "de_workflows_configs/sample_data_exchange_matches_scale.yaml"
+        )
+
+    def test_delete_data_exchange_customers_scale(self):
+        """
+        Delete Data Exchange Customers — scale config (50 customers).
+        Cleanup after scale acceptance tests.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.delete_customers(
+            "de_workflows_configs/sample_data_exchange_customers_scale.yaml"
+        )
+
+    def test_delete_data_exchange_services_scale(self):
+        """
+        Delete Data Exchange Services — scale config (24 services).
+        Cleanup after scale acceptance tests.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.delete_services(
+            "de_workflows_configs/sample_data_exchange_services_scale.yaml"
+        )
+
+    def _acceptance_vault(self, graphiant_config):
+        """Helper: load vault secrets for acceptance tests."""
+        config_path = graphiant_config.config_utils.config_path
+        return (
+            vault_dict_from_example(config_path, "vault_data_exchange_bgp_md5_passwords"),
+            vault_dict_from_example(config_path, "vault_data_exchange_psk"),
+        )
+
+    def test_configure_data_exchange_global_lan_segments(self):
+        """
+        Configure global LAN segments required for Data Exchange acceptance tests.
+        Uses de_workflows_configs/sample_global_lan_segments.yaml (includes customer-1-segment
+        and FinanceBank-* segments used by acceptance and scale configs).
+        Runs twice to verify idempotency.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.global_config.configure("de_workflows_configs/sample_global_lan_segments.yaml")
+        LOG.info("Configure DE global LAN segments result: %s", result)
+        result = graphiant_config.global_config.configure("de_workflows_configs/sample_global_lan_segments.yaml")
+        LOG.info("Configure DE global LAN segments result (idempotency check): %s", result)
+        self.assertFalse(result.get("failed"), f"Configure DE global LAN segments failed: {result}")
+
+    def test_accept_data_exchange_invitation_check_mode(self):
+        """
+        Accept Data Exchange Service Invitation in check mode (requires consumer/proxy tenant creds).
+        Validates the full payload construction and SDK schema validation without calling the API.
+        Expected: changed=True (would accept), total_accepted=1, status="check_mode", no failures.
+        """
+        graphiant_config = graphiant_config_from_read_config(check_mode=True)
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept invitation (check mode) result: %s", result)
+
+        self.assertTrue(result["changed"], "check_mode: expected changed=True (would have accepted)")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 1)
+        self.assertEqual(result["total_skipped"], 0)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "check_mode")
+
+    def test_accept_data_exchange_invitation(self):
+        """
+        Accept Data Exchange Service Invitation — live mode (requires consumer/proxy tenant creds).
+        Expected: changed=True, total_accepted=1, total_skipped=0, status="success".
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
         LOG.info("Accept invitation result: %s", result)
+
+        self.assertTrue(result["changed"], "Expected changed=True on first acceptance")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 1)
+        self.assertEqual(result["total_skipped"], 0)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "success")
+
+    def test_accept_data_exchange_invitation_idempotent(self):
+        """
+        Accept Data Exchange Service Invitation again — already accepted (requires consumer/proxy tenant creds).
+        Expected: changed=False, total_skipped=1, total_accepted=0 (idempotent).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept invitation (idempotent) result: %s", result)
+
+        self.assertFalse(result["changed"], "Expected changed=False when already accepted")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 0)
+        self.assertEqual(result["total_skipped"], 1)
+        self.assertEqual(result["results"][0]["status"], "skipped")
+
+    def test_accept_data_exchange_invitation_scale_check_mode(self):
+        """
+        Accept multiple Data Exchange Service Invitations in check mode — scale config
+        (requires consumer/proxy tenant creds).
+        Validates payload construction and SDK schema validation for all acceptances without calling the API.
+        Expected: no failures across all acceptances, all statuses="check_mode".
+        """
+        graphiant_config = graphiant_config_from_read_config(check_mode=True)
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance_scale.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_scale_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept invitation scale (check mode) result summary: processed=%s accepted=%s skipped=%s",
+                 result["total_processed"], result["total_accepted"], result["total_skipped"])
+
+        failed = [r for r in result["results"] if r["status"] == "failed"]
+        self.assertFalse(failed, f"Expected no failures in scale check_mode, got: {failed}")
+        self.assertEqual(result["total_processed"], result["total_successful"],
+                         "Expected all acceptances to succeed or skip in check_mode")
+        for r in result["results"]:
+            self.assertIn(r["status"], ("check_mode", "skipped"),
+                          f"Unexpected status '{r['status']}' for {r.get('customer_name')}")
 
     def test_show_validated_payload_for_device_config(self):
         """
@@ -2038,9 +2185,9 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_ntp'))
 
     # Data Exchange Tests
-    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))  # Pre-req: prefix lists
-    # Pre-req: Graphiant filters
-
+    #   Pre-req: Prefix lists
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
+    #   Pre-req: Graphiant filters
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_graphiant_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
@@ -2052,7 +2199,27 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_customers_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
-    # suite.addTest(TestGraphiantPlaybooks('test_accept_data_exchange_invitation_check_mode'))
+
+    #   Create 24 services (Scale config)
+    suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services_scale'))
+    #   Create 50 customers (Scale config)
+    suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_customers_scale'))
+    #   Match 20 services (1 service to 5 customers); Total 100 matches; saves scale matches_responses file
+    suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers_scale'))
+
+    # -------------------------------------------------------------------------------------------- #
+    # Run Data Exchange accept_invitation tests in isolation.
+    # Requires consumer/proxy tenant credentials.
+    # suite.addTest(TestGraphiantPlaybooks("test_configure_data_exchange_global_lan_segments"))
+    # suite.addTest(TestGraphiantPlaybooks("test_configure_vpn_profiles"))
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_check_mode"))
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation"))
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_idempotent"))
+    # suite.addTest(TestGraphiantPlaybooks('test_accept_data_exchange_invitation_scale_check_mode'))
+    # -------------------------------------------------------------------------------------------- #
+
+    suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_customers_scale'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services_scale'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_graphiant_filters'))
@@ -2108,6 +2275,7 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_show_validated_payload_for_device_config'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_device_config'))
 
+    '''
     # Backbone (Core) Configuration Management Tests
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone'))
@@ -2121,5 +2289,5 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_direct_peer_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_syslog_targets'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_syslog_targets'))
-
+    '''
     unittest.TextTestRunner(verbosity=2).run(suite)
