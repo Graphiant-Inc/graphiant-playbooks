@@ -9,6 +9,10 @@
 # configs/vault_secrets.yml) — same pattern as site_to_site_vpn.yml.
 # If YAML sets localWebServerPasswordForce: true, supply password via vault (matching device key),
 # YAML localWebServerPassword, or module params — otherwise the task fails. Clear force after rotate.
+# vault_devices_lws_password and localWebServerPassword are declared no_log=True in the module
+# argument spec and the library masks localWebServerPassword in log output — no task-level no_log
+# needed on module tasks (would suppress --diff output). include_vars keeps no_log: true to guard
+# the raw vault file load.
 #
 # Usage:
 #   ansible-playbook playbooks/edge_services_management.yml --tags configure \
@@ -213,5 +217,4 @@
       when: >-
         (edge_lws_password | default('') | length > 0)
         or ((vault_devices_lws_password[edge_lws_device] | default('')) | length > 0)
-      no_log: true
       tags: ['configure_params_lws']

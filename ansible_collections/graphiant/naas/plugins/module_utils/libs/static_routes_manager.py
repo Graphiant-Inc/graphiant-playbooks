@@ -18,6 +18,7 @@ import json
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .base_manager import BaseManager
+from .device_config_common import new_apply_result
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
 
@@ -383,10 +384,8 @@ class StaticRoutesManager(BaseManager):
                 yield device_id, device_name, payload
 
     def apply_static_routes(self, config_yaml_file: str, operation: str) -> dict:
-        result: Dict[str, Any] = {"changed": False, "configured_devices": [], "skipped_devices": []}
-
+        result = new_apply_result()
         output_config: Dict[int, Dict[str, Any]] = {}
-        configured_devices: List[str] = []
 
         for device_id, device_name, payload in self._iter_device_payloads(config_yaml_file, operation=operation):
             gcs_device_info = self.gsdk.get_device_info(device_id)
@@ -402,18 +401,34 @@ class StaticRoutesManager(BaseManager):
                 result["skipped_devices"].append(device_name)
                 continue
 
+            device_dict = device_info_dict.get("device") if isinstance(device_info_dict, dict) else None
+            if device_dict is None:
+                device_dict = device_info_dict if isinstance(device_info_dict, dict) else {}
+            desired_segments = payload.get("edge", {}).get("segments", {})
+            before_segments: Dict[str, Any] = {}
+            for seg_name in desired_segments:
+                before_segments[seg_name] = {
+                    "staticRoutes": self._get_existing_static_routes_for_segment(device_dict, seg_name) or {}
+                }
+            result["diff_plan"].append(
+                {
+                    "device": device_name,
+                    "branch": "edge.segments",
+                    "before": {"segments": before_segments},
+                    "after": {"segments": desired_segments},
+                }
+            )
+
             output_config[device_id] = {"device_id": device_id, "payload": payload}
-            configured_devices.append(device_name)
+            result["configured_devices"].append(device_name)
 
         if not output_config:
-            # Everything already matched desired state
             return result
 
         LOG.info("[static-routes] Pushing payload for %d device(s)...", len(output_config))
         self.execute_concurrent_tasks(self.gsdk.put_device_config_raw, output_config)
 
         result["changed"] = True
-        result["configured_devices"] = configured_devices
         return result
 
     def configure(self, config_yaml_file: str) -> dict:

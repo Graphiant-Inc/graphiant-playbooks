@@ -220,7 +220,7 @@ from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils imp
     handle_graphiant_exception,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
-    ansible_diff_from_plan,
+    apply_module_diff,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs,
@@ -346,9 +346,7 @@ def main():
             skipped_devices=result.get("skipped_devices", []),
             details=details,
         )
-        diff_plan = details.get("diff_plan") or []
-        if getattr(module, "_diff", False) and diff_plan:
-            exit_payload["diff"] = ansible_diff_from_plan(diff_plan)
+        apply_module_diff(module, exit_payload, details)
         module.exit_json(**exit_payload)
 
     except Exception as e:

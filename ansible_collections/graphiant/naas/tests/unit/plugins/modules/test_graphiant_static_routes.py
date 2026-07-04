@@ -79,3 +79,66 @@ def test_main_unsupported_operation_fails_json(mock_ansible_module, mock_get_con
     assert "Unsupported" in err["msg"]
     assert err["operation"] == "not-a-valid-op"
     mod.exit_json.assert_not_called()
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_static_routes.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_static_routes.AnsibleModule")
+def test_main_diff_mode_sets_diff_key(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod._diff = True
+    mod.params = _base_params()
+    mock_ansible_module.return_value = mod
+
+    sr = MagicMock()
+    sr.configure.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "skipped_devices": [],
+        "diff_plan": [
+            {
+                "device": "edge-1-sdktest",
+                "branch": "edge.segments",
+                "before": {"segments": {"lan-1-test": {"staticRoutes": {}}}},
+                "after": {"segments": {"lan-1-test": {"staticRoutes": {"192.168.1.0/24": {"nextHop": "10.0.0.1"}}}}},
+            }
+        ],
+    }
+    gc = MagicMock()
+    gc.static_routes = sr
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_static_routes.main()
+
+    kwargs = mod.exit_json.call_args[1]
+    assert "diff" in kwargs
+    assert "edge-1-sdktest" in kwargs["diff"]["before"]
+    assert "edge-1-sdktest" in kwargs["diff"]["after"]
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_static_routes.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_static_routes.AnsibleModule")
+def test_main_no_diff_key_when_diff_mode_off(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod._diff = False
+    mod.params = _base_params()
+    mock_ansible_module.return_value = mod
+
+    sr = MagicMock()
+    sr.configure.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "skipped_devices": [],
+        "diff_plan": [
+            {"device": "edge-1-sdktest", "branch": "edge.segments", "before": {}, "after": {"x": 1}}
+        ],
+    }
+    gc = MagicMock()
+    gc.static_routes = sr
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_static_routes.main()
+
+    kwargs = mod.exit_json.call_args[1]
+    assert "diff" not in kwargs

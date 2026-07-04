@@ -11,6 +11,7 @@ This module manages device-level NTP objects under:
 from typing import Any, Dict, Iterator, List, Tuple
 
 from .base_manager import BaseManager
+from .device_config_common import new_apply_result
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
 
@@ -170,11 +171,32 @@ class NtpManager(BaseManager):
                 payload: Dict[str, Any] = {"edge": {"ntpGlobalObject": ntp_payload}}
                 yield device_id, device_name, payload
 
-    def apply_ntp(self, config_yaml_file: str, operation: str) -> dict:
-        result: Dict[str, Any] = {"changed": False, "configured_devices": [], "skipped_devices": []}
+    def _ntp_snapshot_from_device(self, device_info_dict: Any) -> Dict[str, Any]:
+        if isinstance(device_info_dict, dict) and isinstance(device_info_dict.get("device"), dict):
+            device_dict = device_info_dict.get("device") or {}
+        elif isinstance(device_info_dict, dict):
+            device_dict = device_info_dict
+        else:
+            device_dict = {}
+        existing_ntp_obj = device_dict.get("ntp")
+        try:
+            existing_ntp_dict: Any = (
+                existing_ntp_obj.to_dict()
+                if existing_ntp_obj is not None and hasattr(existing_ntp_obj, "to_dict")
+                else existing_ntp_obj
+            )
+        except Exception:
+            existing_ntp_dict = existing_ntp_obj
+        if isinstance(existing_ntp_dict, dict):
+            name = existing_ntp_dict.get("name")
+            domains = existing_ntp_dict.get("domains")
+            if name:
+                return {str(name): {"config": {"name": str(name), "domains": self._norm_domains(domains)}}}
+        return {}
 
+    def apply_ntp(self, config_yaml_file: str, operation: str) -> dict:
+        result = new_apply_result()
         output_config: Dict[int, Dict[str, Any]] = {}
-        configured_devices: List[str] = []
 
         for device_id, device_name, payload in self._iter_device_payloads(config_yaml_file, operation=operation):
             gcs_device_info = self.gsdk.get_device_info(device_id)
@@ -191,8 +213,14 @@ class NtpManager(BaseManager):
                 result["skipped_devices"].append(device_name)
                 continue
 
+            before = self._ntp_snapshot_from_device(device_info_dict)
+            after = dict(payload.get("edge", {}).get("ntpGlobalObject") or {})
+            result["diff_plan"].append(
+                {"device": device_name, "branch": "edge.ntpGlobalObject", "before": before, "after": after}
+            )
+
             output_config[device_id] = {"device_id": device_id, "payload": payload}
-            configured_devices.append(device_name)
+            result["configured_devices"].append(device_name)
 
         if not output_config:
             return result
@@ -201,7 +229,6 @@ class NtpManager(BaseManager):
         self.execute_concurrent_tasks(self.gsdk.put_device_config_raw, output_config)
 
         result["changed"] = True
-        result["configured_devices"] = configured_devices
         return result
 
     def configure(self, config_yaml_file: str) -> dict:

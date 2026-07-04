@@ -1,7 +1,11 @@
 ---
 # Site-to-Site VPN: preshared keys and BGP MD5 passwords come from Ansible Vault.
 # Use vault-password-file.sh (echoes ANSIBLE_VAULT_PASSPHRASE); no plaintext password file.
-# Secrets are loaded with include_vars and passed to the module in memory only.
+# Secrets are loaded with include_vars (no_log: true to guard the raw vault load) and passed
+# to the module via vault_site_to_site_vpn_keys / vault_bgp_md5_passwords, which are declared
+# no_log=True in the module argument spec. The Python library also masks presharedKey and
+# md5Password in log output. No task-level no_log is needed on module tasks — removing it
+# allows --diff to show before/after state when running with --check --diff.
 #
 # Prerequisites: Circuits, interfaces, and LAN segments (VRFs) must be configured on the
 # devices first.
@@ -77,7 +81,6 @@
         vault_bgp_md5_passwords: "{{ vault_bgp_md5_passwords | default({}) }}"
         detailed_logs: true
         state: present
-      no_log: true
       register: create_result
       tags: ['site_to_site_vpn', 'create']
 
@@ -94,7 +97,6 @@
         site_to_site_vpn_config_file: "sample_site_to_site_vpn.yaml"
         detailed_logs: true
         state: absent
-      no_log: true
       register: delete_result
       tags: ['site_to_site_vpn', 'delete']
 

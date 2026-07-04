@@ -111,6 +111,13 @@ attributes:
       with a C([check_mode]) prefix so you can see what configuration would be applied.
       The module does not perform state comparison, so V(changed) may be V(True) even
       when the configuration is already applied.
+  diff_mode:
+    description: Supports diff mode.
+    support: full
+    details: >
+      With C(--diff), the module shows per-device before/after snapshots of
+      C(edge.siteToSiteVpn) (secrets redacted) so you can see exactly which VPN
+      tunnels would be created, updated, or deleted.
 
 requirements:
   - python >= 3.7
@@ -202,6 +209,10 @@ site_to_site_vpn_config_file:
   type: str
   returned: always
   sample: "sample_site_to_site_vpn.yaml"
+diff:
+  description: Ansible C(--diff) payload showing per-device before/after Site-to-Site VPN state (secrets redacted).
+  type: dict
+  returned: when playbook uses C(--diff) and at least one device would be updated
 """
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
@@ -209,6 +220,9 @@ from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils imp
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
+)
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
+    apply_module_diff,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
 
@@ -322,12 +336,15 @@ def main():
             result_msg = result["result_msg"]
 
         # Return success
-        module.exit_json(
+        details = result.get("details") or {}
+        exit_payload = dict(
             changed=changed,
             msg=result_msg,
             operation=operation,
             site_to_site_vpn_config_file=site_to_site_vpn_config_file,
         )
+        apply_module_diff(module, exit_payload, details)
+        module.exit_json(**exit_payload)
 
     except Exception as e:
         error_msg = handle_graphiant_exception(e, operation)

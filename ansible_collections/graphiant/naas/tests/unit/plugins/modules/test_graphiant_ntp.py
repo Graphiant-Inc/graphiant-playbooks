@@ -108,3 +108,66 @@ def test_main_state_absent_defaults_to_deconfigure(mock_ansible_module, mock_get
     ntp.deconfigure.assert_called_once()
     mod.exit_json.assert_called_once()
     assert mod.exit_json.call_args[1]["operation"] == "deconfigure"
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_ntp.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_ntp.AnsibleModule")
+def test_main_diff_mode_sets_diff_key(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod._diff = True
+    mod.params = _base_params()
+    mock_ansible_module.return_value = mod
+
+    ntp = MagicMock()
+    ntp.configure.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "skipped_devices": [],
+        "diff_plan": [
+            {
+                "device": "edge-1-sdktest",
+                "branch": "edge.ntpGlobalObject",
+                "before": {},
+                "after": {"testing_local": {"config": {"name": "testing_local", "domains": ["time.google.com"]}}},
+            }
+        ],
+    }
+    gc = MagicMock()
+    gc.ntp = ntp
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_ntp.main()
+
+    kwargs = mod.exit_json.call_args[1]
+    assert "diff" in kwargs
+    assert "edge-1-sdktest" in kwargs["diff"]["before"]
+    assert "edge-1-sdktest" in kwargs["diff"]["after"]
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_ntp.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_ntp.AnsibleModule")
+def test_main_no_diff_key_when_diff_mode_off(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod._diff = False
+    mod.params = _base_params()
+    mock_ansible_module.return_value = mod
+
+    ntp = MagicMock()
+    ntp.configure.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "skipped_devices": [],
+        "diff_plan": [
+            {"device": "edge-1-sdktest", "branch": "edge.ntpGlobalObject", "before": {}, "after": {"x": 1}}
+        ],
+    }
+    gc = MagicMock()
+    gc.ntp = ntp
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_ntp.main()
+
+    kwargs = mod.exit_json.call_args[1]
+    assert "diff" not in kwargs

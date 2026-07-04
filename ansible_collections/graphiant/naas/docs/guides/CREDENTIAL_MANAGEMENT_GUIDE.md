@@ -165,7 +165,12 @@ Keys must match portal hostnames in `sample_edge_services.yaml`. Without `localW
 
 ## Logging
 
-Secrets are already masked in Ansible: sensitive module options use ``no_log``, related playbook tasks use ``no_log``, and vault encrypts files at rest—playbook output shows ``********`` instead of plaintext.
+Secrets are already masked in Ansible through two complementary mechanisms:
+
+1. **Module-level argument masking** — sensitive parameters (`vault_site_to_site_vpn_keys`, `vault_bgp_md5_passwords`, `vault_devices_macsec_psk`, `vault_devices_lws_password`, `localWebServerPassword`, etc.) are declared with ``no_log=True`` in the module argument spec. Ansible censors their values in all task output automatically. Module tasks therefore do **not** need ``no_log: true`` at the task level — doing so would suppress useful output such as ``--diff`` before/after blocks.
+2. **Library-level log masking** — the Python library redacts API field names listed in ``_SENSITIVE_LOG_KEYS`` (``localWebServerPassword``, ``presharedKey``, ``md5Password``) to ``********`` in ``detailed_logs`` output and in ``logs/log_<timestamp>.log``.
+
+The only place ``no_log: true`` is kept in playbooks is on ``include_vars`` tasks that load raw Ansible Vault files — without it, running with ``-vvv`` would print the plaintext vault content before any module masking applies. Vault encrypts files at rest; ``include_vars`` with ``no_log: true`` protects the in-memory load step.
 
 With ``detailed_logs: true``, the collection also writes device config payloads to ``logs/log_<timestamp>.log`` under the playbook working directory (for example ``playbooks/logs/``). That path is outside Ansible (library logging), so keep secrets out of those files by listing API field names in ``_SENSITIVE_LOG_KEYS`` in ``plugins/module_utils/libs/device_config_common.py``. ``gcsdk_client`` redacts those keys (currently ``localWebServerPassword``, ``presharedKey``, ``md5Password``) to ``********`` in log output only. Add new secret API keys there when you introduce sensitive config fields. Do not commit log files.
 

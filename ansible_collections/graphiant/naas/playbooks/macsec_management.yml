@@ -6,6 +6,9 @@
 #
 # CAK: omit from sample_macsec.yaml in production. Set ckn on each key in YAML; load
 # vault_devices_macsec_psk (device → interface → ckn → cak) from configs/vault_secrets.yml.
+# vault_devices_macsec_psk is declared no_log=True in the module argument spec and the library
+# masks cak/presharedKey in log output — no task-level no_log needed on module tasks (would
+# suppress --diff output). include_vars keeps no_log: true to guard the raw vault file load.
 #
 # Vault setup (no plaintext password file; vault-password-file.sh echoes ANSIBLE_VAULT_PASSPHRASE):
 #   1. cp configs/vault_secrets.yml.example configs/vault_secrets.yml
@@ -129,7 +132,6 @@
       loop: "{{ macsec_module_param_examples }}"
       loop_control:
         label: "{{ item.device }}"
-      no_log: true
       tags: ['configure_params_examples']
 
     - name: Query MACsec monitoring status

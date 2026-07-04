@@ -29,10 +29,10 @@
 
     - name: Display configure result message (includes detailed logs)
       ansible.builtin.debug:
-        msg:
-          - "{{ configure_result.msg }}"
-          - "configured_devices={{ configure_result.configured_devices | default([]) }}"
-          - "skipped_devices={{ configure_result.skipped_devices | default([]) }}"
+        msg: |
+          {{ configure_result.msg }}
+          configured_devices={{ configure_result.configured_devices | default([]) }}
+          skipped_devices={{ configure_result.skipped_devices | default([]) }}
       when: configure_result is defined and configure_result.msg is defined
       tags: ['configure']
 
@@ -48,9 +48,9 @@
 
     - name: Display deconfigure result message (includes detailed logs)
       ansible.builtin.debug:
-        msg:
-          - "{{ deconfigure_result.msg }}"
-          - "configured_devices={{ deconfigure_result.configured_devices | default([]) }}"
-          - "skipped_devices={{ deconfigure_result.skipped_devices | default([]) }}"
+        msg: |
+          {{ deconfigure_result.msg }}
+          configured_devices={{ deconfigure_result.configured_devices | default([]) }}
+          skipped_devices={{ deconfigure_result.skipped_devices | default([]) }}
       when: deconfigure_result is defined and deconfigure_result.msg is defined
       tags: ['deconfigure']

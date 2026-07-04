@@ -472,7 +472,7 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 **Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_traffic_policy`, and `graphiant_security_policy` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, `graphiant_traffic_policy`, `graphiant_security_policy` and `graphiant_data_exchange` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmail` drift on existing customers with a hint to use `update_customers`.
+**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_data_exchange`, `graphiant_ntp`, `graphiant_static_routes`, and `graphiant_site_to_site_vpn` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmail` drift on existing customers with a hint to use `update_customers`. For `graphiant_site_to_site_vpn`, secrets (`presharedKey`, `md5Password`) are redacted in diff output.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -485,6 +485,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_mana
 ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 # CAK via vault required for configure tag; use configure_without_vault only with plaintext cak in YAML (dev/local)
 
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 # Data Exchange: check + diff to preview creates and detect adminEmail drift on existing customers
 ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
 # Data Exchange: validate accept_invitation before applying (provide matches_file if service not visible via API)

@@ -10,6 +10,7 @@ import pytest
 
 from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (
     ansible_diff_from_plan,
+    apply_module_diff,
     coerce_str,
     device_not_found_message,
     fetch_device_by_name,
@@ -108,3 +109,48 @@ def test_format_config_payload_for_log() -> None:
     text = format_config_payload_for_log({"localWebServerPassword": "ReplaceMe1"})
     assert "ReplaceMe1" not in text
     assert '"localWebServerPassword": "********"' in text
+
+
+def test_apply_module_diff_sets_diff_when_diff_mode_on() -> None:
+    module = MagicMock()
+    module._diff = True
+    exit_payload: dict = {}
+    details = {
+        "diff_plan": [
+            {
+                "device": "edge-1-sdktest",
+                "branch": "edge.ntpGlobalObject",
+                "before": {},
+                "after": {"testing_local": {"config": {"name": "testing_local", "domains": ["time.google.com"]}}},
+            }
+        ]
+    }
+    apply_module_diff(module, exit_payload, details)
+    assert "diff" in exit_payload
+    assert "edge-1-sdktest" in exit_payload["diff"]["before"]
+    assert "edge-1-sdktest" in exit_payload["diff"]["after"]
+
+
+def test_apply_module_diff_no_diff_when_diff_mode_off() -> None:
+    module = MagicMock()
+    module._diff = False
+    exit_payload: dict = {}
+    details = {"diff_plan": [{"device": "edge-1", "branch": "edge", "before": {}, "after": {"x": 1}}]}
+    apply_module_diff(module, exit_payload, details)
+    assert "diff" not in exit_payload
+
+
+def test_apply_module_diff_no_diff_when_plan_empty() -> None:
+    module = MagicMock()
+    module._diff = True
+    exit_payload: dict = {}
+    apply_module_diff(module, exit_payload, {"diff_plan": []})
+    assert "diff" not in exit_payload
+
+
+def test_apply_module_diff_no_diff_when_details_empty() -> None:
+    module = MagicMock()
+    module._diff = True
+    exit_payload: dict = {}
+    apply_module_diff(module, exit_payload, {})
+    assert "diff" not in exit_payload

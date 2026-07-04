@@ -64,6 +64,12 @@ attributes:
       In check mode, no configuration is pushed to devices, but the module still reads current
       device state to determine whether changes would be made. Payloads that would be pushed are
       logged with a C([check_mode]) prefix.
+  diff_mode:
+    description: Supports diff mode.
+    support: full
+    details: >
+      With C(--diff), the module shows per-device before/after snapshots of C(edge.ntpGlobalObject)
+      so you can see exactly what NTP objects would change.
 requirements:
   - python >= 3.7
   - graphiant-sdk >= 25.12.1
@@ -123,6 +129,10 @@ skipped_devices:
   type: list
   elements: str
   returned: when supported
+diff:
+  description: Ansible C(--diff) payload showing per-device before/after NTP state.
+  type: dict
+  returned: when playbook uses C(--diff) and at least one device would be updated
 """
 
 from ansible.module_utils.basic import AnsibleModule  # noqa: E402
@@ -132,6 +142,9 @@ from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils imp
     graphiant_portal_auth_argument_spec,
     get_graphiant_connection,
     handle_graphiant_exception,
+)
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
+    apply_module_diff,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import (  # noqa: E402
     capture_library_logs,
@@ -245,15 +258,18 @@ def main():
                 module,
                 f"graphiant_ntp: success changed={changed!r} result_msg_preview={preview!r}",
             )
-        module.exit_json(
+        details = result.get("details") or {}
+        exit_payload = dict(
             changed=changed,
             msg=result_msg,
             operation=operation,
             ntp_config_file=cfg_file,
             configured_devices=result.get("configured_devices", []),
             skipped_devices=result.get("skipped_devices", []),
-            details=result.get("details", {}),
+            details=details,
         )
+        apply_module_diff(module, exit_payload, details)
+        module.exit_json(**exit_payload)
 
     except Exception as e:
         if module.params.get("detailed_logs"):

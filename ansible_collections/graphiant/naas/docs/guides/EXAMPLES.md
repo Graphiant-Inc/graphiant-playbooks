@@ -44,7 +44,7 @@ Config file paths are resolved in the following order:
 
 Similarly, template paths use `GRAPHIANT_TEMPLATES_PATH` environment variable.
 
-Check `logs/log_<date>.log` under the playbook working directory (for example `playbooks/logs/`). Secrets are already masked in Ansible output (`no_log` on modules and tasks, plus vault). Outside Ansible, collection logs mask API keys in `_SENSITIVE_LOG_KEYS` (`device_config_common.py`)—see [CREDENTIAL_MANAGEMENT_GUIDE.md](CREDENTIAL_MANAGEMENT_GUIDE.md#logging). Do not commit log files.
+Check `logs/log_<date>.log` under the playbook working directory (for example `playbooks/logs/`). Secrets are masked in Ansible output via `no_log=True` on sensitive module arguments and by the library's `_SENSITIVE_LOG_KEYS` masking in `device_config_common.py` — no task-level `no_log` is needed on module tasks. The `include_vars` task that loads Ansible Vault files keeps `no_log: true` to prevent raw vault content from appearing in verbose output. See [CREDENTIAL_MANAGEMENT_GUIDE.md](CREDENTIAL_MANAGEMENT_GUIDE.md#logging). Do not commit log files.
 
 
 ## Device system settings (name, region, site)
@@ -134,7 +134,7 @@ Use `configs/sample_edge_services.yaml`. DHCP subnet API keys combine interface 
 - **Vault (recommended):** keys = portal hostnames (e.g. `edge-3-sdktest` in `vault_secrets.yml` and YAML).
 - **`localWebServerPasswordForce: true`:** always push when a password is available; task **fails** if no password from YAML, vault, or module params. Clear force after a successful rotate—the portal stores a hash, so force re-pushes every run.
 
-Use `no_log: true` on tasks that pass passwords.
+Sensitive arguments (`vault_devices_lws_password`, `localWebServerPassword`) are declared `no_log=True` in the module and masked in library logs — no additional `no_log` needed on the task itself.
 
 #### Vault setup
 
@@ -342,7 +342,6 @@ LWS via module params or vault (omit `localWebServerPasswordForce` for first-tim
     localWebServerPasswordForce: true  # remove or set false after successful rotate
     vault_devices_lws_password: "{{ vault_devices_lws_password | default({}) }}"
     state: present
-  no_log: true
 ```
 
 There is no `deconfigure` operation for the module as a whole. To revert settings, use module parameters per device: set `dns.mode` to `DNSModeDynamic`, set listed `lldp` interfaces to `false`, use `dhcpSubnets` with `state: absent` for each pool, and set each `dpiApplications` map key you want removed to `state: absent` (sends `application: null`). See `tests/test.py` `_edge_services_deconfigure_module_params` and `test_deconfigure_edge_services`.
@@ -987,7 +986,7 @@ Configure-only (`state: present` at module level). Requires a **software image w
 
 **Prerequisites:** main LAN interfaces must exist (`interface_management.yml --tags lan`). For MACsec on a LAG, configure the LAG first (`lag_interface_management.yml --tags configure`).
 
-**CAK (recommended):** omit `cak` from YAML; set `ckn` on each key and pass `vault_devices_macsec_psk` (device → interface → ckn → cak) via Ansible Vault. Plaintext `cak` in YAML or module params is for dev/local only. Diffs redact CAK and show `cakConfigured` booleans. Use `no_log: true` on tasks that pass secrets.
+**CAK (recommended):** omit `cak` from YAML; set `ckn` on each key and pass `vault_devices_macsec_psk` (device → interface → ckn → cak) via Ansible Vault. Plaintext `cak` in YAML or module params is for dev/local only. Diffs redact CAK and show `cakConfigured` booleans. Sensitive arguments (`vault_devices_macsec_psk`) are declared `no_log=True` in the module and masked in library logs.
 
 Partial updates merge with portal state (disable with `enabled: false`, priority-only, PSK rotation, SAK-only). With `--check`, nothing is pushed; use `--diff` for `details.diff_plan` and Ansible `diff`.
 
@@ -1050,7 +1049,6 @@ From YAML **with vault**:
     detailed_logs: true
     state: present
   register: configure_result
-  no_log: true
 
 - name: Display configure result
   ansible.builtin.debug:
@@ -1085,7 +1083,6 @@ From YAML **with vault**:
           replayProtectionWindowSize: 64
           rekeyInterval: 3600
     state: present
-  no_log: true
 ```
 
 **Disable**, **rotate keys**, and **SAK-only** updates:
@@ -1113,7 +1110,6 @@ From YAML **with vault**:
           - nickname: key1
             state: absent
     state: present
-  no_log: true
 
 - name: Update SAK replay window only
   graphiant.naas.graphiant_macsec:
@@ -2394,8 +2390,8 @@ ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.y
 
 ```bash
 ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 ```
 
 The playbook configures VPN profiles, then creates the Site-to-Site VPN (see `site_to_site_vpn.yml`). Use `vault_site_to_site_vpn_keys` and `vault_bgp_md5_passwords` from vars loaded via `include_vars` from the encrypted `vault_secrets.yml`.
@@ -2404,6 +2400,7 @@ The playbook configures VPN profiles, then creates the Site-to-Site VPN (see `si
 
 ```bash
 ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag delete --check --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag delete --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag delete --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
 ```
 
@@ -2431,8 +2428,10 @@ You can also use the bundled playbook:
 
 ```bash
 ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure
 ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure --check --diff
 ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure
 ```
 
@@ -2478,6 +2477,28 @@ Deconfigure deletes only the objects listed in the YAML (per device) by setting 
 
 Static routes are managed under `edge.segments.<segment>.staticRoutes`.
 See `configs/sample_static_route.yaml`.
+
+**Prerequisites:** The following must be configured before running `static_routes_management.yml`:
+
+- **LAN segments** — run `lan_segments_management.yml --tag configure` first; static routes are attached to named LAN segments.
+- **LAN interfaces** — run `interface_management.yml --tag lan` first; LAN interfaces must exist on the segments before routes can be pushed.
+- **WAN circuits/interfaces** (for `circuit` next hops) — run `interface_management.yml --tag wan` first; the API rejects routes that reference a circuit that does not exist on the device.
+- **Site-to-Site VPN tunnels** (for `thirdPartyIpsecTunnel` next hops) — run `site_to_site_vpn.yml --tag create` first; tunnel interfaces must exist before routes that use them as the outgoing interface.
+
+**Scope of deconfigure:** The `deconfigure` operation removes only the prefixes explicitly listed in the YAML file (per LAN segment). Routes added to the same segments by other modules (for example, `0.0.0.0/0` routes injected by the Site-to-Site VPN module's static routing config) are **not** touched. To remove those, use the respective module (`site_to_site_vpn.yml --tag delete`) or remove them manually via the portal.
+
+With `--check`, nothing is pushed; would-be payloads are logged with a `[check_mode]` prefix. With `--diff`, pending changes appear in Ansible `diff` (`before` / `after`) and `details.diff_plan`.
+
+### Playbook
+
+```bash
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags deconfigure --check
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags deconfigure --check --diff
+ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags deconfigure
+```
 
 ### Configure static routes
 
@@ -2677,7 +2698,7 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_da
 
 **Secrets setup** (for BGP MD5 password and custom PSKs):
 
-Secrets are passed to the module in memory only (`no_log: true`) — never written to disk.
+Secrets are passed to the module in memory only — never written to disk. Sensitive arguments are declared `no_log=True` in the module and masked in library logs.
 Use any secrets store: fetch the values and pass them as module params. See
 `configs/vault_secrets.yml.example` for the expected dict structure.
 

@@ -4,8 +4,9 @@
 # gateway deployment and VPN configuration. Idempotent: already-linked consumers are skipped.
 #
 # Secrets (BGP MD5 password, custom PSKs) are never written to disk — loaded via include_vars
-# and passed to the module with no_log: true. Any secrets store can be used: for Ansible Vault,
-# run with --vault-password-file; for other stores, pre-fetch and pass as extra vars.
+# and passed to the module. Sensitive arguments are declared no_log=True in the module and masked
+# in library logs. Any secrets store can be used: for Ansible Vault, run with --vault-password-file;
+# for other stores, pre-fetch and pass as extra vars.
 # See configs/vault_secrets.yml.example for the expected dict structure.
 #
 # Usage:
@@ -76,7 +77,6 @@
         vault_data_exchange_bgp_md5_passwords: "{{ vault_data_exchange_bgp_md5_passwords | default({}) }}"
         vault_data_exchange_psk: "{{ vault_data_exchange_psk | default({}) }}"
         detailed_logs: true
-      no_log: true
       register: accept_result
 
     - name: Display acceptance result
