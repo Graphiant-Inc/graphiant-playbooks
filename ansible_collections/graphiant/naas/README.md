@@ -84,7 +84,41 @@ This collection provides Ansible modules to automate:
 
 ## Installation
 
+### Windows (WSL)
+
+Ansible does not run natively on Windows. Use **Windows Subsystem for Linux (WSL)** to get a full Linux environment, then follow the standard installation steps.
+
+**Step 1 — Install WSL**
+
+Open PowerShell as Administrator and run:
+```powershell
+wsl --install
+```
+This installs **Ubuntu** as the default distribution. Restart when prompted. After reboot, open the Ubuntu terminal and create your username and password.
+More info: [Install WSL | Microsoft Learn](https://learn.microsoft.com/en-us/windows/wsl/install)
+
+**Step 2 — Update Linux and install Python**
+
+In your WSL Ubuntu terminal:
+```bash
+sudo apt update && sudo apt upgrade -y && sudo apt install python3 python3-pip python3-venv -y
+```
+
+**Step 3 — Create a project directory**
+
+```bash
+mkdir ~/ansible-workspace && cd ~/ansible-workspace
+```
+
+**Step 4 — Install the collection**
+
+Continue with the **[From Source](#from-source)** or **[From Ansible Galaxy](#from-ansible-galaxy)** steps below inside the WSL terminal.
+
+---
+
 ### From Source
+
+**Option A — Clone with Git:**
 
 ```bash
 git clone https://github.com/Graphiant-Inc/graphiant-playbooks.git
@@ -101,6 +135,20 @@ pip install -r ansible_collections/graphiant/naas/requirements-ee.txt
 pip install ansible-core
 ansible-galaxy collection install ansible_collections/graphiant/naas/ --force
 ```
+
+**Option B — Download ZIP (no Git required):**
+
+1. Open [https://github.com/Graphiant-Inc/graphiant-playbooks](https://github.com/Graphiant-Inc/graphiant-playbooks) in your browser.
+2. Click the **Code** dropdown → **Download ZIP**.
+3. Unzip the downloaded file and enter the directory:
+
+```bash
+unzip graphiant-playbooks-main.zip
+cd graphiant-playbooks-main
+```
+
+Then continue with the same steps as Option A (create a virtual environment, install dependencies, install the collection).
+
 
 ### From Ansible Galaxy
 
@@ -477,21 +525,21 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 **Example: run playbooks in check mode (dry run)**
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
+ansible-playbook playbooks/interface_management.yml --check
+ansible-playbook playbooks/complete_network_setup.yml --check
+ansible-playbook playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
+ansible-playbook playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
 # LWS via vault: use --tags configure and --vault-password-file (see edge_services_management.yml)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file configs/vault-password-file.sh
 # CAK via vault required for configure tag; use configure_without_vault only with plaintext cak in YAML (dev/local)
 
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/ntp_management.yml --tags configure --check --diff
+ansible-playbook playbooks/static_routes_management.yml --tags configure --check --diff
+ansible-playbook playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file configs/vault-password-file.sh
 # Data Exchange: check + diff to preview creates and detect adminEmail drift on existing customers
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
+ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
 # Data Exchange: validate accept_invitation before applying (provide matches_file if service not visible via API)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check \
+ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml --check \
   -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
 ```
 

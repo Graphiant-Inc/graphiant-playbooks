@@ -6,7 +6,17 @@ For module reference, see the [Modules documentation](https://github.com/Graphia
 
 ## Quick Start
 
-Set up environment variables before running playbooks:
+### Working directory
+
+All examples in this guide assume you have changed into the collection directory first:
+
+```bash
+cd ansible_collections/graphiant/naas
+```
+
+Running playbooks from this directory keeps paths short (`playbooks/<name>`) and ensures logs are written to `playbooks/logs/` relative to where you run the command.
+
+### Environment variables
 
 ```bash
 export GRAPHIANT_HOST="https://api.graphiant.com"
@@ -15,9 +25,15 @@ export GRAPHIANT_PASSWORD="your_password"
 
 # Alternative (SSO): graphiant login, then source ~/.graphiant/env.sh for GRAPHIANT_ACCESS_TOKEN
 
+# Point to the configs folder so the collection resolves config files automatically
+# Run this after cd-ing into ansible_collections/graphiant/naas — $(pwd) expands to the correct absolute path
+export GRAPHIANT_CONFIGS_PATH=$(pwd)/configs
+
 # Optional: Enable debug callback for readable detailed_logs output (removes `\n` characters)
 export ANSIBLE_STDOUT_CALLBACK=debug
 ```
+
+Setting `GRAPHIANT_CONFIGS_PATH` lets you pass a bare filename like `sample_interface_config.yaml` to `config_file` parameters instead of an absolute path — the collection resolves it against the configs folder automatically.
 
 All modules support `detailed_logs` parameter:
 - `true`: Show detailed library logs in task output
@@ -60,10 +76,10 @@ Use `configs/sample_device_system.yaml`; optional top-level `sites` creates site
 ### Playbook
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml
-ansible-playbook ansible_collections/graphiant/naas/playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --diff
+ansible-playbook playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check
+ansible-playbook playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --check --diff
+ansible-playbook playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml
+ansible-playbook playbooks/device_system_management.yml --tag configure -e config_file=sample_device_system.yaml --diff
 ```
 
 ### Module task
@@ -144,7 +160,7 @@ Required when you configure local web server passwords via Ansible Vault (`vault
 cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example ansible_collections/graphiant/naas/configs/vault_secrets.yml
 # Edit vault_devices_lws_password (keys = portal device hostnames), then:
 export ANSIBLE_VAULT_PASSPHRASE="*************"
-ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file configs/vault-password-file.sh
 ```
 
 ### Playbook
@@ -154,22 +170,22 @@ Tags: `configure` (YAML + vault for LWS), `configure_without_vault` (YAML only, 
 **With vault** (`configure`) — **required** for LWS passwords supplied via Ansible Vault. Loads `vault_secrets.yml`, passes `vault_devices_lws_password` to the module, and requires `--vault-password-file` (e.g. when YAML sets `localWebServerPasswordForce: true` and the password is in vault, not in the config file):
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure -e config_file=sample_edge_services.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure -e config_file=sample_edge_services.yaml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/edge_services_management.yml --tags configure -e config_file=sample_edge_services.yaml --check --diff --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/edge_services_management.yml --tags configure -e config_file=sample_edge_services.yaml --vault-password-file configs/vault-password-file.sh
 ```
 
 **Without vault** (`configure_without_vault`) — use when LWS is **not** sourced from Ansible Vault. Skips vault `include_vars`; `vault_devices_lws_password` stays empty. Suitable for DNS, LLDP, and DHCP only. For LWS without vault, set `localWebServerPassword` literally in YAML or pass it as a module parameter; omit `localWebServerPasswordForce` or set it to `false` (force without YAML, vault, or module params **fails**):
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml
+ansible-playbook playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml --check --diff
+ansible-playbook playbooks/edge_services_management.yml --tags configure_without_vault -e config_file=sample_edge_services.yaml
 ```
 
 **Module-parameter examples** (`configure_params_lws` requires vault when the password comes from `vault_devices_lws_password`):
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_params_examples
-ansible-playbook ansible_collections/graphiant/naas/playbooks/edge_services_management.yml --tags configure_params_lws -e edge_lws_device=edge-3-sdktest --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/edge_services_management.yml --tags configure_params_examples
+ansible-playbook playbooks/edge_services_management.yml --tags configure_params_lws -e edge_lws_device=edge-3-sdktest --vault-password-file configs/vault-password-file.sh
 ```
 
 ### Module task
@@ -355,8 +371,8 @@ Check mode (`--check`) is supported for interface operations: no configuration i
 #### Configure WAN interfaces and circuits (including WAN static routes)
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag wan --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag wan
+ansible-playbook playbooks/interface_management.yml --tag wan --check
+ansible-playbook playbooks/interface_management.yml --tag wan
 ```
 
 ```yaml
@@ -383,8 +399,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_manageme
 **Prerequisite:** Configure WAN circuits/interfaces first.
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag static_routes --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag static_routes
+ansible-playbook playbooks/circuit_management.yml --tag static_routes --check
+ansible-playbook playbooks/circuit_management.yml --tag static_routes
 ```
 
 ```yaml
@@ -409,8 +425,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management
 #### Deconfigure WAN circuit static routes
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag deconfigure
+ansible-playbook playbooks/circuit_management.yml --tag deconfigure --check
+ansible-playbook playbooks/circuit_management.yml --tag deconfigure
 ```
 
 ```yaml
@@ -442,10 +458,10 @@ The operation `deconfigure_wan_circuits_interfaces` is a two-step process:
 2. **Stage 2:** WAN interfaces are deconfigured (set to default LAN). When a WAN interface is deconfigured, the associated circuit is automatically removed.
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/circuit_management.yml --tag deconfigure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_wan --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_wan
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_wan --check
+ansible-playbook playbooks/circuit_management.yml --tag deconfigure
+ansible-playbook playbooks/interface_management.yml --tag deconfigure_wan --check
+ansible-playbook playbooks/interface_management.yml --tag deconfigure_wan
+ansible-playbook playbooks/interface_management.yml --tag deconfigure_wan --check
 ```
 
 ```yaml
@@ -470,8 +486,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_manageme
 #### Configure LAN interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag lan --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag lan
+ansible-playbook playbooks/interface_management.yml --tag lan --check
+ansible-playbook playbooks/interface_management.yml --tag lan
 ```
 
 ```yaml
@@ -495,9 +511,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_manageme
 #### Deconfigure LAN interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_lan --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_lan
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag deconfigure_lan --check
+ansible-playbook playbooks/interface_management.yml --tag deconfigure_lan --check
+ansible-playbook playbooks/interface_management.yml --tag deconfigure_lan
+ansible-playbook playbooks/interface_management.yml --tag deconfigure_lan --check
 ```
 
 ```yaml
@@ -521,8 +537,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_manageme
 #### Configure LAN and WAN interfaces together
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/interface_management.yml --tag configure
+ansible-playbook playbooks/interface_management.yml --tag configure --check
+ansible-playbook playbooks/interface_management.yml --tag configure
 ```
 
 ```yaml
@@ -568,9 +584,9 @@ Sample configs: `configs/sample_backbone_config.yaml` (full Core config covering
 #### Full Core configure / deconfigure (orchestrated)
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure
+ansible-playbook playbooks/backbone_management.yml --tag configure --check
+ansible-playbook playbooks/backbone_management.yml --tag configure
+ansible-playbook playbooks/backbone_management.yml --tag deconfigure
 ```
 
 ```yaml
@@ -598,8 +614,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_managemen
 #### Core-to-core interfaces (loopback + core_to_core_link with optional VLANs)
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_core_to_core_interfaces
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_core_to_core_interfaces
+ansible-playbook playbooks/backbone_management.yml --tag configure_core_to_core_interfaces
+ansible-playbook playbooks/backbone_management.yml --tag deconfigure_core_to_core_interfaces
 ```
 
 ```yaml
@@ -626,8 +642,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_managemen
 #### Core-to-core IPsec tunnels
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_core_to_core_tunnel_interfaces
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_core_to_core_tunnel_interfaces
+ansible-playbook playbooks/backbone_management.yml --tag configure_core_to_core_tunnel_interfaces
+ansible-playbook playbooks/backbone_management.yml --tag deconfigure_core_to_core_tunnel_interfaces
 ```
 
 ```yaml
@@ -655,8 +671,8 @@ The `tunnel_underlay` interface is pre-pushed into an ISP VRF before the tunnel 
 #### WAN ISP circuits
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_wan_circuits
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_wan_circuits
+ansible-playbook playbooks/backbone_management.yml --tag configure_wan_circuits
+ansible-playbook playbooks/backbone_management.yml --tag deconfigure_wan_circuits
 ```
 
 ```yaml
@@ -684,8 +700,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_managemen
 #### Direct-peer interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_direct_peer_interfaces
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_direct_peer_interfaces
+ansible-playbook playbooks/backbone_management.yml --tag configure_direct_peer_interfaces
+ansible-playbook playbooks/backbone_management.yml --tag deconfigure_direct_peer_interfaces
 ```
 
 ```yaml
@@ -711,8 +727,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_managemen
 #### Per-VRF syslog targets
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag configure_syslog_targets
-ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_management.yml --tag deconfigure_syslog_targets
+ansible-playbook playbooks/backbone_management.yml --tag configure_syslog_targets
+ansible-playbook playbooks/backbone_management.yml --tag deconfigure_syslog_targets
 ```
 
 ```yaml
@@ -740,8 +756,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/backbone_managemen
 #### Configure VRRP on interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag configure
+ansible-playbook playbooks/vrrp_interface_management.yml --tag configure --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag configure
 ```
 
 ```yaml
@@ -765,9 +781,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_man
 #### Disable VRRP on interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag deconfigure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure
+ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure --check
 ```
 
 ```yaml
@@ -791,9 +807,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_man
 #### Enable existing VRRP configuration on interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag enable --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag enable
-ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_management.yml --tag enable --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag enable --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag enable
+ansible-playbook playbooks/vrrp_interface_management.yml --tag enable --check
 ```
 
 ```yaml
@@ -818,8 +834,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/vrrp_interface_man
 #### Configure LAG interfaces and subinterfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag configure
+ansible-playbook playbooks/lag_interface_management.yml --tag configure --check
+ansible-playbook playbooks/lag_interface_management.yml --tag configure
 ```
 
 ```yaml
@@ -843,9 +859,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_mana
 #### Add LAG members
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag add_lag_members --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag add_lag_members
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag add_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members
+ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check
 ```
 
 ```yaml
@@ -868,10 +884,10 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_mana
 #### Remove LAG members
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag add_lag_members --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag remove_lag_members --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag remove_lag_members
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag remove_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members
+ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members --check
 ```
 
 ```yaml
@@ -894,9 +910,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_mana
 #### Update LACP configuration on LAG interfaces
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag update_lacp_configs --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag update_lacp_configs
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag update_lacp_configs --check
+ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs --check
+ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs
+ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs --check
 ```
 
 ```yaml
@@ -921,11 +937,11 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_mana
 Idempotent: skips if LAG or subinterface does not exist.
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag configure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
+ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
+ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces
+ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
+ansible-playbook playbooks/lag_interface_management.yml --tag configure
+ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
 ```
 
 ```yaml
@@ -948,9 +964,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_mana
 #### Deconfigure LAG interfaces (delete subinterfaces, then delete LAG)
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag deconfigure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lag_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure
+ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure --check
 ```
 
 ```yaml
@@ -1002,7 +1018,7 @@ Required when CAK is supplied via Ansible Vault (`vault_devices_macsec_psk` in `
 cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example ansible_collections/graphiant/naas/configs/vault_secrets.yml
 # Edit vault_devices_macsec_psk (device → interface → ckn → cak), then:
 export ANSIBLE_VAULT_PASSPHRASE="*************"
-ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file configs/vault-password-file.sh
 ```
 
 ### Playbook
@@ -1012,22 +1028,22 @@ Tags: `configure` (YAML + vault for CAK), `configure_without_vault` (YAML only, 
 **With vault** (`configure`):
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --check --diff --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/macsec_management.yml --tags configure -e config_file=sample_macsec.yaml --vault-password-file configs/vault-password-file.sh
 ```
 
 **Without vault** (`configure_without_vault`) — only when each key has plaintext `cak` in the config YAML (dev/local):
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure_without_vault -e config_file=sample_macsec.yaml --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure_without_vault -e config_file=sample_macsec.yaml
+ansible-playbook playbooks/macsec_management.yml --tags configure_without_vault -e config_file=sample_macsec.yaml --check --diff
+ansible-playbook playbooks/macsec_management.yml --tags configure_without_vault -e config_file=sample_macsec.yaml
 ```
 
 **Module-parameter examples** and **monitoring status**:
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags configure_params_examples --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/macsec_management.yml --tags status -e macsec_device=edge-1-sdktest
+ansible-playbook playbooks/macsec_management.yml --tags configure_params_examples --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/macsec_management.yml --tags status -e macsec_device=edge-1-sdktest
 ```
 
 ### Module task
@@ -1174,19 +1190,19 @@ Tags: `create_prefix_port_lists`, `delete_prefix_port_lists`, `create_prefix_lis
 
 ```bash
 # Create prefix and port lists (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists --check
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists --check --diff
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags create_prefix_port_lists
 
 # Delete prefix and port lists listed in the YAML
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_prefix_port_lists --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_prefix_port_lists
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags delete_prefix_port_lists --check
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags delete_prefix_port_lists
 
 # Prefix lists or port lists only
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_prefix_lists
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_prefix_lists
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags create_port_lists
-ansible-playbook ansible_collections/graphiant/naas/playbooks/prefix_port_list_mangement.yml --tags delete_port_lists
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags create_prefix_lists
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags delete_prefix_lists
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags create_port_lists
+ansible-playbook playbooks/prefix_port_list_mangement.yml --tags delete_port_lists
 ```
 
 ### Module task
@@ -1310,18 +1326,18 @@ Tags: `configure` (configure rulesets + attach to LAN segments), `deconfigure` (
 
 ```bash
 # Configure (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags configure
+ansible-playbook playbooks/traffic_policies_management.yml --tags configure --check
+ansible-playbook playbooks/traffic_policies_management.yml --tags configure --check --diff
+ansible-playbook playbooks/traffic_policies_management.yml --tags configure
 
 # Deconfigure (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags deconfigure
+ansible-playbook playbooks/traffic_policies_management.yml --tags deconfigure --check
+ansible-playbook playbooks/traffic_policies_management.yml --tags deconfigure --check --diff
+ansible-playbook playbooks/traffic_policies_management.yml --tags deconfigure
 
 # Attach / detach LAN segments only
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags attach_to_lan_segments
-ansible-playbook ansible_collections/graphiant/naas/playbooks/traffic_policies_management.yml --tags detach_from_lan_segments
+ansible-playbook playbooks/traffic_policies_management.yml --tags attach_to_lan_segments
+ansible-playbook playbooks/traffic_policies_management.yml --tags detach_from_lan_segments
 ```
 
 ### Module task
@@ -1573,18 +1589,18 @@ Tags: `configure` (configure rulesets + attach zone pairs), `deconfigure` (detac
 
 ```bash
 # Configure (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags configure
+ansible-playbook playbooks/security_policies_management.yml --tags configure --check
+ansible-playbook playbooks/security_policies_management.yml --tags configure --check --diff
+ansible-playbook playbooks/security_policies_management.yml --tags configure
 
 # Deconfigure (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags deconfigure
+ansible-playbook playbooks/security_policies_management.yml --tags deconfigure --check
+ansible-playbook playbooks/security_policies_management.yml --tags deconfigure --check --diff
+ansible-playbook playbooks/security_policies_management.yml --tags deconfigure
 
 # Attach / detach zone pairs only
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags attach_to_zone_pairs
-ansible-playbook ansible_collections/graphiant/naas/playbooks/security_policies_management.yml --tags detach_from_zone_pairs
+ansible-playbook playbooks/security_policies_management.yml --tags attach_to_zone_pairs
+ansible-playbook playbooks/security_policies_management.yml --tags detach_from_zone_pairs
 ```
 
 ### Module task
@@ -1834,8 +1850,8 @@ When both `operation` and `state` are provided, `operation` takes precedence.
 #### Configure / deconfigure prefix lists
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag prefix_sets --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag prefix_sets
+ansible-playbook playbooks/complete_network_setup.yml --tag prefix_sets --check
+ansible-playbook playbooks/complete_network_setup.yml --tag prefix_sets
 ```
 
 ```yaml
@@ -1858,9 +1874,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 Deconfigure:
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_prefix_sets --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_prefix_sets
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_prefix_sets --check
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_prefix_sets --check
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_prefix_sets
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_prefix_sets --check
 ```
 
 ```yaml
@@ -1883,8 +1899,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 #### Configure BGP filters
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag bgp_filters --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag bgp_filters
+ansible-playbook playbooks/complete_network_setup.yml --tag bgp_filters --check
+ansible-playbook playbooks/complete_network_setup.yml --tag bgp_filters
 ```
 
 ```yaml
@@ -1909,8 +1925,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 Graphiant filters use attach points GraphiantIn / GraphiantOut. Use `sample_global_graphiant_filters.yaml` with `graphiant_routing_policies` key.
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters
+ansible-playbook playbooks/complete_network_setup.yml --tag graphiant_filters --check
+ansible-playbook playbooks/complete_network_setup.yml --tag graphiant_filters
 ```
 
 ```yaml
@@ -1933,8 +1949,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 Deconfigure:
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_graphiant_filters --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_graphiant_filters
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_graphiant_filters --check
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_graphiant_filters
 ```
 
 ```yaml
@@ -1957,8 +1973,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 #### Configure / deconfigure LAN segments
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lan_segments_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lan_segments_management.yml --tag configure
+ansible-playbook playbooks/lan_segments_management.yml --tag configure --check
+ansible-playbook playbooks/lan_segments_management.yml --tag configure
 ```
 
 ```yaml
@@ -1982,8 +1998,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lan_segments_manag
 Deconfigure:
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lan_segments_management.yml --tag deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/lan_segments_management.yml --tag deconfigure
+ansible-playbook playbooks/lan_segments_management.yml --tag deconfigure --check
+ansible-playbook playbooks/lan_segments_management.yml --tag deconfigure
 ```
 
 ```yaml
@@ -2007,8 +2023,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/lan_segments_manag
 #### Configure SNMP system objects
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag snmp --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag snmp
+ansible-playbook playbooks/complete_network_setup.yml --tag snmp --check
+ansible-playbook playbooks/complete_network_setup.yml --tag snmp
 ```
 
 ```yaml
@@ -2031,8 +2047,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 #### Configure syslog servers
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag syslog --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag syslog
+ansible-playbook playbooks/complete_network_setup.yml --tag syslog --check
+ansible-playbook playbooks/complete_network_setup.yml --tag syslog
 ```
 
 ```yaml
@@ -2055,8 +2071,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 #### Configure / deconfigure NTP objects
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag ntp --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag ntp
+ansible-playbook playbooks/complete_network_setup.yml --tag ntp --check
+ansible-playbook playbooks/complete_network_setup.yml --tag ntp
 ```
 
 ```yaml
@@ -2079,8 +2095,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 #### Configure IPFIX collectors
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag ipfix --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag ipfix
+ansible-playbook playbooks/complete_network_setup.yml --tag ipfix --check
+ansible-playbook playbooks/complete_network_setup.yml --tag ipfix
 ```
 
 ```yaml
@@ -2103,8 +2119,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 #### Configure / deconfigure VPN profiles (3rd party IPsec)
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag vpn_profiles --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag vpn_profiles
+ansible-playbook playbooks/complete_network_setup.yml --tag vpn_profiles --check
+ansible-playbook playbooks/complete_network_setup.yml --tag vpn_profiles
 ```
 
 ```yaml
@@ -2127,9 +2143,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 Deconfigure:
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_vpn_profiles --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_vpn_profiles
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag deconfigure_vpn_profiles --check
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_vpn_profiles --check
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_vpn_profiles
+ansible-playbook playbooks/complete_network_setup.yml --tag deconfigure_vpn_profiles --check
 ```
 
 ```yaml
@@ -2153,14 +2169,14 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_s
 
 ```bash
 # Configure (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_lists_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_lists_management.yml --tag configure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_lists_management.yml --tag configure --check
+ansible-playbook playbooks/site_lists_management.yml --tag configure --check
+ansible-playbook playbooks/site_lists_management.yml --tag configure
+ansible-playbook playbooks/site_lists_management.yml --tag configure --check
 
 # Deconfigure (dry run, then apply)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_lists_management.yml --tag deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_lists_management.yml --tag deconfigure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_lists_management.yml --tag deconfigure --check
+ansible-playbook playbooks/site_lists_management.yml --tag deconfigure --check
+ansible-playbook playbooks/site_lists_management.yml --tag deconfigure
+ansible-playbook playbooks/site_lists_management.yml --tag deconfigure --check
 ```
 
 **Configure site lists** (`playbooks/site_lists_management.yml`):
@@ -2212,9 +2228,9 @@ Create sites, delete sites, attach or detach global system objects (LAN segments
 ### Create sites
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag configure_sites --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag configure_sites
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag configure_sites --check
+ansible-playbook playbooks/site_management.yml --tag configure_sites --check
+ansible-playbook playbooks/site_management.yml --tag configure_sites
+ansible-playbook playbooks/site_management.yml --tag configure_sites --check
 ```
 
 ```yaml
@@ -2238,9 +2254,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.ym
 ### Delete sites
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag deconfigure_sites --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag deconfigure_sites
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag deconfigure_sites --check
+ansible-playbook playbooks/site_management.yml --tag deconfigure_sites --check
+ansible-playbook playbooks/site_management.yml --tag deconfigure_sites
+ansible-playbook playbooks/site_management.yml --tag deconfigure_sites --check
 ```
 
 ```yaml
@@ -2266,8 +2282,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.ym
 Prerequisite: global objects (e.g. LAN segments, site lists) are already created.
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag attach_objects --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag attach_objects
+ansible-playbook playbooks/site_management.yml --tag attach_objects --check
+ansible-playbook playbooks/site_management.yml --tag attach_objects
 ```
 
 ```yaml
@@ -2291,8 +2307,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.ym
 ### Detach system objects from sites
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag detach_objects --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag detach_objects
+ansible-playbook playbooks/site_management.yml --tag detach_objects --check
+ansible-playbook playbooks/site_management.yml --tag detach_objects
 ```
 
 ```yaml
@@ -2316,8 +2332,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.ym
 ### Create sites and attach objects
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag configure
+ansible-playbook playbooks/site_management.yml --tag configure --check
+ansible-playbook playbooks/site_management.yml --tag configure
 ```
 
 ```yaml
@@ -2341,9 +2357,9 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.ym
 ### Detach objects and delete sites
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag deconfigure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_management.yml --tag deconfigure --check
+ansible-playbook playbooks/site_management.yml --tag deconfigure --check
+ansible-playbook playbooks/site_management.yml --tag deconfigure
+ansible-playbook playbooks/site_management.yml --tag deconfigure --check
 ```
 
 ```yaml
@@ -2383,15 +2399,15 @@ Vault keys match the VPN `name` field. Set `presharedKey: null` and `md5Password
 ```bash
 cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example ansible_collections/graphiant/naas/configs/vault_secrets.yml
 export ANSIBLE_VAULT_PASSPHRASE="*************"
-ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-vault encrypt ansible_collections/graphiant/naas/configs/vault_secrets.yml --vault-password-file configs/vault-password-file.sh
 ```
 
 #### Create Site-to-Site VPN
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag create --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/site_to_site_vpn.yml --tag create --check --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/site_to_site_vpn.yml --tag create --vault-password-file configs/vault-password-file.sh
 ```
 
 The playbook configures VPN profiles, then creates the Site-to-Site VPN (see `site_to_site_vpn.yml`). Use `vault_site_to_site_vpn_keys` and `vault_bgp_md5_passwords` from vars loaded via `include_vars` from the encrypted `vault_secrets.yml`.
@@ -2399,9 +2415,9 @@ The playbook configures VPN profiles, then creates the Site-to-Site VPN (see `si
 #### Delete Site-to-Site VPN
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag delete --check --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag delete --check --diff --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
-ansible-playbook ansible_collections/graphiant/naas/playbooks/site_to_site_vpn.yml --tag delete --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+ansible-playbook playbooks/site_to_site_vpn.yml --tag delete --check --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/site_to_site_vpn.yml --tag delete --check --diff --vault-password-file configs/vault-password-file.sh
+ansible-playbook playbooks/site_to_site_vpn.yml --tag delete --vault-password-file configs/vault-password-file.sh
 ```
 
 ```yaml
@@ -2427,12 +2443,12 @@ See `configs/sample_device_ntp.yaml`.
 You can also use the bundled playbook:
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags configure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/ntp_management.yml --tags deconfigure
+ansible-playbook playbooks/ntp_management.yml --tags configure --check
+ansible-playbook playbooks/ntp_management.yml --tags configure --check --diff
+ansible-playbook playbooks/ntp_management.yml --tags configure
+ansible-playbook playbooks/ntp_management.yml --tags deconfigure --check
+ansible-playbook playbooks/ntp_management.yml --tags deconfigure --check --diff
+ansible-playbook playbooks/ntp_management.yml --tags deconfigure
 ```
 
 ### Configure NTP Module task
@@ -2492,12 +2508,12 @@ With `--check`, nothing is pushed; would-be payloads are logged with a `[check_m
 ### Playbook
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags configure
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags deconfigure --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags deconfigure --check --diff
-ansible-playbook ansible_collections/graphiant/naas/playbooks/static_routes_management.yml --tags deconfigure
+ansible-playbook playbooks/static_routes_management.yml --tags configure --check
+ansible-playbook playbooks/static_routes_management.yml --tags configure --check --diff
+ansible-playbook playbooks/static_routes_management.yml --tags configure
+ansible-playbook playbooks/static_routes_management.yml --tags deconfigure --check
+ansible-playbook playbooks/static_routes_management.yml --tags deconfigure --check --diff
+ansible-playbook playbooks/static_routes_management.yml --tags deconfigure
 ```
 
 ### Configure static routes
@@ -2544,33 +2560,33 @@ Deconfigure deletes only the prefixes listed in the YAML (per segment).
 
 ```bash
 # Create LAN segments
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml
+ansible-playbook playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml --check
+ansible-playbook playbooks/de_workflows/00_dataex_lan_segments_prerequisites.yml
 
 # Configure interfaces
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml
+ansible-playbook playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml --check
+ansible-playbook playbooks/de_workflows/00_dataex_lan_interface_prerequisites.yml
 
 # Create Prefix Lists
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag prefix_sets --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag prefix_sets
+ansible-playbook playbooks/complete_network_setup.yml --tag prefix_sets --check
+ansible-playbook playbooks/complete_network_setup.yml --tag prefix_sets
 
 # Create Graphiant filters to be in Data Exchange Services
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/complete_network_setup.yml --tag graphiant_filters
+ansible-playbook playbooks/complete_network_setup.yml --tag graphiant_filters --check
+ansible-playbook playbooks/complete_network_setup.yml --tag graphiant_filters
 
 # Create VPN profiles in the proxy tenant
 export GRAPHIANT_USERNAME="proxy-tenant-username"
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml
+ansible-playbook playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml --check
+ansible-playbook playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml
 ```
 
 ### Step 2: Create Data Exchange Services
 
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/01_dataex_create_services.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/01_dataex_create_services.yml
+ansible-playbook playbooks/de_workflows/01_dataex_create_services.yml --check
+ansible-playbook playbooks/de_workflows/01_dataex_create_services.yml
 ```
 
 To create Data Exchange services
@@ -2612,16 +2628,16 @@ To list Data Exchange services
 
 ```bash
 # Dry-run (validates config)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check
+ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check
 
 # Dry-run with diff: shows which customers would be created, and detects adminEmail drift on existing customers
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
+ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
 
 # Apply
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml
+ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml
 
 # Custom config file
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/02_dataex_create_customers.yml \
+ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml \
   -e config_file=de_workflows_configs/sample_data_exchange_customers.yaml
 ```
 
@@ -2664,11 +2680,11 @@ To list Data Exchange Customers
 
 ```bash
 export GRAPHIANT_CONFIGS_PATH=$(pwd)/ansible_collections/graphiant/naas/configs/
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml
+ansible-playbook playbooks/de_workflows/03_dataex_match_services_to_customers.yml --check
+ansible-playbook playbooks/de_workflows/03_dataex_match_services_to_customers.yml
 
 # Custom config file
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/03_dataex_match_services_to_customers.yml \
+ansible-playbook playbooks/de_workflows/03_dataex_match_services_to_customers.yml \
   -e config_file=de_workflows_configs/sample_data_exchange_matches.yaml
 ```
 
@@ -2715,7 +2731,7 @@ cp ansible_collections/graphiant/naas/configs/vault_secrets.yml.example \
 # Edit vault_secrets.yml: set vault_data_exchange_bgp_md5_passwords and vault_data_exchange_psk
 export ANSIBLE_VAULT_PASSPHRASE="your-passphrase"
 ansible-vault encrypt ansible_collections/graphiant/naas/configs/de_workflows_configs/vault_secrets.yml \
-  --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+  --vault-password-file configs/vault-password-file.sh
 ```
 
 **Other secrets stores** (HashiCorp Vault, AWS Secrets Manager, etc.): pre-fetch secrets and pass
@@ -2732,23 +2748,23 @@ Secrets precedence: **YAML non-null wins; secrets store fills `null`/absent fiel
 export GRAPHIANT_USERNAME="proxy-tenant-username"
 
 # Dry-run without matches_file (works if service is already visible via API)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check
+ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml --check
 
 # Dry-run with matches_file (required when service is not yet visible via API)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml --check \
+ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml --check \
   -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
 
 # Apply (matches_file optional; omit to use API lookup, or provide explicitly)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
+ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml \
   -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
 
 # Apply with vault secrets (BGP MD5, custom PSKs)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
+ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml \
   -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json \
-  --vault-password-file ansible_collections/graphiant/naas/configs/vault-password-file.sh
+  --vault-password-file configs/vault-password-file.sh
 
 # Custom config file
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/07_dataex_accept_invitation.yml \
+ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml \
   -e config_file=de_workflows_configs/sample_data_exchange_acceptance.yaml \
   -e matches_file=de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json
 ```
@@ -2818,13 +2834,13 @@ siteToSiteVpn:
 
 ```bash
 # Dry-run (validates config)
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml --check
+ansible-playbook playbooks/de_workflows/04_dataex_delete_customers.yml --check
 
 # Apply
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml
+ansible-playbook playbooks/de_workflows/04_dataex_delete_customers.yml
 
 # Custom config file
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_dataex_delete_customers.yml \
+ansible-playbook playbooks/de_workflows/04_dataex_delete_customers.yml \
   -e config_file=de_workflows_configs/sample_data_exchange_customers.yaml
 ```
 
@@ -2845,8 +2861,8 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/04_da
 ### Cleanup - Delete Data Exchange Services
 
 ```bash
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/05_dataex_delete_services.yml --check
-ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/05_dataex_delete_services.yml
+ansible-playbook playbooks/de_workflows/05_dataex_delete_services.yml --check
+ansible-playbook playbooks/de_workflows/05_dataex_delete_services.yml
 ```
 
 ```yaml
@@ -2864,6 +2880,145 @@ ansible-playbook ansible_collections/graphiant/naas/playbooks/de_workflows/05_da
   ansible.builtin.debug:
     msg: "{{ delete_services_result.msg }}"
 ```
+
+## Raw Device Configuration (graphiant_device_config)
+
+`graphiant_device_config` is a **generic, low-level module** that pushes any JSON payload directly to the Graphiant device config API (`PUT /v1/devices/{id}/config`). Use it as an escape hatch when the structured modules (`graphiant_interfaces`, `graphiant_ntp`, etc.) do not yet cover a specific configuration field — anything the Portal UI can configure can be pushed with this module.
+
+- **Edge and Gateway devices** use the `"edge"` top-level key in the payload.
+- **Core (backbone) devices** use the `"core"` top-level key.
+- Payloads can be captured directly from the Graphiant Portal UI browser developer tools (Network tab → `PUT /v1/devices/{id}/config`).
+- The module is **not idempotent by design** — it always pushes and reports `changed: true` for `configure`. Use `show_validated_payload` to inspect what would be sent before applying.
+
+### Operations
+
+| Operation | Description |
+|-----------|-------------|
+| `show_validated_payload` | Dry-run: validates and prints the payload that would be pushed, without making any changes |
+| `configure` | Pushes the payload to the device config API |
+
+### Playbook
+
+```bash
+# Dry-run: inspect payload before pushing
+ansible-playbook playbooks/device_config_management.yml --tags validate
+
+# Apply configuration
+ansible-playbook playbooks/device_config_management.yml --tags configure
+```
+
+### Without Template (inline JSON payload)
+
+Use `sample_device_config_payload.yaml` when each device needs its own hand-crafted payload. The payload is a raw JSON string conforming to the API schema:
+
+```yaml
+# configs/sample_device_config_payload.yaml
+device_config:
+  - edge-1-sdktest:
+      payload: |
+        {
+          "edge": {
+            "dns": {
+              "dns": {
+                "static": {
+                  "primaryIpv4V2": { "address": "8.8.8.8" },
+                  "secondaryIpv4V2": { "address": "8.8.4.4" }
+                }
+              }
+            },
+            "regionName": "us-west-2 (San Jose)"
+          },
+          "description": "Configure custom DNS and region",
+          "configurationMetadata": { "name": "dns_config_v1" }
+        }
+
+  - edge-2-sdktest:
+      payload: |
+        {
+          "edge": {
+            "dns": {
+              "dns": {
+                "static": {
+                  "primaryIpv4V2": { "address": "8.8.8.8" },
+                  "secondaryIpv4V2": { "address": "8.8.4.4" }
+                }
+              }
+            }
+          },
+          "description": "Configure custom DNS servers."
+        }
+```
+
+Run with:
+
+```bash
+ansible-playbook playbooks/device_config_management.yml --tags configure
+# or override the default config file:
+ansible-playbook playbooks/device_config_management.yml --tags configure \
+  -e config_file=sample_device_config_payload.yaml
+```
+
+### With Template (user-defined Jinja2 template)
+
+When multiple devices share the same structure, use a simplified config file (`sample_device_config_with_template.yaml`) paired with a Jinja2 template (`device_config_template.yaml`). The config file declares common values and per-device overrides; the template expands them into the full API payload. This eliminates repetition and makes bulk updates a single-line change.
+
+```yaml
+# configs/sample_device_config_with_template.yaml
+common:
+  primary_dns: "8.8.8.8"
+  secondary_dns: "8.8.4.4"
+  region: "us-west-2 (San Jose)"
+  config_ver_name: "dns_config_v1"
+
+devices:
+  - name: "edge-1-sdktest"
+    config_ver_desc: "Configure DNS and region for edge-1"
+  - name: "edge-2-sdktest"
+    config_ver_desc: "Configure DNS and region for edge-2"
+  - name: "edge-3-sdktest"
+    region: "us-east-1 (N. Virginia)"   # per-device override
+    config_ver_desc: "Configure DNS and region for edge-3"
+```
+
+Run with:
+
+```bash
+ansible-playbook playbooks/device_config_management.yml --tags configure \
+  -e config_file=sample_device_config_with_template.yaml \
+  -e template_file=device_config_template.yaml
+```
+
+### Core Device Payload
+
+For Core (backbone) devices, replace the `"edge"` key with `"core"` in the payload. The config file structure is identical:
+
+```yaml
+# configs/sample_device_config_core_device_payload.yaml
+device_config:
+  - core-api-test-core-01:
+      payload: |
+        {
+          "core": {
+            "name": "core-api-test-core-01",
+            "regionName": "us-east-1 (N. Virginia)"
+          },
+          "description": "Override region for core device"
+        }
+```
+
+```bash
+ansible-playbook playbooks/device_config_management.yml --tags configure \
+  -e config_file=sample_device_config_core_device_payload.yaml
+```
+
+### When to Use
+
+Use `graphiant_device_config` when:
+- A configuration field is not yet exposed by any structured module
+- You need to push a payload captured from the Portal UI directly
+- You are prototyping a new configuration before a structured module is built
+
+For production use, prefer structured modules (`graphiant_interfaces`, `graphiant_ntp`, `graphiant_static_routes`, etc.) where available — they support idempotency, check mode, and diff mode.
 
 ## Complete Network Setup
 
