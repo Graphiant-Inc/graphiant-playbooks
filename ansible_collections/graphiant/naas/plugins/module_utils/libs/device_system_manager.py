@@ -228,7 +228,7 @@ class DeviceSystemManager(BaseManager):
             updates = {k: cfg[k] for k in _UPDATE_KEYS if k in cfg}
             merged = self._merge_branch(current, updates)
             payload = self._build_payload(dtype, merged)
-            after_branch = {k: merged[k] for k in ("name", "regionName", "site") if k in merged}
+            after_branch: Dict[str, Any] = {k: merged[k] for k in ("name", "regionName", "site") if k in merged}
             site_nm = self._site_name(after_branch)
             if site_nm:
                 self.get_site_id(site_nm)

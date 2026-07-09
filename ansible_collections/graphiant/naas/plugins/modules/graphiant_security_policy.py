@@ -60,7 +60,7 @@ notes:
     Diff mode (C(--diff)) adds Ansible C(diff) (C(before) / C(after) strings) and C(details.diff_plan).
     Ruleset entries list only changed rules under C(rules) (plus C(_meta) when ruleset metadata changes).
     Zone pair attach/detach diffs show per-pair ruleset references under C(zones).
-version_added: "26.5.0"
+version_added: "26.6.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:

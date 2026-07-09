@@ -1,8 +1,8 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2026-05-27  
-**Collection Version:** 26.5.0  
+**Review Date:** 2026-07-08  
+**Collection Version:** 26.6.0  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
@@ -16,7 +16,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `26.5.0` (meets requirement: >= 1.0.0)
+  - Collection version: `26.6.0` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -49,7 +49,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `26.5.0` is specified in `galaxy.yml`
+  - Version `26.6.0` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -60,7 +60,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `26.5.0` (follows semantic versioning)
+  - Current version: `26.6.0` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py`
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -82,17 +82,13 @@
   - All modules have `DOCUMENTATION` sections with proper YAML format
   - All modules have `EXAMPLES` sections
   - All modules have `RETURN` sections
-  - Modules verified:
-    - `graphiant_backbone.py` ✅
-    - `graphiant_bgp.py` ✅
-    - `graphiant_data_exchange.py` ✅
-    - `graphiant_data_exchange_info.py` ✅
-    - `graphiant_device_config.py` ✅
-    - `graphiant_global_config.py` ✅
-    - `graphiant_interfaces.py` ✅
-    - `graphiant_sites.py` ✅
-    - `graphiant_vrrp.py` ✅
-    - `graphiant_lag_interfaces.py` ✅
+  - All 20 modules verified (18 state-changing + 2 `_info`):
+    - `graphiant_interfaces.py`, `graphiant_bgp.py`, `graphiant_global_config.py`, `graphiant_sites.py` ✅
+    - `graphiant_data_exchange.py`, `graphiant_device_config.py`, `graphiant_vrrp.py`, `graphiant_lag_interfaces.py` ✅
+    - `graphiant_site_to_site_vpn.py`, `graphiant_static_routes.py`, `graphiant_ntp.py`, `graphiant_device_system.py` ✅
+    - `graphiant_backbone.py`, `graphiant_edge_services.py`, `graphiant_macsec.py`, `graphiant_prefix_port_list.py` ✅
+    - `graphiant_traffic_policy.py`, `graphiant_security_policy.py` ✅
+    - `graphiant_data_exchange_info.py`, `graphiant_macsec_info.py` ✅ (`_info` modules)
 
 ### 2.3.1 Semantic Markup
 - [x] **Status:** ✅ **PASSING**
@@ -109,36 +105,29 @@
   - Return values use `RV()` markup (e.g., `RV(msg)`)
   - File/input names use `I()` markup (e.g., `I(config_file)`)
   - Code/commands use `C()` markup (e.g., `C(/v1/devices/{device_id}/config)`)
-  - All 10 modules verified ✅
+  - All 20 modules verified ✅
 
 ### 2.3.2 Check Mode Support Information
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** All modules must have check mode support information in the `attributes` field
 - **Verification:**
-  - All 10 modules have `attributes:` section with `check_mode:` information:
-    - `graphiant_backbone.py`: `support: full` ✅ (payloads logged with `[check_mode]` prefix; no writes performed)
-    - `graphiant_bgp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
-    - `graphiant_data_exchange.py`: `support: none` (with explanation) ✅
-    - `graphiant_data_exchange_info.py`: `support: full` ✅ (read-only _info module)
-    - `graphiant_device_config.py`: `support: partial` ✅ (show_validated_payload returns changed=False, configure assumes changes)
-    - `graphiant_global_config.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
-    - `graphiant_interfaces.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
-    - `graphiant_lag_interfaces.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
-    - `graphiant_sites.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
-    - `graphiant_vrrp.py`: `support: partial` ✅ (correctly documented - assumes changes would be made)
+  - All 20 modules declare an `attributes:` section with `check_mode:` (and, where applicable, `diff_mode:`) information:
+    - `support: full` (18): `graphiant_interfaces.py`, `graphiant_global_config.py`, `graphiant_sites.py`, `graphiant_vrrp.py`, `graphiant_lag_interfaces.py`, `graphiant_data_exchange.py`, `graphiant_site_to_site_vpn.py`, `graphiant_static_routes.py`, `graphiant_ntp.py`, `graphiant_device_system.py`, `graphiant_backbone.py`, `graphiant_edge_services.py`, `graphiant_macsec.py`, `graphiant_prefix_port_list.py`, `graphiant_traffic_policy.py`, `graphiant_security_policy.py`, `graphiant_data_exchange_info.py`, `graphiant_macsec_info.py` ✅ (idempotent state comparison against live device/global state; `--check --diff` returns accurate `changed` and diff plan; read-only `_info` modules perform no writes)
+    - `support: partial` (2): `graphiant_bgp.py`, `graphiant_device_config.py` ✅ (`graphiant_device_config` returns `changed=False` for read-only `show_validated_payload` and assumes changes for `configure`; `graphiant_bgp` assumes changes would be made)
 
 ### 2.3.3 Check Mode Best Practices Compliance
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Check mode support level must accurately reflect module capabilities. Modules should not always return `changed=True` in check mode when they can determine no changes would be made.
 - **Verification:**
   - **Support level accuracy:** ✅ **PASSING**
-    - State-changing modules use `support: partial` (cannot determine current state without API calls) ✅
-    - Read-only modules use `support: full` (`graphiant_data_exchange_info`) ✅
-    - Modules with intentional limitations use `support: none` (`graphiant_data_exchange`) ✅
+    - Most state-changing modules use `support: full` — they compare the requested config against live device/global state and return accurate `changed` plus a diff plan under `--check --diff` ✅
+    - Read-only `_info` modules use `support: full` (`graphiant_data_exchange_info`, `graphiant_macsec_info`) ✅
+    - Only `graphiant_bgp` and `graphiant_device_config` use `support: partial`, where state comparison is not fully implemented ✅
+    - No module uses `support: none` — `graphiant_data_exchange` now supports `--check` (the removed dry-run playbook was replaced by check mode) ✅
   - **Check mode behavior:** ✅ **PASSING**
     - `graphiant_device_config`: Returns `changed=False` for `show_validated_payload` (read-only operation) ✅
     - `graphiant_device_config`: Returns `changed=True` for `configure` (assumes changes, documented) ✅
-    - Other state-changing modules: Return `changed=True` with clear documentation that this assumes changes would be made ✅
+    - Full-support modules: Return accurate `changed` based on comparison with live state; `--check --diff` shows before/after via `diff_plan` ✅
   - **Documentation:** ✅ **PASSING**
     - All modules document check mode limitations in `attributes.check_mode.description` ✅
     - Support levels accurately reflect actual capabilities ✅
@@ -162,20 +151,12 @@
     - Query operations properly separated into `graphiant_data_exchange_info` module ✅
     - All state-changing modules only handle create/update/delete operations ✅
   - **Check mode support:** ✅ **PASSING**
-    - `graphiant_backbone`: `supports_check_mode=True`, `support: full` ✅ (payloads logged, no writes)
-    - `graphiant_interfaces`: `supports_check_mode=True`, `support: partial` ✅
-    - `graphiant_bgp`: `supports_check_mode=True`, `support: partial` ✅
-    - `graphiant_global_config`: `supports_check_mode=True`, `support: partial` ✅
-    - `graphiant_lag_interfaces`: `supports_check_mode=True`, `support: partial` ✅
-    - `graphiant_sites`: `supports_check_mode=True`, `support: partial` ✅
-    - `graphiant_vrrp`: `supports_check_mode=True`, `support: partial` ✅
-    - `graphiant_device_config`: `supports_check_mode=True`, `support: partial` ✅
-      - Note: Returns `changed=False` for read-only `show_validated_payload` operation
-      - Returns `changed=True` for `configure` operation (assumes changes, documented)
-    - `graphiant_data_exchange`: `supports_check_mode=False`, `support: none` ⚠️
-      - Note: Intentional for complex multi-step workflows
-      - Module provides `dry_run` parameter for `accept_invitation` operation
-    - `graphiant_data_exchange_info`: `supports_check_mode=True`, `support: full` ✅ (required for _info modules, read-only)
+    - All 20 modules set `supports_check_mode=True` ✅
+    - `support: full` (18): `graphiant_interfaces`, `graphiant_global_config`, `graphiant_sites`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_data_exchange`, `graphiant_site_to_site_vpn`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_backbone`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy`, plus read-only `graphiant_data_exchange_info` and `graphiant_macsec_info` ✅
+    - `support: partial` (2): ✅
+      - `graphiant_device_config`: Returns `changed=False` for read-only `show_validated_payload`; returns `changed=True` for `configure` (assumes changes, documented)
+      - `graphiant_bgp`: Returns `changed=True` (assumes changes would be made, documented)
+    - `graphiant_data_exchange` now supports check mode (`--check` replaced the removed dry-run playbook); the `accept_invitation` operation still exposes a `dry_run` parameter for workflow validation ✅
 
 ### 2.5 Python Version Support
 - [x] **Status:** ✅ **PASSING**
@@ -240,7 +221,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must have at least one module
 - **Verification:**
-  - Module count: 10 modules
+  - Module count: 20 modules
   - State-changing modules:
     1. `graphiant_interfaces` - Manage interfaces and circuits
     2. `graphiant_bgp` - Manage BGP peering and routing policies
@@ -250,9 +231,19 @@
     6. `graphiant_device_config` - Push raw device configurations
     7. `graphiant_vrrp` - Manage VRRP configuration
     8. `graphiant_lag_interfaces` - Manage LAG (Link Aggregation Group) configuration
-    9. `graphiant_backbone` - Manage Graphiant Core (backbone) device configuration
+    9. `graphiant_site_to_site_vpn` - Manage site-to-site IPsec VPN
+    10. `graphiant_static_routes` - Manage static routes
+    11. `graphiant_ntp` - Manage NTP configuration
+    12. `graphiant_device_system` - Manage device system fields (name, region, site)
+    13. `graphiant_backbone` - Manage Graphiant Core (backbone) device configuration
+    14. `graphiant_edge_services` - Manage Edge/Gateway services (DHCP, DNS, LLDP, local web server)
+    15. `graphiant_macsec` - Manage interface MACsec configuration
+    16. `graphiant_prefix_port_list` - Manage Prefix and Port Lists on Edge devices
+    17. `graphiant_traffic_policy` - Manage device-level traffic rulesets and LAN-segment attachments
+    18. `graphiant_security_policy` - Manage device-level security rulesets and zone-pair attachments
   - Information-gathering modules:
-    10. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
+    19. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
+    20. `graphiant_macsec_info` - Query interface MACsec status ✅ (follows `<something>_info` naming)
 
 ### 3.3 Changelog
 - [x] **Status:** ✅ **PASSING**
@@ -270,18 +261,28 @@
 - **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
   - All modules use `version_added` in major.minor format (collection version) ✅
-  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.4.0"`; bumped by `scripts/bump_version.py` at release-cut)
-  - Modules verified:
-    - `graphiant_backbone.py`: `version_added: "26.5.0"` ✅ (added in 26.5.0)
-    - `graphiant_bgp.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_data_exchange.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_data_exchange_info.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_device_config.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_global_config.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_interfaces.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_sites.py`: `version_added: "26.1.0"` ✅
-    - `graphiant_vrrp.py`: `version_added: "25.13.0"` ✅ (added in 25.13.0)
-    - `graphiant_lag_interfaces.py`: `version_added: "25.13.0"` ✅ (added in 25.13.0)
+  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.6.0"`; bumped by `scripts/bump_version.py` at release-cut)
+  - Modules verified (value as declared in each module):
+    - `graphiant_interfaces.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_bgp.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_global_config.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_sites.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_data_exchange.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_data_exchange_info.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_device_config.py`: `version_added: "25.12.0"` ✅
+    - `graphiant_vrrp.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_lag_interfaces.py`: `version_added: "26.1.0"` ✅
+    - `graphiant_site_to_site_vpn.py`: `version_added: "26.2.0"` ✅
+    - `graphiant_static_routes.py`: `version_added: "26.2.0"` ✅
+    - `graphiant_ntp.py`: `version_added: "26.2.0"` ✅
+    - `graphiant_device_system.py`: `version_added: "26.4.0"` ✅
+    - `graphiant_backbone.py`: `version_added: "26.5.0"` ✅
+    - `graphiant_edge_services.py`: `version_added: "26.5.0"` ✅
+    - `graphiant_macsec.py`: `version_added: "26.5.0"` ✅
+    - `graphiant_macsec_info.py`: `version_added: "26.5.0"` ✅
+    - `graphiant_prefix_port_list.py`: `version_added: "26.5.0"` ✅
+    - `graphiant_traffic_policy.py`: `version_added: "26.5.0"` ✅ (module present at `v26.5.0` tag)
+    - `graphiant_security_policy.py`: `version_added: "26.6.0"` ✅ (added after `v26.5.0` tag)
 
 ### 3.5 galaxy.yml Tags Field
 - [x] **Status:** ✅ **PASSING**
@@ -314,7 +315,7 @@
 - **Verification:**
   - All module files include GPLv3 license header after shebang
   - Format: `# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)`
-  - All 10 modules verified ✅
+  - All 20 modules verified ✅
   - Collection license: GPLv3+ (consistent across all files) ✅
 
 ### 3.9 Public Plugins, Roles, and Playbooks
@@ -468,18 +469,28 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 
 | Module | Type | Check Mode | Python | version_added | License Header |
 |--------|------|------------|--------|---------------|----------------|
+| `graphiant_interfaces` | State-changing | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_bgp` | State-changing | ✅ Partial* | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_global_config` | State-changing | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_sites` | State-changing | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_data_exchange` | State-changing | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_device_config` | State-changing | ✅ Partial** | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_vrrp` | State-changing | ✅ Full | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_lag_interfaces` | State-changing | ✅ Full | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_site_to_site_vpn` | State-changing | ✅ Full | >= 3.7 | 26.2.0 | ✅ GPLv3 |
+| `graphiant_static_routes` | State-changing | ✅ Full | >= 3.7 | 26.2.0 | ✅ GPLv3 |
+| `graphiant_ntp` | State-changing | ✅ Full | >= 3.7 | 26.2.0 | ✅ GPLv3 |
+| `graphiant_device_system` | State-changing | ✅ Full | >= 3.7 | 26.4.0 | ✅ GPLv3 |
 | `graphiant_backbone` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
-| `graphiant_interfaces` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
-| `graphiant_bgp` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
-| `graphiant_global_config` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
-| `graphiant_sites` | State-changing | ✅ Yes | >= 3.7 | 26.1.0 | ✅ GPLv3 |
-| `graphiant_data_exchange` | State-changing | ⚠️ No* | >= 3.7 | 26.1.0 | ✅ GPLv3 |
-| `graphiant_device_config` | State-changing | ✅ Partial** | >= 3.7 | 26.1.0 | ✅ GPLv3 |
-| `graphiant_vrrp` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
-| `graphiant_lag_interfaces` | State-changing | ✅ Partial | >= 3.7 | 25.13.0 | ✅ GPLv3 |
-| `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 26.1.0 | ✅ GPLv3 |
+| `graphiant_edge_services` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
+| `graphiant_macsec` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
+| `graphiant_prefix_port_list` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
+| `graphiant_traffic_policy` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
+| `graphiant_security_policy` | State-changing | ✅ Full | >= 3.7 | 26.6.0 | ✅ GPLv3 |
+| `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
+| `graphiant_macsec_info` | Information-gathering | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
 
-*Note: `graphiant_data_exchange` does not support check_mode but provides `dry_run` parameter for the `accept_invitation` operation. This is intentional for complex multi-step workflows.
+*Note: `graphiant_bgp` declares `support: partial` — it assumes changes would be made in check mode rather than fully comparing against live BGP state.
 
 **Note: `graphiant_device_config` has partial check mode support:
 - `show_validated_payload` operation: Returns `changed=False` (read-only validation)
@@ -529,9 +540,8 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 
 These are not blocking requirements but are recommended for better collection quality:
 
-1. **Check Mode Support** - Consider adding check_mode support to `graphiant_data_exchange` module
-   - Current: `supports_check_mode=False`
-   - Note: Module provides `dry_run` parameter which may be sufficient for workflow testing
+1. **Full Check Mode for Remaining Modules** - Consider upgrading `graphiant_bgp` and `graphiant_device_config` from `support: partial` to `support: full` by comparing against live state (as the other modules now do)
+   - Note: `graphiant_data_exchange` now supports check mode (`--check` replaced the removed dry-run playbook)
 
 2. **Documentation Examples** - Consider adding more examples for edge cases and advanced usage
 
@@ -542,7 +552,7 @@ These are not blocking requirements but are recommended for better collection qu
 All critical action items have been completed:
 
 - [x] ✅ Code of Conduct - `CODE_OF_CONDUCT.md` exists
-- [x] ✅ version_added - All modules use major.minor format (`"25.11.0"`, `"25.12.0"`, `"26.1.0"`, `"26.2.0"`, `"26.3.0"`, `"26.4.0"`, or `"26.5.0"` for the new `graphiant_backbone`)
+- [x] ✅ version_added - All 20 modules use major.minor format (`"25.12.0"`, `"26.1.0"`, `"26.2.0"`, `"26.4.0"`, `"26.5.0"`, `"26.6.0"`)
 - [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19, 2.20
 - [x] ✅ Scheduled CI runs - Nightly runs at 2 AM UTC
 - [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
@@ -554,7 +564,7 @@ All critical action items have been completed:
 
 ### Optional Action Items
 
-- [ ] (Optional) Add check_mode support to `graphiant_data_exchange` module
+- [ ] (Optional) Upgrade `graphiant_bgp` and `graphiant_device_config` to `support: full` check mode
 - [ ] (Optional) Add more documentation examples
 
 ---
@@ -573,7 +583,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 26.5.0  
-**Review Date:** 2026-05-27  
+**Collection Version:** 26.6.0  
+**Review Date:** 2026-07-08  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7
