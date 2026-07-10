@@ -193,6 +193,44 @@ def test_graphiant_vrrp_configure(m_am, m_gc) -> None:
     m.exit_json.assert_called_once()
 
 
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_dhcp_relay.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_dhcp_relay.AnsibleModule")
+def test_graphiant_dhcp_relay_deconfigure(m_am, m_gc) -> None:
+    from ansible_collections.graphiant.naas.plugins.modules import graphiant_dhcp_relay
+
+    m = _mod(
+        dhcp_relay_config_file="d.yaml",
+        operation="deconfigure",
+        state="present",
+    )
+    m_am.return_value = m
+    mgr = MagicMock()
+    mgr.deconfigure_dhcp_relay_interfaces.return_value = _result()
+    m_gc.return_value = _conn_with(dhcp_relay_interfaces=mgr)
+    graphiant_dhcp_relay.main()
+    m.exit_json.assert_called_once()
+    mgr.deconfigure_dhcp_relay_interfaces.assert_called_once_with("d.yaml")
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_dhcp_relay.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_dhcp_relay.AnsibleModule")
+def test_graphiant_dhcp_relay_configure(m_am, m_gc) -> None:
+    from ansible_collections.graphiant.naas.plugins.modules import graphiant_dhcp_relay
+
+    m = _mod(
+        dhcp_relay_config_file="d.yaml",
+        operation="configure",
+        state="present",
+    )
+    m_am.return_value = m
+    mgr = MagicMock()
+    mgr.configure_dhcp_relay_interfaces.return_value = _result()
+    m_gc.return_value = _conn_with(dhcp_relay_interfaces=mgr)
+    graphiant_dhcp_relay.main()
+    m.exit_json.assert_called_once()
+    mgr.configure_dhcp_relay_interfaces.assert_called_once_with("d.yaml")
+
+
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_interfaces.get_graphiant_connection")
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_interfaces.AnsibleModule")
 def test_graphiant_interfaces_configure_circuits(m_am, m_gc) -> None:

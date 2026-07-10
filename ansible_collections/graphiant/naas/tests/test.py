@@ -2012,6 +2012,29 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure port lists result (idempotency check): %s", result2)
         assert result2["changed"] is False, "Deconfigure port lists idempotency failed"
 
+    def test_configure_dhcp_relay_interfaces(self):
+        """
+        Configure DHCP relay on main interfaces and subinterfaces for multiple devices.
+        Prerequisite: interfaces configured via sample_interface_config.yaml.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.dhcp_relay_interfaces.configure("sample_dhcp_relay_config.yaml")
+        LOG.info("Configure DHCP relay interfaces result: %s", result)
+        result = graphiant_config.dhcp_relay_interfaces.configure("sample_dhcp_relay_config.yaml")
+        LOG.info("Configure DHCP relay interfaces result (rerun check): %s", result)
+        assert result['changed'] is False, "Configure DHCP relay interfaces idempotency failed"
+
+    def test_deconfigure_dhcp_relay_interfaces(self):
+        """
+        Deconfigure DHCP relay from main interfaces and subinterfaces for multiple devices.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.dhcp_relay_interfaces.deconfigure("sample_dhcp_relay_config.yaml")
+        LOG.info("Deconfigure DHCP relay interfaces result: %s", result)
+        result = graphiant_config.dhcp_relay_interfaces.deconfigure("sample_dhcp_relay_config.yaml")
+        LOG.info("Deconfigure DHCP relay interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Deconfigure DHCP relay interfaces idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -2113,6 +2136,10 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vrrp_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_enable_vrrp_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vrrp_interfaces'))
+
+    # DHCP Relay Interface Configuration Management
+    suite.addTest(TestGraphiantPlaybooks('test_configure_dhcp_relay_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_dhcp_relay_interfaces'))
 
     # LAG Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lag_interfaces'))

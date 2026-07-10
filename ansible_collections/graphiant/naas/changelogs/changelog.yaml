@@ -5,6 +5,11 @@
 
 ancestor: null
 releases:
+  "26.7.0":
+    release_date: "2026-07-31"
+    changes:
+      minor_changes:
+        - "New ``graphiant_dhcp_relay`` module and ``dhcp_relay_interface_management.yml`` playbook for DHCP relay (IPv4/IPv6) on main interfaces and VLAN subinterfaces; sample ``sample_dhcp_relay_config.yaml``; operations ``configure`` / ``deconfigure``; idempotent comparison to live device relay server lists; interface/subinterface existence validation before push; deep merge when multiple VLAN subinterfaces on the same parent are configured in one run; full check mode and diff mode (``--check --diff`` returns accurate ``changed``, ``details.diff_plan``, and Ansible ``diff`` with per-interface relay server ``before``/``after`` under ``edge.interfaces``); integration tests in ``tests/test.py``"
   "26.6.0":
     release_date: "2026-07-10"
     changes:

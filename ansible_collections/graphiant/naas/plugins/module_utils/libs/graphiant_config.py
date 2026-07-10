@@ -13,6 +13,7 @@ from .site_manager import SiteManager
 from .data_exchange_manager import DataExchangeManager
 from .device_config_manager import DeviceConfigManager
 from .vrrp_interface_manager import VRRPInterfaceManager
+from .dhcp_relay_interface_manager import DhcpRelayInterfaceManager
 from .lag_interface_manager import LagInterfaceManager
 from .site_to_site_vpn_manager import SiteToSiteVpnManager
 from .static_routes_manager import StaticRoutesManager
@@ -85,6 +86,7 @@ class GraphiantConfig:
             self.data_exchange = DataExchangeManager(self.config_utils)
             self.device_config = DeviceConfigManager(self.config_utils)
             self.vrrp_interfaces = VRRPInterfaceManager(self.config_utils)
+            self.dhcp_relay_interfaces = DhcpRelayInterfaceManager(self.config_utils)
             self.lag_interfaces = LagInterfaceManager(self.config_utils)
             self.site_to_site_vpn = SiteToSiteVpnManager(self.config_utils)
             self.static_routes = StaticRoutesManager(self.config_utils)
@@ -118,6 +120,7 @@ class GraphiantConfig:
             "data_exchange": hasattr(self, "data_exchange") and self.data_exchange is not None,
             "device_config": hasattr(self, "device_config") and self.device_config is not None,
             "vrrp_interfaces": hasattr(self, "vrrp_interfaces") and self.vrrp_interfaces is not None,
+            "dhcp_relay_interfaces": hasattr(self, "dhcp_relay_interfaces") and self.dhcp_relay_interfaces is not None,
             "config_utils": hasattr(self, "config_utils") and self.config_utils is not None,
             "lag_interfaces": hasattr(self, "lag_interfaces") and self.lag_interfaces is not None,
             "site_to_site_vpn": hasattr(self, "site_to_site_vpn") and self.site_to_site_vpn is not None,

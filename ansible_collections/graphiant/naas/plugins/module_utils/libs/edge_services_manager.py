@@ -794,6 +794,44 @@ class EdgeServicesManager(BaseManager):
                 names.add(iface)
         return frozenset(names)
 
+    @classmethod
+    def _interface_dict_has_relay(cls, iface_dict: Dict[str, Any]) -> bool:
+        """Return True if any address family on the interface dict has DHCP relay servers."""
+        for af_key in ("ipv4", "ipv6"):
+            af = iface_dict.get(af_key)
+            if not isinstance(af, dict):
+                continue
+            relay = af.get("dhcpRelay")
+            if not isinstance(relay, dict):
+                continue
+            if relay.get("dhcpv4Relays") or relay.get("dhcpv6Relays"):
+                return True
+        return False
+
+    @classmethod
+    def _has_dhcp_relay_on_interface(cls, d: Dict[str, Any], interface_name: str) -> bool:
+        """Check whether interface_name has DHCP relay configured in the device dict."""
+        parts = interface_name.rsplit(".", 1)
+        parent_name = parts[0]
+        vlan_str = parts[1] if len(parts) == 2 else None
+
+        for iface in d.get("interfaces") or []:
+            if not isinstance(iface, dict):
+                continue
+            if cls._str(iface.get("name")) != parent_name:
+                continue
+            if vlan_str is None:
+                return cls._interface_dict_has_relay(iface)
+            subs = iface.get("subinterfaces")
+            if isinstance(subs, dict):
+                sub = subs.get(vlan_str) or {}
+                return cls._interface_dict_has_relay(sub.get("interface") or sub)
+            if isinstance(subs, list):
+                for sub in subs:
+                    if isinstance(sub, dict) and str(sub.get("vlan", "")) == vlan_str:
+                        return cls._interface_dict_has_relay(sub)
+        return False
+
     def _validate_dhcp_entries(
         self, device_name: str, dhcp_entries: List[Dict[str, Any]], current_device: Dict[str, Any]
     ) -> None:
@@ -827,6 +865,12 @@ class EdgeServicesManager(BaseManager):
                 raise ConfigurationError(
                     f"Device '{device_name}': dhcpSubnets references interface {iface!r} which does not exist "
                     f"on this device. Known interfaces: {known}."
+                )
+            if iface and self._has_dhcp_relay_on_interface(current_device, iface):
+                raise ConfigurationError(
+                    f"Device '{device_name}': cannot configure DHCP subnet on interface {iface!r} — "
+                    f"DHCP relay is already active on this interface. "
+                    f"An interface supports either DHCP relay or DHCP subnet, not both."
                 )
 
     def _build_edge_payload(

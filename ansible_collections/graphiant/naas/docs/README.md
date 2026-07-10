@@ -44,6 +44,7 @@ ansible-doc graphiant.naas.graphiant_global_config
 ansible-doc graphiant.naas.graphiant_sites
 ansible-doc graphiant.naas.graphiant_data_exchange
 ansible-doc graphiant.naas.graphiant_static_routes
+ansible-doc graphiant.naas.graphiant_dhcp_relay
 ansible-doc graphiant.naas.graphiant_ntp
 ansible-doc graphiant.naas.graphiant_traffic_policy
 ansible-doc graphiant.naas.graphiant_security_policy

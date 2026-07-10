@@ -21,6 +21,7 @@ This collection provides Ansible modules to automate:
 - Core (backbone) device configuration — interfaces, ISP circuits, direct-peer circuits, site info, and per-VRF syslog targets
 - Static routes management (per-segment configure/deconfigure)
 - VRRP (Virtual Router Redundancy Protocol) configuration
+- DHCP relay on main interfaces and VLAN subinterfaces
 - LAG (Link Aggregation Group) interface configuration
 - Interface MACsec (802.1AE) configuration and monitoring on Edge/Gateway devices
 - BGP peering management (including BFD — Bidirectional Forwarding Detection)
@@ -67,6 +68,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_backbone` | Manage Graphiant Core (backbone) device interfaces, ISP circuits, direct-peer circuits, site info, and per-VRF syslog targets |
 | `graphiant_static_routes` | Manage static routes (per-segment configure/deconfigure/validate) |
 | `graphiant_vrrp` | Manage VRRP (Virtual Router Redundancy Protocol) configuration |
+| `graphiant_dhcp_relay` | Manage DHCP relay (IPv4/IPv6) on main interfaces and subinterfaces |
 | `graphiant_lag_interfaces` | Manage LAG interfaces configuration |
 | `graphiant_macsec` | Configure interface MACsec (802.1AE) on Edge/Gateway devices |
 | `graphiant_macsec_info` | Query MACsec monitoring status (secure/unsecure) per interface |
@@ -391,6 +393,7 @@ The collection includes ready-to-use example playbooks in the `playbooks/` direc
 | `backbone_management.yml` | Core (backbone) device management operations |
 | `static_routes_management.yml` | Static routes configure/deconfigure/validate |
 | `vrrp_interface_management.yml` | VRRP configuration on interfaces and subinterfaces |
+| `dhcp_relay_interface_management.yml` | DHCP relay on main interfaces and subinterfaces |
 | `lag_interface_management.yml` | LAG interface configuration |
 | `macsec_management.yml` | Interface MACsec configuration and monitoring status |
 | `circuit_management.yml` | Circuit configuration and static routes |
@@ -442,6 +445,7 @@ ansible-doc graphiant.naas.graphiant_security_policy
 ansible-doc graphiant.naas.graphiant_device_system
 ansible-doc graphiant.naas.graphiant_edge_services
 ansible-doc graphiant.naas.graphiant_vrrp
+ansible-doc graphiant.naas.graphiant_dhcp_relay
 ansible-doc graphiant.naas.graphiant_lag_interfaces
 ansible-doc graphiant.naas.graphiant_macsec
 ansible-doc graphiant.naas.graphiant_macsec_info
@@ -514,13 +518,13 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 | Support | Modules | Behavior |
 |--------|---------|----------|
-| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info`, `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
+| **Full** | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_dhcp_relay`, `graphiant_lag_interfaces`, `graphiant_sites`, `graphiant_site_to_site_vpn`, `graphiant_global_config`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_data_exchange`, `graphiant_data_exchange_info`, `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy` | Mutating writes are skipped. Intended requests are usually logged with a `[check_mode]` prefix; use `detailed_logs: true` and often `ANSIBLE_STDOUT_CALLBACK=debug` for readable output. |
 | **Partial** | `graphiant_bgp`, `graphiant_device_config`, `graphiant_backbone`                                                                                                                                                                                                                                                                    | Writes are still skipped, but `changed` is not computed from a full live diff: BGP reports `changed: true` for configure/deconfigure/detach in check mode; `graphiant_device_config` returns `changed: false` for `show_validated_payload` and `changed: true` for `configure`; `graphiant_backbone` reports `changed: true` whenever the supplied config file contains matching backbone resources (no live diff against current Core device state). See each module's `attributes.check_mode` details. |
 | **Read-only** | `graphiant_macsec_info` | Always read-only; check mode has no side effects. |
 
-**Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_traffic_policy`, and `graphiant_security_policy` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
+**Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_dhcp_relay`, `graphiant_traffic_policy`, and `graphiant_security_policy` read device state in check mode and set `changed` from whether an apply would be needed. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_data_exchange`, `graphiant_ntp`, `graphiant_static_routes`, and `graphiant_site_to_site_vpn` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmail` drift on existing customers with a hint to use `update_customers`. For `graphiant_site_to_site_vpn`, secrets (`presharedKey`, `md5Password`) are redacted in diff output.
+**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, `graphiant_dhcp_relay`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_data_exchange`, `graphiant_ntp`, `graphiant_static_routes`, and `graphiant_site_to_site_vpn` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmail` drift on existing customers with a hint to use `update_customers`. For `graphiant_site_to_site_vpn`, secrets (`presharedKey`, `md5Password`) are redacted in diff output. For `graphiant_dhcp_relay`, diff shows per-interface relay server lists under `edge.interfaces`.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -535,6 +539,7 @@ ansible-playbook playbooks/macsec_management.yml --tags configure -e config_file
 
 ansible-playbook playbooks/ntp_management.yml --tags configure --check --diff
 ansible-playbook playbooks/static_routes_management.yml --tags configure --check --diff
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tags configure --check --diff
 ansible-playbook playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file configs/vault-password-file.sh
 # Data Exchange: check + diff to preview creates and detect adminEmail drift on existing customers
 ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
@@ -670,6 +675,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_device_traffic_policies.yaml` - Traffic rulesets under `edge.trafficPolicy` and LAN segment ruleset attachments under `edge.segments` (use configure + attach_to_lan_segments, or the `traffic_policies_management.yml` playbook `--tags configure`)
 - `sample_device_security_policies.yaml` - Security rulesets under `edge.trafficPolicy.securityRulesets` and zone pair ruleset attachments under `edge.trafficPolicy.zones` (use configure + attach_to_zone_pairs, or the `security_policies_management.yml` playbook `--tags configure`). Custom application matches (`applicationCustom`) require DPI applications from `graphiant_edge_services` / `sample_edge_services.yaml`.
 - `sample_vrrp_config.yaml` - VRRP (Virtual Router Redundancy Protocol) configurations
+- `sample_dhcp_relay_config.yaml` - DHCP relay on main interfaces and VLAN subinterfaces (`edge.interfaces.*.ipv4/ipv6.dhcp.dhcpRelay`)
 - `sample_lag_interface_config.yaml` - LAG interface configurations
 - `sample_macsec.yaml` - Interface MACsec (PSK/SAK) configuration; CAK via `vault_devices_macsec_psk` in `vault_secrets.yml`
 - `sample_bgp_peering.yaml` - BGP peering configurations

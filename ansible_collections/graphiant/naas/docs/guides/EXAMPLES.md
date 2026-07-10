@@ -268,6 +268,8 @@ For a **single device**, use module parameters (camelCase API names; snake_case 
 
 Each entry targets one pool on a LAN segment. `segment` must match the device LAN segment name; `interface` and `ipPrefix` must match an existing LAN interface/subinterface and its prefix (from `interface_management.yml --tags lan`). The API key is `{interface}-{ipPrefix}`. Use `state: absent` to remove a pool.
 
+**Mutual exclusion:** An interface supports either a DHCP subnet (server) or DHCP relay, not both. Configure fails if the target interface already has DHCP relay configured. Deconfigure the relay first (`graphiant_dhcp_relay` with `operation: deconfigure`) before adding a DHCP subnet.
+
 **YAML** (`configs/sample_edge_services.yaml`):
 
 ```yaml
@@ -827,6 +829,103 @@ ansible-playbook playbooks/vrrp_interface_management.yml --tag enable --check
     msg: "{{ enable_result.msg }}"
   when: enable_result is defined and enable_result.msg is defined
   tags: ['vrrp_interfaces', 'enable']
+```
+
+### Module: graphiant.naas.graphiant_dhcp_relay
+
+Configure DHCP relay (IPv4 and/or IPv6) on main interfaces and subinterfaces under `edge.interfaces.{name}.interface.ipv4.dhcp.dhcpRelay` (and the IPv6 equivalent). Payloads are built in Python (no Jinja2 template). See `configs/sample_dhcp_relay_config.yaml`.
+
+**Prerequisite:** Configure LAN/WAN interfaces first (`interface_management.yml --tag lan` or `--tag configure`).
+
+**YAML keys:**
+
+| Key | Description |
+|-----|-------------|
+| `dhcp_relay_config` | List of `{device_name: [interface entries]}` blocks |
+| `name` | Parent interface name (e.g. `GigabitEthernet4/0/0`) |
+| `vlan` | Optional VLAN ID for subinterface relay; omit for main interface |
+| `dhcpRelayIpv4` | List of IPv4 relay server addresses (or `{relayServers: [...]}`) |
+| `dhcpRelayIpv6` | List of IPv6 relay server addresses (same format) |
+
+**Idempotency:** Configure compares desired relay servers to live device state per interface and address family; deconfigure skips when relay is already removed for the families listed in YAML.
+
+**Validation:** Each entry is checked against interfaces on the device (main interface or subinterface). The task fails with a clear error if `name`/`vlan` does not exist — configure LAN/WAN interfaces first.
+
+**Mutual exclusion:** An interface supports either DHCP relay or a DHCP subnet (server), not both. Configure fails immediately if the target interface already has a DHCP subnet configured. Remove the DHCP subnet first (`graphiant_edge_services` with `state: absent`) before enabling DHCP relay on that interface.
+
+With `--check`, nothing is pushed; would-be payloads are logged with a `[check_mode]` prefix and `changed` reflects whether an apply would be needed. With `--diff`, pending changes appear in Ansible `diff` (`before` / `after`) and `details.diff_plan` (per-device relay server lists under `edge.interfaces`).
+
+#### Configure DHCP relay
+
+```bash
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag configure --check
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag configure --check --diff
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag configure
+```
+
+```yaml
+- name: Configure DHCP relay on interfaces
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['dhcp_relay_interfaces', 'configure']
+
+- name: Display DHCP relay configuration results
+  ansible.builtin.debug:
+    msg: "{{ configure_result.msg }}"
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['dhcp_relay_interfaces', 'configure']
+```
+
+#### Deconfigure DHCP relay
+
+Deconfigure sets `relayServers: []` for each address family listed in the YAML entry (IPv4 and/or IPv6).
+
+```bash
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag deconfigure --check --diff
+ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag deconfigure
+```
+
+```yaml
+- name: Deconfigure DHCP relay from interfaces
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: deconfigure
+    dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
+    detailed_logs: true
+    state: absent
+  register: deconfigure_result
+  tags: ['dhcp_relay_interfaces', 'deconfigure']
+
+- name: Display DHCP relay deconfiguration results
+  ansible.builtin.debug:
+    msg: "{{ deconfigure_result.msg }}"
+  when: deconfigure_result is defined and deconfigure_result.msg is defined
+  tags: ['dhcp_relay_interfaces', 'deconfigure']
+```
+
+#### Sample YAML excerpt
+
+```yaml
+dhcp_relay_config:
+  - edge-1-sdktest:
+    - name: GigabitEthernet4/0/0
+      vlan: 1
+      dhcpRelayIpv4:
+        - 10.1.1.1
+        - 10.2.1.1
+      dhcpRelayIpv6:
+        - 2001:10:1:1::1
+  - edge-2-sdktest:
+    - name: GigabitEthernet8/0/0
+      dhcpRelayIpv4: 
+        - 10.1.11.1
+        - 10.2.11.1
 ```
 
 ### Module: graphiant.naas.graphiant_lag_interfaces
@@ -3066,27 +3165,28 @@ tasks:
 
 Sample configuration files are in the `configs/` directory:
 
-| File | Description |
-|------|-------------|
-| `sample_device_system.yaml` | Device system configuration (hostname, region and site name) |
-| `sample_interface_config.yaml` | Interface configurations |
-| `sample_circuit_config.yaml` | Circuit configurations |
-| `sample_bgp_peering.yaml` | BGP peering settings |
-| `sample_global_prefix_lists.yaml` | Prefix set definitions |
-| `sample_global_bgp_filters.yaml` | BGP filter definitions |
-| `sample_global_graphiant_filters.yaml` | Graphiant filter definitions (GraphiantIn / GraphiantOut) |
-| `sample_global_lan_segments.yaml` | LAN segment definitions |
-| `sample_global_ntp.yaml` | NTP object definitions |
-| `sample_global_vpn_profiles.yaml` | VPN profile definitions |
-| `sample_sites.yaml` | Site definitions |
-| `sample_site_attachments.yaml` | Site attachment configurations |
-| `sample_device_ntp.yaml` | Device NTP configuration  |
-| `sample_static_route.yaml` | Static routes under edge segments |
-| `sample_macsec.yaml` | Interface MACsec (802.1AE) on ethernet or LAG main interfaces |
-| `sample_edge_services.yaml` | Edge services (DHCP, DNS, LLDP, LWS password) |
+| File | Description                                                                                        |
+|------|----------------------------------------------------------------------------------------------------|
+| `sample_device_system.yaml` | Device system configuration (hostname, region and site name)                                       |
+| `sample_interface_config.yaml` | Interface configurations                                                                           |
+| `sample_circuit_config.yaml` | Circuit configurations                                                                             |
+| `sample_bgp_peering.yaml` | BGP peering settings                                                                               |
+| `sample_global_prefix_lists.yaml` | Prefix set definitions                                                                             |
+| `sample_global_bgp_filters.yaml` | BGP filter definitions                                                                             |
+| `sample_global_graphiant_filters.yaml` | Graphiant filter definitions (GraphiantIn / GraphiantOut)                                          |
+| `sample_global_lan_segments.yaml` | LAN segment definitions                                                                            |
+| `sample_global_ntp.yaml` | NTP object definitions                                                                             |
+| `sample_global_vpn_profiles.yaml` | VPN profile definitions                                                                            |
+| `sample_sites.yaml` | Site definitions                                                                                   |
+| `sample_site_attachments.yaml` | Site attachment configurations                                                                     |
+| `sample_device_ntp.yaml` | Device NTP configuration                                                                           |
+| `sample_static_route.yaml` | Static routes under edge segments                                                                  |
+| `sample_dhcp_relay_config.yaml` | DHCP relay on main interfaces and subinterfaces                                                    |
+| `sample_macsec.yaml` | Interface MACsec (802.1AE) on ethernet or LAG main interfaces                                      |
+| `sample_edge_services.yaml` | Edge services (DHCP, DNS, LLDP, LWS password)                                                      |
 | `sample_prefix_and_port_list.yaml` | Device-level prefix lists (`networkLists`) and port lists (`portLists`) under `edge.trafficPolicy` |
-| `sample_device_traffic_policies.yaml` | Device-level traffic policy rulesets and LAN segment attachments |
-| `sample_device_security_policies.yaml` | Device-level security policy rulesets and zone pair attachments |
+| `sample_device_traffic_policies.yaml` | Device-level traffic policy rulesets and LAN segment attachments                                   |
+| `sample_device_security_policies.yaml` | Device-level security policy rulesets and zone pair attachments                                    |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
 
@@ -3100,6 +3200,7 @@ For Python library usage, see `tests/test.py` which demonstrates:
 - Site operations
 - Device system settings
 - Edge services and MACsec configuration
+- DHCP relay on interfaces
 - Data Exchange workflows
 
 ```python
@@ -3116,6 +3217,9 @@ config.interfaces.configure_lan_interfaces("interface_config.yaml")
 
 # Configure BGP
 config.bgp.configure("bgp_config.yaml")
+
+# Configure DHCP relay on interfaces
+config.dhcp_relay_interfaces.configure("sample_dhcp_relay_config.yaml")
 
 # Configure global objects
 config.global_config.configure("global_prefix_lists.yaml")
