@@ -7,7 +7,7 @@ Configures DHCP relay (ipv4/ipv6) on main interfaces and VLAN subinterfaces.
 from typing import Any, Dict, List, Optional
 
 from .base_manager import BaseManager
-from .device_config_common import new_apply_result
+from .device_config_common import load_device_list_yaml_config, new_apply_result
 from .logger import setup_logger
 from .exceptions import ConfigurationError, DeviceNotFoundError
 
@@ -161,27 +161,39 @@ class DhcpRelayInterfaceManager(BaseManager):
         state["ipv6"] = cls._relay_servers_from_interface(getattr(intf_obj, "ipv6", None), af="ipv6")
         return state
 
+    @staticmethod
+    def _af_action(iface_action: str, af_cfg: Any) -> str:
+        """Return the effective action for one address family, respecting per-AF state."""
+        if isinstance(af_cfg, dict):
+            af_state = af_cfg.get("state")
+            if af_state == "absent":
+                return "delete"
+            if af_state == "present":
+                return "add"
+        return iface_action
+
     @classmethod
     def _has_relay_config(cls, config: Dict[str, Any]) -> bool:
-        ipv4_cfg = config.get("dhcpRelayIpv4")
-        ipv6_cfg = config.get("dhcpRelayIpv6")
-        return bool(cls._relay_servers_from_config(ipv4_cfg) or cls._relay_servers_from_config(ipv6_cfg))
+        for key in ("dhcpRelayIpv4", "dhcpRelayIpv6"):
+            af_cfg = config.get(key)
+            if af_cfg is None:
+                continue
+            if isinstance(af_cfg, dict) and "state" in af_cfg:
+                return True  # explicit per-AF state is always actionable
+            if cls._relay_servers_from_config(af_cfg):
+                return True
+        return False
 
     @classmethod
     def _desired_relay_state(cls, config: Dict[str, Any], action: str) -> Dict[str, List[str]]:
-        ipv4_cfg = config.get("dhcpRelayIpv4")
-        ipv6_cfg = config.get("dhcpRelayIpv6")
-        if action == "delete":
-            desired: Dict[str, List[str]] = {"ipv4": [], "ipv6": []}
-            if ipv4_cfg is not None:
-                desired["ipv4"] = []
-            if ipv6_cfg is not None:
-                desired["ipv6"] = []
-            return desired
-        return {
-            "ipv4": cls._relay_servers_from_config(ipv4_cfg) if ipv4_cfg is not None else [],
-            "ipv6": cls._relay_servers_from_config(ipv6_cfg) if ipv6_cfg is not None else [],
-        }
+        desired: Dict[str, List[str]] = {"ipv4": [], "ipv6": []}
+        for af, key in (("ipv4", "dhcpRelayIpv4"), ("ipv6", "dhcpRelayIpv6")):
+            af_cfg = config.get(key)
+            if af_cfg is None:
+                continue
+            af_action = cls._af_action(action, af_cfg)
+            desired[af] = [] if af_action == "delete" else cls._relay_servers_from_config(af_cfg)
+        return desired
 
     @classmethod
     def _relay_afs_in_scope(cls, config: Dict[str, Any]) -> List[str]:
@@ -194,21 +206,17 @@ class DhcpRelayInterfaceManager(BaseManager):
 
     @classmethod
     def _relay_state_matches(
-        cls, existing: Dict[str, List[str]], desired: Dict[str, List[str]], afs: List[str], action: str
+        cls, existing: Dict[str, List[str]], desired: Dict[str, List[str]], afs: List[str]
     ) -> bool:
         for af in afs:
-            existing_servers = sorted(existing.get(af) or [])
-            desired_servers = sorted(desired.get(af) or [])
-            if action == "delete":
-                if existing_servers:
-                    return False
-            elif existing_servers != desired_servers:
+            if sorted(existing.get(af) or []) != sorted(desired.get(af) or []):
                 return False
         return True
 
     @classmethod
     def _dhcp_relay_block(cls, relay_cfg: Any, action: str) -> Optional[Dict[str, Any]]:
-        if action == "delete":
+        af_action = cls._af_action(action, relay_cfg)
+        if af_action == "delete":
             if relay_cfg is None:
                 return None
             return {"dhcp": {"dhcpRelay": {"relayServers": []}}}
@@ -302,15 +310,46 @@ class DhcpRelayInterfaceManager(BaseManager):
             else:
                 config_payload["interfaces"][iface_name] = cls._deep_merge_interface_entry(existing, iface_data)
 
-    def _load_device_configs(self, dhcp_relay_config_file: str) -> Dict[str, List[Dict[str, Any]]]:
-        dhcp_relay_config_data = self.render_config_file(dhcp_relay_config_file)
-        device_configs: Dict[str, List[Dict[str, Any]]] = {}
-        for device_info in dhcp_relay_config_data.get("dhcp_relay_config") or []:
-            for device_name, config_list in device_info.items():
-                device_configs[device_name] = config_list
-        return device_configs
+    @staticmethod
+    def _row_from_params(mp: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a per-device row dict from module params for load_device_list_yaml_config."""
+        if mp.get("interfaces"):
+            return {"interfaces": list(mp["interfaces"])}
+        entry: Dict[str, Any] = {}
+        for key in ("name", "vlan", "dhcpRelayIpv4", "dhcpRelayIpv6"):
+            if mp.get(key) is not None:
+                entry[key] = mp[key]
+        return {"interfaces": [entry]} if entry.get("name") else {}
 
-    def apply_dhcp_relay_interfaces(self, dhcp_relay_config_file: str, operation: str) -> Dict[str, Any]:
+    @staticmethod
+    def _validate_cfg(device_name: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+        ifaces = cfg.get("interfaces")
+        if not isinstance(ifaces, list):
+            raise ConfigurationError(f"Device '{device_name}': expected 'interfaces' list in dhcp_relay_config entry.")
+        return cfg
+
+    def _load_device_configs(
+        self,
+        dhcp_relay_config_file: Optional[str],
+        module_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        by_name = load_device_list_yaml_config(
+            "dhcp_relay_config",
+            dhcp_relay_config_file,
+            module_params,
+            self.render_config_file,
+            missing_input_error="Provide dhcp_relay_config_file and/or device (portal device name).",
+            build_row_from_params=self._row_from_params,
+            validate_device_cfg=self._validate_cfg,
+        )
+        return {name: cfg.get("interfaces") or [] for name, cfg in by_name.items()}
+
+    def apply_dhcp_relay_interfaces(
+        self,
+        dhcp_relay_config_file: Optional[str],
+        operation: str,
+        module_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         action = "add" if operation == "configure" else "delete"
         result = new_apply_result(
             deconfigured_interfaces=[],
@@ -319,7 +358,7 @@ class DhcpRelayInterfaceManager(BaseManager):
         output_config: Dict[int, Dict[str, Any]] = {}
 
         try:
-            for device_name, interfaces in self._load_device_configs(dhcp_relay_config_file).items():
+            for device_name, interfaces in self._load_device_configs(dhcp_relay_config_file, module_params).items():
                 device_id = self.gsdk.get_device_id(device_name)
                 if device_id is None:
                     raise ConfigurationError(
@@ -336,13 +375,24 @@ class DhcpRelayInterfaceManager(BaseManager):
                 for config in interfaces:
                     interface_name = config.get("name")
                     vlan = config.get("vlan")
+                    iface_state = config.get("state")
+
+                    # Per-interface state overrides the module-level operation.
+                    if iface_state == "absent":
+                        iface_action = "delete"
+                    elif iface_state == "present":
+                        iface_action = "add"
+                    else:
+                        iface_action = action
+
+                    iface_operation = "deconfigure" if iface_action == "delete" else "configure"
                     label = self._interface_label(str(interface_name or ""), vlan)
 
                     self._validate_interface_entry(
-                        device_name, gcs_device_info, interface_name, vlan, operation=operation
+                        device_name, gcs_device_info, interface_name, vlan, operation=iface_operation
                     )
 
-                    if operation == "configure" and not self._has_relay_config(config):
+                    if iface_action == "add" and not self._has_relay_config(config):
                         LOG.info(
                             "Skipping interface '%s' on %s - no DHCP relay servers configured",
                             interface_name,
@@ -351,13 +401,35 @@ class DhcpRelayInterfaceManager(BaseManager):
                         continue
 
                     afs = self._relay_afs_in_scope(config)
+                    effective_config = config
+
+                    # When deleting with no explicit address families, clear whatever is live.
+                    if iface_action == "delete" and not afs:
+                        existing_for_afs = self._get_existing_dhcp_relay_state(
+                            gcs_device_info, str(interface_name), vlan
+                        )
+                        afs = [af for af in ("ipv4", "ipv6") if existing_for_afs.get(af)]
+                        if not afs:
+                            result["skipped_interfaces"].append(
+                                {
+                                    "device": device_name,
+                                    "interface": interface_name,
+                                    "vlan": vlan,
+                                    "reason": "DHCP relay already matches desired state",
+                                }
+                            )
+                            continue
+                        effective_config = dict(config)
+                        for af in afs:
+                            effective_config["dhcpRelayIpv4" if af == "ipv4" else "dhcpRelayIpv6"] = {}
+
                     if not afs:
                         continue
 
                     existing = self._get_existing_dhcp_relay_state(gcs_device_info, str(interface_name), vlan)
-                    desired = self._desired_relay_state(config, action)
+                    desired = self._desired_relay_state(effective_config, iface_action)
 
-                    if self._relay_state_matches(existing, desired, afs, action):
+                    if self._relay_state_matches(existing, desired, afs):
                         result["skipped_interfaces"].append(
                             {
                                 "device": device_name,
@@ -368,7 +440,7 @@ class DhcpRelayInterfaceManager(BaseManager):
                         )
                         continue
 
-                    payload = self.build_dhcp_relay_interfaces_payload(action=action, **config)
+                    payload = self.build_dhcp_relay_interfaces_payload(action=iface_action, **effective_config)
                     if not payload:
                         result["skipped_interfaces"].append(
                             {
@@ -396,7 +468,7 @@ class DhcpRelayInterfaceManager(BaseManager):
                     device_before[label] = before_entry
                     device_after[label] = after_entry
 
-                    if operation == "configure":
+                    if iface_action == "add":
                         LOG.info("Will configure DHCP relay on %s for device %s", label, device_name)
                     else:
                         result["deconfigured_interfaces"].append(
@@ -429,14 +501,34 @@ class DhcpRelayInterfaceManager(BaseManager):
         except Exception as e:
             raise ConfigurationError(f"DHCP relay interface {operation} failed: {str(e)}")
 
-    def configure(self, config_yaml_file: str) -> Dict[str, Any]:
-        return self.configure_dhcp_relay_interfaces(config_yaml_file)
+    def configure(
+        self,
+        config_yaml_file: Optional[str] = None,
+        module_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return self.configure_dhcp_relay_interfaces(config_yaml_file, module_params=module_params)
 
-    def deconfigure(self, config_yaml_file: str) -> Dict[str, Any]:
-        return self.deconfigure_dhcp_relay_interfaces(config_yaml_file)
+    def deconfigure(
+        self,
+        config_yaml_file: Optional[str] = None,
+        module_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return self.deconfigure_dhcp_relay_interfaces(config_yaml_file, module_params=module_params)
 
-    def configure_dhcp_relay_interfaces(self, dhcp_relay_config_file: str) -> Dict[str, Any]:
-        return self.apply_dhcp_relay_interfaces(dhcp_relay_config_file, operation="configure")
+    def configure_dhcp_relay_interfaces(
+        self,
+        dhcp_relay_config_file: Optional[str],
+        module_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return self.apply_dhcp_relay_interfaces(
+            dhcp_relay_config_file, operation="configure", module_params=module_params
+        )
 
-    def deconfigure_dhcp_relay_interfaces(self, dhcp_relay_config_file: str) -> Dict[str, Any]:
-        return self.apply_dhcp_relay_interfaces(dhcp_relay_config_file, operation="deconfigure")
+    def deconfigure_dhcp_relay_interfaces(
+        self,
+        dhcp_relay_config_file: Optional[str],
+        module_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return self.apply_dhcp_relay_interfaces(
+            dhcp_relay_config_file, operation="deconfigure", module_params=module_params
+        )

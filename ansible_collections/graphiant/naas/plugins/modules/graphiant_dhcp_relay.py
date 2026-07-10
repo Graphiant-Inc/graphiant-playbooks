@@ -49,13 +49,57 @@ options:
   dhcp_relay_config_file:
     description:
       - Path to the DHCP relay configuration YAML file.
-      - Required for all operations.
+      - Optional when O(device) is set with at least O(name) or O(interfaces).
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
-      - File must contain interface definitions with device names, interface names, and relay server lists.
+      - >-
+        File must contain a C(dhcp_relay_config) list; each entry maps a device name to a dict with
+        an C(interfaces) key (list of interface entries with C(name), C(vlan), C(dhcpRelayIpv4),
+        C(dhcpRelayIpv6)).
     type: str
-    required: true
+    required: false
     aliases:
       - dhcp_relay_file
+  device:
+    description:
+      - Portal device hostname for single-device or loop execution.
+      - When combined with O(dhcp_relay_config_file), overrides that device's interface list in the file.
+      - Required when O(dhcp_relay_config_file) is omitted.
+    type: str
+  name:
+    description:
+      - Interface name for single-interface module-param mode (e.g. C(GigabitEthernet4/0/0)).
+      - Required when O(dhcp_relay_config_file) is omitted and O(interfaces) is not set.
+    type: str
+    aliases:
+      - interface_name
+  vlan:
+    description:
+      - VLAN ID for subinterface relay. Omit for main interface.
+      - Used together with O(name) in single-interface mode.
+    type: raw
+  dhcpRelayIpv4:
+    description:
+      - List of IPv4 DHCP relay server addresses for the interface named by O(name).
+      - Ignored when O(interfaces) is set.
+    type: list
+    elements: str
+    aliases:
+      - dhcp_relay_ipv4
+  dhcpRelayIpv6:
+    description:
+      - List of IPv6 DHCP relay server addresses for the interface named by O(name).
+      - Ignored when O(interfaces) is set.
+    type: list
+    elements: str
+    aliases:
+      - dhcp_relay_ipv6
+  interfaces:
+    description:
+      - List of interface entries for multi-interface module-param mode.
+      - Each entry may contain C(name), C(vlan), C(dhcpRelayIpv4), and C(dhcpRelayIpv6).
+      - When set, takes precedence over O(name) / O(vlan) / O(dhcpRelayIpv4) / O(dhcpRelayIpv6).
+    type: list
+    elements: dict
   operation:
     description:
       - "The specific DHCP relay operation to perform."
@@ -103,7 +147,9 @@ author:
 """
 
 EXAMPLES = r"""
-- name: Configure DHCP relay on interfaces
+# --- From YAML config file ---
+
+- name: Configure DHCP relay on interfaces (from YAML)
   graphiant.naas.graphiant_dhcp_relay:
     operation: configure
     dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
@@ -112,7 +158,7 @@ EXAMPLES = r"""
     password: "{{ graphiant_password }}"
     detailed_logs: true
 
-- name: Deconfigure DHCP relay from interfaces
+- name: Deconfigure DHCP relay from interfaces (from YAML)
   graphiant.naas.graphiant_dhcp_relay:
     operation: deconfigure
     dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
@@ -120,7 +166,132 @@ EXAMPLES = r"""
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
 
-- name: Preview DHCP relay changes
+# --- Single device, single interface from module parameters ---
+
+- name: Configure DHCP relay on a single interface (module params)
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    device: "edge-1-sdktest"
+    name: "GigabitEthernet4/0/0"
+    vlan: 1
+    dhcpRelayIpv4:
+      - 10.1.1.1
+      - 10.2.1.1
+    dhcpRelayIpv6:
+      - 2001:10:1:1::1
+
+- name: Deconfigure DHCP relay on a single interface (module params)
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: deconfigure
+    device: "edge-1-sdktest"
+    name: "GigabitEthernet4/0/0"
+    vlan: 1
+    dhcpRelayIpv4:
+      - 10.1.1.1
+
+# --- Single device, multiple interfaces from module parameters ---
+
+- name: Configure DHCP relay on multiple interfaces (module params)
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    device: "edge-1-sdktest"
+    interfaces:
+      - name: GigabitEthernet4/0/0
+        vlan: 1
+        dhcpRelayIpv4:
+          - 10.1.1.1
+          - 10.2.1.1
+        dhcpRelayIpv6:
+          - 2001:10:1:1::1
+      - name: GigabitEthernet8/0/0
+        dhcpRelayIpv4:
+          - 10.1.11.1
+          - 10.2.11.1
+
+# --- Loop over multiple devices (one interface per iteration) ---
+
+- name: Configure DHCP relay on multiple devices (loop)
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    device: "{{ item.device }}"
+    name: "{{ item.name }}"
+    vlan: "{{ item.vlan | default(omit) }}"
+    dhcpRelayIpv4: "{{ item.dhcpRelayIpv4 | default(omit) }}"
+    dhcpRelayIpv6: "{{ item.dhcpRelayIpv6 | default(omit) }}"
+  loop:
+    - device: edge-1-sdktest
+      name: GigabitEthernet4/0/0
+      vlan: 1
+      dhcpRelayIpv4: ["10.1.1.1", "10.2.1.1"]
+      dhcpRelayIpv6: ["2001:10:1:1::1"]
+    - device: edge-2-sdktest
+      name: GigabitEthernet8/0/0
+      dhcpRelayIpv4: ["10.1.11.1"]
+
+# --- Override one device from a YAML file ---
+
+- name: Override DHCP relay for one device from file
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
+    device: "edge-1-sdktest"
+    name: "GigabitEthernet4/0/0"
+    dhcpRelayIpv4:
+      - 192.168.1.1
+
+# --- Per-interface state: absent (remove all relay on one interface, configure others) ---
+
+- name: Remove relay from one subinterface while configuring others
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    device: "edge-3-sdktest"
+    interfaces:
+      - name: GigabitEthernet7/0/0
+        dhcpRelayIpv4:
+          - 10.2.1.2
+      - name: GigabitEthernet8/0/0
+        vlan: 30
+        state: absent
+
+# --- Per-AF state: absent (remove only IPv4 relay, keep IPv6) ---
+
+- name: Remove IPv4 relay only, keep IPv6 on subinterface
+  graphiant.naas.graphiant_dhcp_relay:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    device: "edge-3-sdktest"
+    interfaces:
+      - name: GigabitEthernet8/0/0
+        vlan: 30
+        dhcpRelayIpv4:
+          state: absent
+        dhcpRelayIpv6:
+          relayServers:
+            - 2001:10:2:1::2
+
+# --- Check / diff mode ---
+
+- name: Preview DHCP relay changes (check + diff)
   graphiant.naas.graphiant_dhcp_relay:
     operation: configure
     dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
@@ -148,9 +319,9 @@ operation:
   type: str
   returned: always
 dhcp_relay_config_file:
-  description: The DHCP relay configuration file used for the operation.
+  description: The DHCP relay configuration file used for the operation, if provided.
   type: str
-  returned: always
+  returned: when provided
 configured_devices:
   description: Device names where configuration would be or was pushed.
   type: list
@@ -197,7 +368,13 @@ def execute_with_logging(module, func, *args, **kwargs):
 def main():
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        dhcp_relay_config_file=dict(type="str", required=True, aliases=["dhcp_relay_file"]),
+        dhcp_relay_config_file=dict(type="str", required=False, default=None, aliases=["dhcp_relay_file"]),
+        device=dict(type="str", required=False, default=None),
+        name=dict(type="str", required=False, default=None, aliases=["interface_name"]),
+        vlan=dict(type="raw", required=False, default=None),
+        dhcpRelayIpv4=dict(type="list", required=False, default=None, elements="str", aliases=["dhcp_relay_ipv4"]),
+        dhcpRelayIpv6=dict(type="list", required=False, default=None, elements="str", aliases=["dhcp_relay_ipv6"]),
+        interfaces=dict(type="list", required=False, default=None, elements="dict"),
         operation=dict(type="str", required=False, choices=["configure", "deconfigure"]),
         state=dict(type="str", required=False, default="present", choices=["present", "absent"]),
         detailed_logs=dict(type="bool", required=False, default=False),
@@ -208,10 +385,31 @@ def main():
     params = module.params
     operation = params.get("operation")
     state = params.get("state", "present")
-    dhcp_relay_config_file = params["dhcp_relay_config_file"]
+    dhcp_relay_config_file = params.get("dhcp_relay_config_file")
+    device = (params.get("device") or "").strip()
 
     if not operation:
         operation = "configure" if state == "present" else "deconfigure"
+
+    if not dhcp_relay_config_file and not device:
+        module.fail_json(
+            msg="Provide dhcp_relay_config_file and/or device (portal device name).",
+            operation=operation,
+        )
+        return
+
+    if not dhcp_relay_config_file and device:
+        if not params.get("name") and not params.get("interfaces"):
+            module.fail_json(
+                msg="When dhcp_relay_config_file is omitted, provide name (interface name) or interfaces list.",
+                operation=operation,
+            )
+            return
+
+    module_params = {"device": device or None}
+    for key in ("name", "vlan", "dhcpRelayIpv4", "dhcpRelayIpv6", "interfaces"):
+        if params.get(key) is not None:
+            module_params[key] = params[key]
 
     try:
         connection = get_graphiant_connection(params, check_mode=module.check_mode)
@@ -222,6 +420,7 @@ def main():
                 module,
                 graphiant_config.dhcp_relay_interfaces.configure_dhcp_relay_interfaces,
                 dhcp_relay_config_file,
+                module_params,
                 success_msg="Successfully configured DHCP relay on interfaces",
                 no_change_msg="DHCP relay already matches desired state; no changes needed",
             )
@@ -230,6 +429,7 @@ def main():
                 module,
                 graphiant_config.dhcp_relay_interfaces.deconfigure_dhcp_relay_interfaces,
                 dhcp_relay_config_file,
+                module_params,
                 success_msg="Successfully deconfigured DHCP relay from interfaces",
                 no_change_msg="DHCP relay already removed or not configured; no changes needed",
             )
@@ -239,11 +439,12 @@ def main():
             changed=result["changed"],
             msg=result["result_msg"],
             operation=operation,
-            dhcp_relay_config_file=dhcp_relay_config_file,
             configured_devices=details.get("configured_devices", []),
             skipped_devices=details.get("skipped_devices", []),
             details=details,
         )
+        if dhcp_relay_config_file:
+            exit_payload["dhcp_relay_config_file"] = dhcp_relay_config_file
         apply_module_diff(module, exit_payload, details)
         module.exit_json(**exit_payload)
 

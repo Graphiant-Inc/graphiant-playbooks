@@ -839,13 +839,15 @@ Configure DHCP relay (IPv4 and/or IPv6) on main interfaces and subinterfaces und
 
 **YAML keys:**
 
-| Key | Description |
-|-----|-------------|
-| `dhcp_relay_config` | List of `{device_name: [interface entries]}` blocks |
-| `name` | Parent interface name (e.g. `GigabitEthernet4/0/0`) |
-| `vlan` | Optional VLAN ID for subinterface relay; omit for main interface |
-| `dhcpRelayIpv4` | List of IPv4 relay server addresses (or `{relayServers: [...]}`) |
-| `dhcpRelayIpv6` | List of IPv6 relay server addresses (same format) |
+| Key | Description                                                                                  |
+|-----|----------------------------------------------------------------------------------------------|
+| `dhcp_relay_config` | List of `{device_name: {interfaces: [...]}}` blocks                                          |
+| `interfaces` | List of interface entries for the device                                                     |
+| `name` | Parent interface name (e.g. `GigabitEthernet4/0/0`)                                          |
+| `vlan` | Optional VLAN ID for subinterface relay; omit for main interface                             |
+| `dhcpRelayIpv4` | List of IPv4 relay server addresses ` dict, or `{state: absent}` to remove                   |
+| `dhcpRelayIpv6` | List of IPv6 relay server addresses (same format)                                            |
+| `state` | Per-interface: `absent` removes all relay on that entry regardless of module-level operation |
 
 **Idempotency:** Configure compares desired relay servers to live device state per interface and address family; deconfigure skips when relay is already removed for the families listed in YAML.
 
@@ -909,23 +911,200 @@ ansible-playbook playbooks/dhcp_relay_interface_management.yml --tag deconfigure
   tags: ['dhcp_relay_interfaces', 'deconfigure']
 ```
 
-#### Sample YAML excerpt
+### Module task
+
+From YAML (configure tag — YAML drives all devices):
 
 ```yaml
-dhcp_relay_config:
-  - edge-1-sdktest:
-    - name: GigabitEthernet4/0/0
+- name: Configure DHCP relay on interfaces (from YAML)
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    dhcp_relay_config_file: "{{ config_file }}"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure']
+
+- name: Display DHCP relay configuration results
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['configure']
+```
+
+For a **single device, single interface**, use module parameters directly:
+
+```yaml
+- name: Configure DHCP relay on a single interface (module params)
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    name: "GigabitEthernet4/0/0"
+    vlan: 1
+    dhcpRelayIpv4:
+      - 10.1.1.1
+      - 10.2.1.1
+    dhcpRelayIpv6:
+      - 2001:10:1:1::1
+    detailed_logs: true
+    state: present
+```
+
+For a **single device, multiple interfaces**, use the `interfaces` list:
+
+```yaml
+- name: Configure DHCP relay on multiple interfaces (module params)
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    interfaces:
+      - name: GigabitEthernet4/0/0
+        vlan: 1
+        dhcpRelayIpv4:
+          - 10.1.1.1
+          - 10.2.1.1
+        dhcpRelayIpv6:
+          - 2001:10:1:1::1
+      - name: GigabitEthernet8/0/0
+        dhcpRelayIpv4:
+          - 10.1.11.1
+          - 10.2.11.1
+    detailed_logs: true
+    state: present
+```
+
+For **multiple devices without a config file**, loop over a list (one interface per iteration):
+
+```yaml
+- name: Configure DHCP relay on multiple devices (loop)
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "{{ item.device }}"
+    name: "{{ item.name }}"
+    vlan: "{{ item.vlan | default(omit) }}"
+    dhcpRelayIpv4: "{{ item.dhcpRelayIpv4 | default(omit) }}"
+    dhcpRelayIpv6: "{{ item.dhcpRelayIpv6 | default(omit) }}"
+  loop:
+    - device: edge-1-sdktest
+      name: GigabitEthernet4/0/0
       vlan: 1
       dhcpRelayIpv4:
         - 10.1.1.1
         - 10.2.1.1
       dhcpRelayIpv6:
         - 2001:10:1:1::1
-  - edge-2-sdktest:
-    - name: GigabitEthernet8/0/0
+    - device: edge-2-sdktest
+      name: GigabitEthernet8/0/0
       dhcpRelayIpv4: 
         - 10.1.11.1
-        - 10.2.11.1
+```
+
+To **override one device** from a YAML file (module params take precedence for that device):
+
+```yaml
+- name: Override DHCP relay for one device from file
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    dhcp_relay_config_file: "sample_dhcp_relay_config.yaml"
+    device: "edge-1-sdktest"
+    name: "GigabitEthernet4/0/0"
+    dhcpRelayIpv4:
+      - 192.168.1.1
+```
+
+To **remove relay from a specific interface** while configuring others in the same run, use `state: absent` on that interface entry. The module-level `operation: configure` still applies to all other entries.
+
+```yaml
+- name: Configure relay on most interfaces, remove from one
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-3-sdktest"
+    interfaces:
+      - name: GigabitEthernet7/0/0         # configure as normal
+        dhcpRelayIpv4:
+          - 10.2.1.2
+      - name: GigabitEthernet8/0/0
+        vlan: 30
+        state: absent                       # remove all relay on this subinterface
+```
+
+YAML equivalent (inside `sample_dhcp_relay_config.yaml`):
+
+```yaml
+dhcp_relay_config:
+  - edge-3-sdktest:
+      interfaces:
+        - name: GigabitEthernet7/0/0
+          dhcpRelayIpv4:
+            - 10.2.1.2
+        - name: GigabitEthernet8/0/0
+          vlan: 30
+          state: absent                     # remove all relay on this subinterface
+```
+
+To **remove only one address family** while keeping the other, use `state: absent` on the individual `dhcpRelayIpv4` or `dhcpRelayIpv6` field:
+
+```yaml
+- name: Remove IPv4 relay only, keep IPv6
+  graphiant.naas.graphiant_dhcp_relay:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-3-sdktest"
+    interfaces:
+      - name: GigabitEthernet8/0/0
+        vlan: 30
+        dhcpRelayIpv4:
+          state: absent                     # removes IPv4 relay servers
+        dhcpRelayIpv6:
+          relayServers:
+            - 2001:10:2:1::2               # keeps / updates IPv6
+```
+
+YAML equivalent:
+
+```yaml
+dhcp_relay_config:
+  - edge-3-sdktest:
+      interfaces:
+        - name: GigabitEthernet8/0/0
+          vlan: 30
+          dhcpRelayIpv4:
+            state: absent
+          dhcpRelayIpv6:
+            relayServers:
+              - 2001:10:2:1::2
+```
+
+#### Sample YAML excerpt
+
+Each device entry uses an `interfaces:` list. The `vlan` key is optional (omit for main interface).
+
+```yaml
+dhcp_relay_config:
+  - edge-1-sdktest:
+      interfaces:
+        - name: GigabitEthernet4/0/0
+          vlan: 1
+          dhcpRelayIpv4:
+            - 10.1.1.1
+            - 10.2.1.1
+          dhcpRelayIpv6:
+            - 2001:10:1:1::1
+  - edge-2-sdktest:
+      interfaces:
+        - name: GigabitEthernet8/0/0
+          dhcpRelayIpv4:
+            - 10.1.11.1
+            - 10.2.11.1
 ```
 
 ### Module: graphiant.naas.graphiant_lag_interfaces

@@ -66,17 +66,39 @@ def test_has_relay_config() -> None:
 def test_relay_state_matches_configure() -> None:
     existing = {"ipv4": ["10.1.1.1"], "ipv6": []}
     desired = {"ipv4": ["10.1.1.1"], "ipv6": []}
-    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired, ["ipv4"], "add") is True
-    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired, ["ipv4"], "add") is True
+    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired, ["ipv4"]) is True
     desired2 = {"ipv4": ["10.2.1.1"], "ipv6": []}
-    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired2, ["ipv4"], "add") is False
+    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired2, ["ipv4"]) is False
 
 
 def test_relay_state_matches_deconfigure() -> None:
     existing = {"ipv4": ["10.1.1.1"], "ipv6": []}
     desired = {"ipv4": [], "ipv6": []}
-    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired, ["ipv4"], "delete") is False
-    assert DhcpRelayInterfaceManager._relay_state_matches({"ipv4": [], "ipv6": []}, desired, ["ipv4"], "delete") is True
+    assert DhcpRelayInterfaceManager._relay_state_matches(existing, desired, ["ipv4"]) is False
+    assert DhcpRelayInterfaceManager._relay_state_matches({"ipv4": [], "ipv6": []}, desired, ["ipv4"]) is True
+
+
+def test_per_af_state_absent_desired() -> None:
+    cfg = {"name": "GigabitEthernet8/0/0", "vlan": 30, "dhcpRelayIpv4": {"state": "absent"}}
+    desired = DhcpRelayInterfaceManager._desired_relay_state(cfg, "add")
+    assert desired["ipv4"] == []
+
+
+def test_per_af_state_absent_block() -> None:
+    block = DhcpRelayInterfaceManager._dhcp_relay_block({"state": "absent"}, "add")
+    assert block == {"dhcp": {"dhcpRelay": {"relayServers": []}}}
+
+
+def test_per_af_state_absent_with_servers_overrides() -> None:
+    cfg = {"name": "GigabitEthernet8/0/0", "dhcpRelayIpv4": {"relayServers": ["10.1.1.1"], "state": "absent"}}
+    desired = DhcpRelayInterfaceManager._desired_relay_state(cfg, "add")
+    assert desired["ipv4"] == []
+
+
+def test_per_af_state_present_overrides_delete() -> None:
+    cfg = {"name": "GigabitEthernet8/0/0", "dhcpRelayIpv4": {"relayServers": ["10.1.1.1"], "state": "present"}}
+    desired = DhcpRelayInterfaceManager._desired_relay_state(cfg, "delete")
+    assert desired["ipv4"] == ["10.1.1.1"]
 
 
 def test_merge_dhcp_relay_payload_two_subinterfaces_same_parent() -> None:

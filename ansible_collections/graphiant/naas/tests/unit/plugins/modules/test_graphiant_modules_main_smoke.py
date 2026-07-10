@@ -209,7 +209,7 @@ def test_graphiant_dhcp_relay_deconfigure(m_am, m_gc) -> None:
     m_gc.return_value = _conn_with(dhcp_relay_interfaces=mgr)
     graphiant_dhcp_relay.main()
     m.exit_json.assert_called_once()
-    mgr.deconfigure_dhcp_relay_interfaces.assert_called_once_with("d.yaml")
+    mgr.deconfigure_dhcp_relay_interfaces.assert_called_once_with("d.yaml", {"device": None})
 
 
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_dhcp_relay.get_graphiant_connection")
@@ -228,7 +228,7 @@ def test_graphiant_dhcp_relay_configure(m_am, m_gc) -> None:
     m_gc.return_value = _conn_with(dhcp_relay_interfaces=mgr)
     graphiant_dhcp_relay.main()
     m.exit_json.assert_called_once()
-    mgr.configure_dhcp_relay_interfaces.assert_called_once_with("d.yaml")
+    mgr.configure_dhcp_relay_interfaces.assert_called_once_with("d.yaml", {"device": None})
 
 
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_interfaces.get_graphiant_connection")

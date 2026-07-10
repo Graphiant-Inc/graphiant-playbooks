@@ -2035,6 +2035,130 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure DHCP relay interfaces result (idempotency check): %s", result)
         assert result['changed'] is False, "Deconfigure DHCP relay interfaces idempotency failed"
 
+    @staticmethod
+    def _load_dhcp_relay_from_yaml(graphiant_config, config_yaml_file):
+        """Return {device_name: {"interfaces": [...]}} from dhcp_relay_config YAML list."""
+        cfg = graphiant_config.config_utils.render_config_file(config_yaml_file) or {}
+        raw = cfg.get("dhcp_relay_config") or []
+        by_name = {}
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            for device_name, device_cfg in entry.items():
+                by_name[device_name] = device_cfg if isinstance(device_cfg, dict) else {}
+        return by_name
+
+    def _dhcp_relay_context(self, graphiant_config):
+        """Resolve device and interface list from sample_dhcp_relay_config.yaml."""
+        by_name = self._load_dhcp_relay_from_yaml(graphiant_config, config_yaml_file="sample_dhcp_relay_config.yaml")
+        if not by_name:
+            raise KeyError("No dhcp_relay_config entries in sample_dhcp_relay_config.yaml")
+        device = next(iter(by_name))
+        interfaces = by_name[device].get("interfaces") or []
+        if not interfaces:
+            raise KeyError(f"No interfaces in dhcp_relay_config for {device!r}")
+        return {
+            "device": device,
+            "interfaces": interfaces,
+            "first_interface": interfaces[0],
+        }
+
+    def test_configure_dhcp_relay_interfaces_module_params(self):
+        """Configure DHCP relay using module_params only (no YAML file)."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._dhcp_relay_context(graphiant_config)
+        module_params = {
+            "device": ctx["device"],
+            "interfaces": ctx["interfaces"],
+        }
+        result = graphiant_config.dhcp_relay_interfaces.configure(module_params=module_params)
+        LOG.info("Configure DHCP relay via module_params result: %s", result)
+        result = graphiant_config.dhcp_relay_interfaces.configure(module_params=module_params)
+        LOG.info("Configure DHCP relay via module_params (idempotency check): %s", result)
+        assert result["changed"] is False, "Configure DHCP relay module_params idempotency failed"
+
+    def test_deconfigure_dhcp_relay_interfaces_module_params(self):
+        """Deconfigure DHCP relay using module_params only (no YAML file)."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._dhcp_relay_context(graphiant_config)
+        module_params = {
+            "device": ctx["device"],
+            "interfaces": ctx["interfaces"],
+        }
+        result = graphiant_config.dhcp_relay_interfaces.deconfigure(module_params=module_params)
+        LOG.info("Deconfigure DHCP relay via module_params result: %s", result)
+        result = graphiant_config.dhcp_relay_interfaces.deconfigure(module_params=module_params)
+        LOG.info("Deconfigure DHCP relay via module_params (idempotency check): %s", result)
+        assert result["changed"] is False, "Deconfigure DHCP relay module_params idempotency failed"
+
+    def test_configure_dhcp_relay_interfaces_module_params_override(self):
+        """Configure DHCP relay from YAML with a module_params override for one device."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._dhcp_relay_context(graphiant_config)
+        first_iface = ctx["first_interface"]
+        # Override: use only the first IPv4 relay server (subset of what the YAML specifies).
+        override_servers = (first_iface.get("dhcpRelayIpv4") or [])[:1]
+        module_params = {
+            "device": ctx["device"],
+            "interfaces": [{**first_iface, "dhcpRelayIpv4": override_servers}],
+        }
+        result = graphiant_config.dhcp_relay_interfaces.configure(
+            "sample_dhcp_relay_config.yaml",
+            module_params=module_params,
+        )
+        LOG.info("Configure DHCP relay YAML + module_params override result: %s", result)
+        result = graphiant_config.dhcp_relay_interfaces.configure(
+            "sample_dhcp_relay_config.yaml",
+            module_params=module_params,
+        )
+        LOG.info("Configure DHCP relay YAML + module_params override (idempotency check): %s", result)
+        assert result["changed"] is False, "Configure DHCP relay module_params override idempotency failed"
+
+    def test_configure_dhcp_relay_per_interface_state_absent(self):
+        """Per-interface state: absent removes relay from one entry while others are configured normally."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._dhcp_relay_context(graphiant_config)
+        interfaces = ctx["interfaces"]
+        if len(interfaces) < 2:
+            self.skipTest("Need at least 2 interface entries in sample_dhcp_relay_config.yaml for this test")
+        # Configure the first interface normally, mark the second absent.
+        module_params = {
+            "device": ctx["device"],
+            "interfaces": [
+                interfaces[0],
+                {**interfaces[1], "state": "absent"},
+            ],
+        }
+        result = graphiant_config.dhcp_relay_interfaces.configure(module_params=module_params)
+        LOG.info("Per-interface state: absent result: %s", result)
+        # Idempotency: second run should report no changes.
+        result = graphiant_config.dhcp_relay_interfaces.configure(module_params=module_params)
+        LOG.info("Per-interface state: absent (idempotency check): %s", result)
+        assert result["changed"] is False, "Per-interface state: absent idempotency failed"
+
+    def test_configure_dhcp_relay_per_af_state_absent(self):
+        """Per-AF state: absent removes only the specified address family, leaving the other intact."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._dhcp_relay_context(graphiant_config)
+        first_iface = ctx["first_interface"]
+        if not first_iface.get("dhcpRelayIpv4"):
+            self.skipTest("First interface in sample_dhcp_relay_config.yaml has no dhcpRelayIpv4")
+        # Remove IPv4 relay only; leave IPv6 untouched.
+        module_params = {
+            "device": ctx["device"],
+            "interfaces": [{
+                "name": first_iface["name"],
+                "vlan": first_iface.get("vlan"),
+                "dhcpRelayIpv4": {"state": "absent"},
+            }],
+        }
+        result = graphiant_config.dhcp_relay_interfaces.configure(module_params=module_params)
+        LOG.info("Per-AF state: absent result: %s", result)
+        # Idempotency: second run should report no changes.
+        result = graphiant_config.dhcp_relay_interfaces.configure(module_params=module_params)
+        LOG.info("Per-AF state: absent (idempotency check): %s", result)
+        assert result["changed"] is False, "Per-AF state: absent idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -2140,6 +2264,9 @@ if __name__ == '__main__':
     # DHCP Relay Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_dhcp_relay_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_dhcp_relay_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_dhcp_relay_interfaces_module_params'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_dhcp_relay_interfaces_module_params'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_dhcp_relay_interfaces_module_params_override'))
 
     # LAG Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lag_interfaces'))
