@@ -24,6 +24,7 @@ from .device_system_manager import DeviceSystemManager
 from .edge_services_manager import EdgeServicesManager
 from .prefix_and_port_list import PrefixAndPortListManager
 from .macsec_manager import MacsecManager
+from .nat_policy_manager import NatPolicyManager
 from .logger import setup_logger
 from .exceptions import GraphiantPlaybookError
 
@@ -97,6 +98,7 @@ class GraphiantConfig:
             self.edge_services = EdgeServicesManager(self.config_utils)
             self.prefix_port_list = PrefixAndPortListManager(self.config_utils)
             self.macsec = MacsecManager(self.config_utils)
+            self.nat_policy = NatPolicyManager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -132,4 +134,5 @@ class GraphiantConfig:
             "edge_services": hasattr(self, "edge_services") and self.edge_services is not None,
             "prefix_port_list": hasattr(self, "prefix_port_list") and self.prefix_port_list is not None,
             "macsec": hasattr(self, "macsec") and self.macsec is not None,
+            "nat_policy": hasattr(self, "nat_policy") and self.nat_policy is not None,
         }

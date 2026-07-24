@@ -2159,6 +2159,134 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Per-AF state: absent (idempotency check): %s", result)
         assert result["changed"] is False, "Per-AF state: absent idempotency failed"
 
+    _NAT_POLICY_CONFIG_FILE = "sample_device_nat_policies.yaml"
+
+    @staticmethod
+    def _load_nat_policy_from_yaml(graphiant_config, config_yaml_file):
+        """Return {device_name: config_dict} from natPolicyObject YAML list."""
+        cfg = graphiant_config.config_utils.render_config_file(config_yaml_file) or {}
+        raw = cfg.get("natPolicyObject") or []
+        by_name = {}
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            for device_name, device_cfg in entry.items():
+                by_name[device_name] = device_cfg if isinstance(device_cfg, dict) else {}
+        return by_name
+
+    def _nat_policy_context(self, graphiant_config):
+        """Resolve device name and config from sample_device_nat_policies.yaml."""
+        by_name = self._load_nat_policy_from_yaml(graphiant_config, self._NAT_POLICY_CONFIG_FILE)
+        if not by_name:
+            raise KeyError(f"No natPolicyObject entries in {self._NAT_POLICY_CONFIG_FILE}")
+        device = next(iter(by_name))
+        return {"device": device, "device_cfg": by_name[device]}
+
+    def test_configure_device_nat_policy(self):
+        """
+        Configure device-level NAT policy rulesets (edge.natPolicy.natRulesets).
+
+        Second run should be idempotent (changed=False) if desired state already matches.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.nat_policy.configure(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Configure device-level NAT policy result: %s", result)
+        result2 = graphiant_config.nat_policy.configure(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Configure device-level NAT policy result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure device-level NAT policy idempotency failed"
+
+    def test_deconfigure_device_nat_policy(self):
+        """
+        Deconfigure (delete) device-level NAT policy rulesets listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when rulesets are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.nat_policy.deconfigure(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Deconfigure device-level NAT policy result: %s", result)
+        result2 = graphiant_config.nat_policy.deconfigure(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Deconfigure device-level NAT policy result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure device-level NAT policy idempotency failed"
+
+    def test_attach_nat_policy_lan_segments(self):
+        """
+        Attach NAT ruleset reference on LAN segments (edge.segments.*.natRuleset).
+
+        Uses ``sample_device_nat_policies.yaml``. Second run is idempotent when
+        the portal already shows the same ruleset name on the segment.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.nat_policy.attach_to_lan_segments(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Attach NAT policy to LAN segments result: %s", result)
+        result2 = graphiant_config.nat_policy.attach_to_lan_segments(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Attach NAT policy to LAN segments (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Attach LAN segment NAT policy idempotency failed"
+
+    def test_detach_nat_policy_lan_segments(self):
+        """
+        Clear NAT ruleset reference on LAN segments listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when references are already cleared.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.nat_policy.detach_from_lan_segments(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Detach NAT policy from LAN segments result: %s", result)
+        result2 = graphiant_config.nat_policy.detach_from_lan_segments(self._NAT_POLICY_CONFIG_FILE)
+        LOG.info("Detach NAT policy from LAN segments (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Detach LAN segment NAT policy idempotency failed"
+
+    def test_configure_device_nat_policy_module_params(self):
+        """Configure NAT policy rulesets using module_params only (no YAML file)."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._nat_policy_context(graphiant_config)
+        module_params = {
+            "device": ctx["device"],
+            "natRulesets": ctx["device_cfg"].get("natRulesets"),
+        }
+        result = graphiant_config.nat_policy.configure(module_params=module_params)
+        LOG.info("Configure NAT policy via module_params result: %s", result)
+        result2 = graphiant_config.nat_policy.configure(module_params=module_params)
+        LOG.info("Configure NAT policy via module_params (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure NAT policy module_params idempotency failed"
+
+    def test_deconfigure_device_nat_policy_module_params(self):
+        """Deconfigure NAT policy rulesets using module_params only (no YAML file)."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._nat_policy_context(graphiant_config)
+        module_params = {
+            "device": ctx["device"],
+            "natRulesets": ctx["device_cfg"].get("natRulesets"),
+        }
+        result = graphiant_config.nat_policy.deconfigure(module_params=module_params)
+        LOG.info("Deconfigure NAT policy via module_params result: %s", result)
+        result2 = graphiant_config.nat_policy.deconfigure(module_params=module_params)
+        LOG.info("Deconfigure NAT policy via module_params (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure NAT policy module_params idempotency failed"
+
+    def test_configure_device_nat_policy_module_params_override(self):
+        """Configure NAT policy from YAML with a module_params override for one device."""
+        graphiant_config = graphiant_config_from_read_config()
+        ctx = self._nat_policy_context(graphiant_config)
+        module_params = {
+            "device": ctx["device"],
+            "natRulesets": ctx["device_cfg"].get("natRulesets"),
+        }
+        result = graphiant_config.nat_policy.configure(
+            self._NAT_POLICY_CONFIG_FILE,
+            module_params=module_params,
+        )
+        LOG.info("Configure NAT policy YAML + module_params override result: %s", result)
+        result2 = graphiant_config.nat_policy.configure(
+            self._NAT_POLICY_CONFIG_FILE,
+            module_params=module_params,
+        )
+        LOG.info("Configure NAT policy YAML + module_params override (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure NAT policy module_params override idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -2421,6 +2549,17 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_security_policy'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_edge_services'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_and_port_list'))
+
+    # Device NAT Policy Management Tests
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_nat_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_attach_nat_policy_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_detach_nat_policy_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_nat_policy'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_nat_policy_module_params'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_nat_policy_module_params_override'))
+    suite.addTest(TestGraphiantPlaybooks('test_attach_nat_policy_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_detach_nat_policy_lan_segments'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_nat_policy_module_params'))
 
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))

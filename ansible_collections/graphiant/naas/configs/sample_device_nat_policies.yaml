@@ -1,0 +1,78 @@
+# Device-level NAT policy (edge.natPolicy.natRulesets).
+#
+# Rule guidance:
+#   Required fields per rule: seq, type, originalSrcIpPrefix, translatedSrcIpPrefix.
+#   Optional fields per rule: name, originalDstIpPrefix, advertisePreNatPrefixes.
+#   name and originalDstIpPrefix may be omitted if not needed.
+#
+#   type options:
+#     OneToOne  — bidirectional 1:1 address mapping between original and translated prefixes.
+#     PAT       — port address translation; many-to-one mapping using port overloading.
+#
+#   advertisePreNatPrefixes: true | false (default false)
+#     When true, the pre-NAT source prefix is advertised into the overlay routing table.
+#
+# Segment attachment guidance:
+#   Configure workflow: operation configure (natRulesets) then attach_to_lan_segments (segments).
+#   Deconfigure workflow: detach_from_lan_segments (segments) then deconfigure (natRulesets).
+#   The nat_policy_management.yml playbook runs both steps under the configure / deconfigure tags.
+#   attach_to_lan_segments maps each listed segment to the ruleset value (string shorthand).
+#   detach_from_lan_segments clears the ruleset reference on each listed segment; values are ignored.
+#
+# Per-object state (under configure; default is present):
+#   - Delete one ruleset:  name: My-Ruleset / state: absent
+#   - Delete one rule:     seq: 10 / state: absent  (only seq required for absent)
+
+natPolicyObject:
+  - edge-1-sdktest:
+      natRulesets:
+        - name: NatPolicyRuleSet1
+          rules:
+            - seq: 10
+              type: OneToOne          # OneToOne or PAT
+              name: Testing
+              originalSrcIpPrefix: 1.1.1.1/32
+              originalDstIpPrefix: 2.2.2.2/32
+              translatedSrcIpPrefix: 3.3.3.3/32
+              advertisePreNatPrefixes: true
+
+            - seq: 20
+              type: PAT               # OneToOne or PAT
+              name: testingPAT
+              originalSrcIpPrefix: 4.4.4.4/32
+              originalDstIpPrefix: 5.5.5.5/32
+              translatedSrcIpPrefix: 6.6.6.6/32
+              advertisePreNatPrefixes: true
+
+      # LAN segment attachments.
+      segments:
+        lan-segment-3: NatPolicyRuleSet1
+
+  - edge-2-sdktest:
+      natRulesets:
+        - name: NatPolicyRuleSet2
+          rules:
+            - seq: 100
+              name: testing
+              type: OneToOne          # OneToOne or PAT
+              originalSrcIpPrefix: 1.1.1.1/32
+              translatedSrcIpPrefix: 3.3.3.3/32
+              advertisePreNatPrefixes: true
+
+            - seq: 200
+              type: PAT               # OneToOne or PAT
+              name: testingPAT
+              originalSrcIpPrefix: 5.5.5.5/32
+              translatedSrcIpPrefix: 178.6.6.6/32
+
+        - name: NatPolicyRuleSet3
+          rules:
+            - seq: 300
+              type: OneToOne
+              originalSrcIpPrefix: 10.1.4.4/32
+              translatedSrcIpPrefix: 172.5.6.6/32
+
+      # LAN segment attachments.
+      segments:
+        lan-7-test: NatPolicyRuleSet2
+        lan-8-test: NatPolicyRuleSet3

@@ -2100,6 +2100,312 @@ SecurityPolicyObject:
 
 Use exactly one primary match type per rule: **application** (`applicationBuiltin` / `applicationCustom`) **or** **network/L4** (`ipProtocol`, `sourceNetwork`, `destinationNetwork`, ports). Do not combine both in the same rule. You cannot switch match type on an existing rule — delete it (`state: absent`) and create a new rule with the desired type.
 
+## NAT Policies
+
+### Module: graphiant.naas.graphiant_nat_policy
+
+`graphiant_nat_policy` manages device-level NAT policy rulesets and LAN segment attachments via `PUT /v1/devices/{id}/config` (`edge.natPolicy.natRulesets` and `edge.segments.<name>.natRuleset`).
+
+- **NAT rulesets** — named collections of rules with sequence numbers; each rule defines address mapping (`OneToOne`) or port address translation (`PAT`)
+- **LAN segment attachments** — map each segment name to a ruleset reference under `segments` in the YAML
+- **Idempotent** — compares intended rulesets and segment references to live device state; skips the push when already matched
+- **`state: absent` on ruleset entries** (under `configure`) — deletes that ruleset without a full deconfigure; sends `ruleset: null`
+- **`state: absent` on rule entries** (under `configure`) — deletes that individual rule; sends `rule: null`
+- **`state: absent` on segment entries** (under `attach_to_lan_segments`) — detaches that segment from its current ruleset; equivalent to `detach_from_lan_segments` for only that segment
+- **Safety check** — deleting a ruleset still referenced by LAN segments raises an error; detach the segments first
+
+Configure workflow: `configure` (create/update rulesets) → `attach_to_lan_segments`. Deconfigure workflow: `detach_from_lan_segments` → `deconfigure`. Use `--check --diff` to preview changes without pushing; the segment safety check and absent no-op pruning are skipped in check mode.
+
+Use `configs/sample_device_nat_policies.yaml`. Top-level key is `natPolicyObject` (list of devices). Each device entry contains `natRulesets` (list of rulesets) and `segments` (map of segment name to ruleset name).
+
+### Playbook
+
+Tags: `configure` (configure rulesets + attach to LAN segments), `deconfigure` (detach from segments + delete rulesets), `attach_to_lan_segments`, `detach_from_lan_segments`.
+
+```bash
+# Configure (dry run, then apply)
+ansible-playbook playbooks/nat_policy_management.yml --tags configure --check
+ansible-playbook playbooks/nat_policy_management.yml --tags configure --check --diff
+ansible-playbook playbooks/nat_policy_management.yml --tags configure
+
+# Deconfigure (dry run, then apply)
+# Order matters: detach from segments first, then delete rulesets.
+ansible-playbook playbooks/nat_policy_management.yml --tags deconfigure --check
+ansible-playbook playbooks/nat_policy_management.yml --tags deconfigure --check --diff
+ansible-playbook playbooks/nat_policy_management.yml --tags deconfigure
+
+# Attach / detach LAN segments only
+ansible-playbook playbooks/nat_policy_management.yml --tags attach_to_lan_segments
+ansible-playbook playbooks/nat_policy_management.yml --tags detach_from_lan_segments
+```
+
+### Module task
+
+**Configure rulesets** (`configure` tag — runs configure then attach_to_lan_segments):
+
+```yaml
+- name: Configure device-level NAT policy rulesets
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: configure
+    nat_policy_config_file: "sample_device_nat_policies.yaml"
+    detailed_logs: true
+    state: present
+  register: configure_result
+  tags: ['configure']
+
+- name: Display configure result
+  ansible.builtin.debug:
+    msg: |
+      {{ configure_result.msg | trim }}
+      configured_devices={{ configure_result.configured_devices | default([]) }}
+      skipped_devices={{ configure_result.skipped_devices | default([]) }}
+  when: configure_result is defined and configure_result.msg is defined
+  tags: ['configure']
+```
+
+**Attach rulesets to LAN segments** (run after `configure`, or standalone to update segment assignments):
+
+```yaml
+- name: Attach NAT ruleset to LAN segments
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: attach_to_lan_segments
+    nat_policy_config_file: "sample_device_nat_policies.yaml"
+    detailed_logs: true
+  register: attach_result
+  tags: ['configure', 'attach_to_lan_segments']
+
+- name: Display attach-to-segments result
+  ansible.builtin.debug:
+    msg: |
+      {{ attach_result.msg | trim }}
+      configured_devices={{ attach_result.configured_devices | default([]) }}
+      skipped_devices={{ attach_result.skipped_devices | default([]) }}
+  when: attach_result is defined and attach_result.msg is defined
+  tags: ['configure', 'attach_to_lan_segments']
+```
+
+**Detach rulesets from LAN segments** (run before `deconfigure` to clear segment references first):
+
+```yaml
+- name: Detach NAT ruleset from LAN segments
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: detach_from_lan_segments
+    nat_policy_config_file: "sample_device_nat_policies.yaml"
+    detailed_logs: true
+  register: detach_result
+  tags: ['deconfigure', 'detach_from_lan_segments']
+
+- name: Display detach-from-segments result
+  ansible.builtin.debug:
+    msg: |
+      {{ detach_result.msg | trim }}
+      configured_devices={{ detach_result.configured_devices | default([]) }}
+      skipped_devices={{ detach_result.skipped_devices | default([]) }}
+  when: detach_result is defined and detach_result.msg is defined
+  tags: ['deconfigure', 'detach_from_lan_segments']
+```
+
+**Deconfigure rulesets** (run after `detach_from_lan_segments` — deletes rulesets listed in the YAML; raises an error if any ruleset is still attached to a LAN segment):
+
+```yaml
+- name: Deconfigure device-level NAT policy rulesets
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: deconfigure
+    nat_policy_config_file: "sample_device_nat_policies.yaml"
+    detailed_logs: true
+    state: absent
+  register: deconfigure_result
+  tags: ['deconfigure']
+
+- name: Display deconfigure result
+  ansible.builtin.debug:
+    msg: |
+      {{ deconfigure_result.msg | trim }}
+      configured_devices={{ deconfigure_result.configured_devices | default([]) }}
+      skipped_devices={{ deconfigure_result.skipped_devices | default([]) }}
+  when: deconfigure_result is defined and deconfigure_result.msg is defined
+  tags: ['deconfigure']
+```
+
+**Single device via module params** (no YAML file required):
+
+```yaml
+- name: Configure NAT rulesets on a single device
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    natRulesets:
+      NAT-Ruleset-1:
+        rules:
+          - seq: 10
+            type: OneToOne
+            name: host-mapping
+            originalSrcIpPrefix: 192.168.1.0/24
+            translatedSrcIpPrefix: 10.0.1.0/24
+          - seq: 20
+            type: PAT
+            originalSrcIpPrefix: 10.1.0.0/16
+            translatedSrcIpPrefix: 203.0.113.1/32
+            advertisePreNatPrefixes: true
+    detailed_logs: true
+    state: present
+
+- name: Attach NAT ruleset to LAN segments (module params)
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: attach_to_lan_segments
+    device: "edge-1-sdktest"
+    segments:
+      LAN-Segment-1: NAT-Ruleset-1
+```
+
+**Delete a single ruleset** using `state: absent` on the ruleset entry (detach segments first):
+
+```yaml
+- name: Delete one NAT ruleset via state absent
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    natRulesets:
+      NAT-Ruleset-1:
+        state: absent
+```
+
+**Delete a single rule** within a ruleset (only `seq` and `state: absent` required):
+
+```yaml
+- name: Delete rule seq 20 from NAT-Ruleset-1
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: configure
+    device: "edge-1-sdktest"
+    natRulesets:
+      NAT-Ruleset-1:
+        rules:
+          - seq: 20
+            state: absent
+```
+
+**Detach a segment via `state: absent`** on the segment entry (mix detach and attach in one call):
+
+```yaml
+- name: Detach LAN-Segment-1 from its ruleset, attach LAN-Segment-2 to another
+  graphiant.naas.graphiant_nat_policy:
+    <<: *graphiant_client_params
+    operation: attach_to_lan_segments
+    device: "edge-1-sdktest"
+    segments:
+      LAN-Segment-1:
+        state: absent      # detaches this segment from its current ruleset
+      LAN-Segment-2: NAT-Ruleset-2   # attach/update another segment in the same call
+```
+
+**Check and diff mode**
+
+With `--check`, nothing is pushed; the module reads live device state and sets `changed` from whether an apply would update at least one device. The segment attachment safety check and absent no-op pruning are skipped in check mode so that a full deconfigure workflow can be previewed with `--check --diff` without running the real detach step first.
+
+With `--diff`, pending changes appear in Ansible `diff` and `details.diff_plan`:
+
+| Branch | Diff shape |
+|--------|------------|
+| `edge.natPolicy.natRulesets` | Per ruleset: changed rules only under `rules.<seq>`; metadata under `_meta` |
+| `edge.segments` | Per segment: ruleset reference before and after |
+
+Example `details.diff_plan` entry for a rule update:
+
+```yaml
+- device: edge-1-sdktest
+  branch: edge.natPolicy.natRulesets
+  before:
+    natRulesets:
+      NAT-Ruleset-1:
+        rules:
+          "10":
+            seq: 10
+            originalSrcIpPrefix: 192.168.0.0/24
+  after:
+    natRulesets:
+      NAT-Ruleset-1:
+        rules:
+          "10":
+            seq: 10
+            originalSrcIpPrefix: 192.168.1.0/24
+```
+
+### Config YAML (`configs/sample_device_nat_policies.yaml`)
+
+```yaml
+natPolicyObject:
+  - edge-1-sdktest:
+      natRulesets:
+        - name: NatPolicyRuleSet1
+          rules:
+            - seq: 10
+              type: OneToOne          # OneToOne or PAT
+              name: Testing
+              originalSrcIpPrefix: 1.1.1.1/32
+              originalDstIpPrefix: 2.2.2.2/32
+              translatedSrcIpPrefix: 3.3.3.3/32
+              advertisePreNatPrefixes: true
+
+            - seq: 20
+              type: PAT
+              name: testingPAT
+              originalSrcIpPrefix: 4.4.4.4/32
+              originalDstIpPrefix: 5.5.5.5/32
+              translatedSrcIpPrefix: 6.6.6.6/32
+              advertisePreNatPrefixes: true
+
+      # LAN segment attachments (used by attach_to_lan_segments / detach_from_lan_segments)
+      segments:
+        lan-segment-3: NatPolicyRuleSet1
+```
+
+**Per-object deletion** (under `configure`; `state: absent` targets individual objects):
+
+```yaml
+# Delete one ruleset by name (detach from segments first)
+- name: My-Ruleset
+  state: absent
+
+# Delete one rule by seq (only seq required for absent)
+- seq: 20
+  state: absent
+```
+
+**Per-segment detach** (under `attach_to_lan_segments`; mixed with attach in the same call):
+
+```yaml
+segments:
+  lan-segment-1:
+    state: absent   # detach this segment from its current ruleset
+  lan-segment-2: NatPolicyRuleSet2   # attach/update this segment
+```
+
+**Required rule fields:**
+
+| Field | Description |
+|-------|-------------|
+| `seq` | Rule sequence number (unique within the ruleset) |
+| `type` | `OneToOne` (bidirectional address mapping) or `PAT` (port address translation) |
+| `originalSrcIpPrefix` | Source IP prefix before NAT (CIDR) |
+| `translatedSrcIpPrefix` | Translated source IP prefix (CIDR) |
+
+**Optional rule fields:**
+
+| Field | Description |
+|-------|-------------|
+| `name` | Human-readable rule label |
+| `originalDstIpPrefix` | Destination IP prefix before NAT (CIDR) |
+| `translatedDstIpPrefix` | Translated destination IP prefix (CIDR) |
+| `advertisePreNatPrefixes` | `true` / `false` (default `false`) — advertise pre-NAT source prefix into overlay routing |
+
 ## BGP Configuration
 
 ```yaml
@@ -3366,6 +3672,7 @@ Sample configuration files are in the `configs/` directory:
 | `sample_prefix_and_port_list.yaml` | Device-level prefix lists (`networkLists`) and port lists (`portLists`) under `edge.trafficPolicy` |
 | `sample_device_traffic_policies.yaml` | Device-level traffic policy rulesets and LAN segment attachments                                   |
 | `sample_device_security_policies.yaml` | Device-level security policy rulesets and zone pair attachments                                    |
+| `sample_device_nat_policies.yaml` | Device-level NAT policy rulesets (`edge.natPolicy.natRulesets`) and LAN segment attachments        |
 
 Data Exchange configs are in `configs/de_workflows_configs/`.
 
