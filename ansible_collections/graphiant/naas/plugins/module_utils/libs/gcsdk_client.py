@@ -1,5 +1,6 @@
 import json
 import time
+from types import SimpleNamespace
 from typing import Optional, Tuple, Type
 
 
@@ -312,6 +313,36 @@ class GraphiantPortalClient:
 
         if exception:
             LOG.error("%s: Got Exception: %s", method_name, exception)
+
+    @staticmethod
+    def _raise_for_raw_status(response_data) -> None:
+        """
+        Raise ApiException if a raw ``api_client.call_api()`` response was not 2xx.
+
+        Unlike the SDK's typed generated methods (e.g. ``v1_extranets_b2b_peering_producer_post``),
+        the raw ``param_serialize()``/``call_api()`` pattern used for endpoints not yet bound in
+        the SDK does *not* raise for HTTP error status codes on its own — ``call_api()`` returns
+        whatever the server sent, success or not (confirmed: ``RESTClientObject.request()`` only
+        raises for network-level failures, never based on ``response.status``). Every raw call
+        site must call this right after ``response_data.read()`` and before treating the body as
+        a success, or an error response (e.g. HTTP 500 with a JSON error body) gets parsed and
+        returned as if it were the expected payload.
+
+        Args:
+            response_data: The RESTResponse returned by api_client.call_api(), already .read().
+
+        Raises:
+            ApiException: if response_data.status is not in the 2xx range. Constructed from the
+                response itself so str(e) includes the same "HTTP response body: ..." detail the
+                typed SDK methods already surface for errors.
+        """
+        status = getattr(response_data, "status", None)
+        if status is not None and not 200 <= status < 300:
+            # ApiException is resolved dynamically in _gcsdk_exception_types() above and typed
+            # as the widened Type[Exception] there (to cover the no-SDK-installed fallback), so
+            # mypy checks this call against plain Exception's signature rather than the real
+            # graphiant_sdk.exceptions.ApiException, which does accept http_resp=.
+            raise ApiException(http_resp=response_data)  # type: ignore[call-arg]
 
     def get_all_enterprises(self):
         """
@@ -1211,6 +1242,56 @@ class GraphiantPortalClient:
             lan_segments[lan_segment_obj.name] = lan_segment_obj.id
         return lan_segments
 
+    def get_lan_segment_site_device_map(self, lan_segment_id: int) -> dict:
+        """
+        Get the site/edge-device topology for a LAN segment.
+
+        GET /v1/sites/map/details?lanSegmentIds[0]={lan_segment_id}
+
+        Uses a raw API call rather than the SDK-bound v1_sites_map_details_get: that method
+        serializes lan_segment_ids=[id] as the bare query key "lanSegmentIds=<id>" (collection
+        format "multi"), which the live backend rejects with "array expected" — confirmed
+        against a real tenant. The backend only accepts the indexed-bracket form
+        "lanSegmentIds[0]=<id>" used here.
+
+        Used to validate that configured sites actually belong to the LAN segment, and that
+        configured edge devices (e.g. natTranslationMode NAT pool keys for client_to_server
+        services) belong to one of the sites selected for the service.
+
+        Args:
+            lan_segment_id (int): LAN segment ID to look up.
+
+        Returns:
+            dict: {"lanSegmentIds": {"<id>": {"siteIds": {"<site_id>": {"lanSegmentExists":
+                [{"deviceId":..., "hostname":..., "siteId":...}, ...]}}}}}
+        """
+        try:
+            LOG.info("get_lan_segment_site_device_map: Retrieving site/device map for LAN segment %s", lan_segment_id)
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "GET",
+                "/v1/sites/map/details",
+                query_params={"lanSegmentIds[0]": lan_segment_id},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Accept": "application/json",
+                },
+                body=None,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            self._raise_for_raw_status(response_data)
+            return json.loads(response_data.data)
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/sites/map/details"
+            self._log_api_error(
+                method_name="get_lan_segment_site_device_map",
+                api_url=api_url,
+                query_params={"lanSegmentIds[0]": lan_segment_id},
+                exception=e,
+            )
+            raise e
+
     # Site Lists API methods
 
     def create_global_site_list(self, site_list_config: dict):
@@ -1337,12 +1418,14 @@ class GraphiantPortalClient:
         Args:
             service_config (dict): Service configuration containing:
                 - serviceName: Service name
-                - type: Service type (e.g., "peering_service")
+                - type: Service type (e.g., "peering_service", "client_to_server")
                 - policy: Service policy configuration
 
         Returns:
             dict: Created service response
         """
+        if service_config.get("type") == "client_to_server":
+            return self._create_extranet_b2b_producer(service_config)
         if getattr(self, "check_mode", False):
             LOG.info(
                 "[check_mode] create_data_exchange_services would create: %s", json.dumps(service_config, indent=2)
@@ -1363,24 +1446,181 @@ class GraphiantPortalClient:
             )
             raise e
 
-    def get_data_exchange_services_summary(self):
+    def _create_extranet_b2b_producer(self, service_config: dict) -> dict:
         """
-        Get summary of all Data Exchange services.
+        Create a "client_to_server" Data Exchange service via the generic extranet producer API.
+
+        POST /v1/extranet/b2b/producer
+
+        This endpoint (and its NAT-capable policy schema) is not yet exposed by the released
+        graphiant_sdk client, so it is called directly via the raw API client, following the
+        same pattern as get_data_exchange_service_details/edit_data_exchange_service below.
+
+        TODO: replace with a bound SDK method call once graphiant-sdk >= 26.7.0 exposes one
+        for this endpoint (planned for a follow-up MR).
+
+        Args:
+            service_config (dict): {"serviceName", "type": "client_to_server", "policy": {...}}
 
         Returns:
-            dict: Services summary response
+            dict: Created service response (contains "id")
         """
+        policy = dict(service_config.get("policy") or {})
+        policy.pop("type", None)
+        request_body = {
+            "serviceName": service_config.get("serviceName"),
+            "serviceType": "client_to_server",
+            "policy": policy,
+        }
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] create_data_exchange_services (client_to_server) would create: %s",
+                json.dumps(request_body, indent=2),
+            )
+            return {"id": 0}
         try:
-            LOG.info("get_data_exchange_services_summary: Retrieving services summary")
-            response = self.api.v1_extranets_b2b_general_services_summary_get(authorization=self.bearer_token)
-            services_count = len(response.info) if response.info else 0
-            LOG.info("get_data_exchange_services_summary: Successfully retrieved %s services", services_count)
-            return response
+            LOG.info(
+                "create_data_exchange_services: Creating client_to_server service '%s'",
+                service_config.get("serviceName"),
+            )
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "POST",
+                "/v1/extranet/b2b/producer",
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body=request_body,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            LOG.info(
+                "create_data_exchange_services: Raw producer POST response (status %s): %s",
+                getattr(response_data, "status", "?"),
+                response_data.data,
+            )
+            self._raise_for_raw_status(response_data)
+            result = json.loads(response_data.data)
+            LOG.info(
+                "create_data_exchange_services: Successfully created client_to_server service with ID: %s",
+                result.get("id"),
+            )
+            return result
         except ApiException as e:
-            # Log the actual API endpoint URL for debugging
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/producer"
+            self._log_api_error(
+                method_name="create_data_exchange_services",
+                api_url=api_url,
+                request_body=request_body,
+                exception=e,
+            )
+            raise e
+
+    def get_data_exchange_services_summary(self):
+        """
+        Get summary of all Data Exchange services, of any type (peering_service and
+        client_to_server).
+
+        Merges two sources:
+        - GET /v1/extranets-b2b-general/services-summary (legacy, SDK-bound): always
+          available; the source of truth for peering_service entries.
+        - GET /v1/extranet/b2b/services/summary (generic, raw call — not yet bound in the
+          SDK): returns every service regardless of type, including client_to_server, which
+          the legacy endpoint silently omits. Not guaranteed to be deployed on every tenant
+          yet, so a failure here is logged and swallowed rather than raised — callers still
+          get the legacy result set (peering_service creates/updates/deletes keep working
+          unchanged even on tenants without the new endpoint).
+
+        TODO: replace the generic raw call with a bound SDK method call once graphiant-sdk
+        >= 26.7.0 exposes one for this endpoint (planned for a follow-up MR).
+
+        Returns:
+            SimpleNamespace with an ``.info`` list of SimpleNamespace service entries
+            (id, name, type, status, is_publisher, matched_customers) and a ``.to_dict()``
+            method, matching the shape callers previously got from the legacy SDK response.
+        """
+        info_by_id = {}
+        try:
+            LOG.info("get_data_exchange_services_summary: Retrieving services summary (legacy)")
+            legacy_response = self.api.v1_extranets_b2b_general_services_summary_get(authorization=self.bearer_token)
+            LOG.info(
+                "get_data_exchange_services_summary: Raw legacy summary response: %s",
+                [s.to_dict() for s in (legacy_response.info or [])],
+            )
+            for service in legacy_response.info or []:
+                info_by_id[service.id] = SimpleNamespace(
+                    id=service.id,
+                    name=service.name,
+                    # This legacy endpoint predates client_to_server and only ever lists
+                    # peering-style services; its "type"/"matchedCustomers" fields are
+                    # confirmed absent from the raw response (not even null) on live tenants,
+                    # so default rather than leave the summary table blank.
+                    type=getattr(service, "type", None) or "peering_service",
+                    status=service.status,
+                    is_publisher=getattr(service, "is_publisher", False),
+                    matched_customers=getattr(service, "matched_customers", 0) or 0,
+                )
+        except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-general/services-summary"
             self._log_api_error(method_name="get_data_exchange_services_summary", api_url=api_url, exception=e)
             raise e
+
+        try:
+            # serviceType is not listed as a query parameter in the openapi spec for this
+            # endpoint, but omitting it returns an empty "{}" body (confirmed against a live
+            # tenant) — the backend requires it. peering_service is already covered by the
+            # legacy call above, so only client_to_server is queried here.
+            LOG.info(
+                "get_data_exchange_services_summary: Retrieving services summary "
+                "(generic, serviceType=client_to_server)"
+            )
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "GET",
+                "/v1/extranet/b2b/services/summary",
+                query_params={"serviceType": "client_to_server"},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Accept": "application/json",
+                },
+                body=None,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            LOG.info(
+                "get_data_exchange_services_summary: Raw generic summary response (status %s): %s",
+                getattr(response_data, "status", "?"),
+                response_data.data,
+            )
+            self._raise_for_raw_status(response_data)
+            raw = json.loads(response_data.data)
+            generic_services = raw.get("services") or []
+            for svc in generic_services:
+                svc_id = svc.get("id")
+                info_by_id[svc_id] = SimpleNamespace(
+                    id=svc_id,
+                    name=svc.get("serviceName"),
+                    type=svc.get("serviceType"),
+                    status=svc.get("status"),
+                    is_publisher=svc.get("isPublisher", False),
+                    matched_customers=svc.get("totalCustomers", 0),
+                )
+            LOG.info(
+                "get_data_exchange_services_summary: Generic summary contributed %s service(s)",
+                len(generic_services),
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            LOG.warning(
+                "get_data_exchange_services_summary: Generic extranet services summary unavailable "
+                "(tenant may not yet support client_to_server services, or it has none): %s",
+                e,
+            )
+
+        info = list(info_by_id.values())
+        LOG.info("get_data_exchange_services_summary: Successfully retrieved %s services", len(info))
+        return SimpleNamespace(info=info, to_dict=lambda: {"info": [vars(s) for s in info]})
 
     def get_data_exchange_service_by_name(self, service_name: str):
         """
@@ -1666,6 +1906,7 @@ class GraphiantPortalClient:
             )
             response_data = api_client.call_api(method, url, header_params, body, post_params)
             response_data.read()
+            self._raise_for_raw_status(response_data)
             LOG.info(
                 "get_data_exchange_customer_details: Successfully retrieved customer details for ID: %s", customer_id
             )
@@ -1717,6 +1958,7 @@ class GraphiantPortalClient:
             )
             response_data = api_client.call_api(method, url, header_params, body, post_params)
             response_data.read()
+            self._raise_for_raw_status(response_data)
             LOG.info("edit_data_exchange_customer: Successfully updated customer ID: %s", customer_id)
             return response_data
         except ApiException as e:
@@ -1744,6 +1986,8 @@ class GraphiantPortalClient:
         Returns:
             dict: Service details response
         """
+        if type == "client_to_server":
+            return self._get_extranet_b2b_producer(service_id)
         try:
             LOG.info("get_data_exchange_service_details: Retrieving service details for ID: %s", service_id)
             api_client = self.api.api_client
@@ -1760,6 +2004,7 @@ class GraphiantPortalClient:
             )
             response_data = api_client.call_api(method, url, header_params, body, post_params)
             response_data.read()
+            self._raise_for_raw_status(response_data)
             LOG.info("get_data_exchange_service_details: Successfully retrieved service details for ID: %s", service_id)
             return json.loads(response_data.data)
         except ApiException as e:
@@ -1773,6 +2018,60 @@ class GraphiantPortalClient:
             )
             raise e
 
+    def _get_extranet_b2b_producer(self, service_id: int) -> dict:
+        """
+        Get a "client_to_server" Data Exchange service via the generic extranet producer API.
+
+        GET /v1/extranet/b2b/producer/{id}
+
+        Returns: {id, policy: {serviceName, serviceType, policy: {...natTranslationMode, ...}}, status}
+        (same policy.policy.* nesting as the legacy /v1/extranets-b2b/{id}/producer response).
+
+        Called via the raw API client — not yet bound in the released graphiant_sdk client.
+        TODO: replace with a bound SDK method call once graphiant-sdk >= 26.7.0 exposes one
+        for this endpoint (planned for a follow-up MR).
+
+        Args:
+            service_id (int): ID of the service to retrieve
+
+        Returns:
+            dict: Service details response
+        """
+        try:
+            LOG.info(
+                "get_data_exchange_service_details: Retrieving client_to_server service details for ID: %s",
+                service_id,
+            )
+            api_client = self.api.api_client
+            method, url, header_params, body, post_params = api_client.param_serialize(
+                "GET",
+                "/v1/extranet/b2b/producer/{id}",
+                path_params={"id": service_id},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Accept": "application/json",
+                },
+                body=None,
+            )
+            response_data = api_client.call_api(method, url, header_params, body, post_params)
+            response_data.read()
+            self._raise_for_raw_status(response_data)
+            LOG.info(
+                "get_data_exchange_service_details: Successfully retrieved client_to_server service details "
+                "for ID: %s",
+                service_id,
+            )
+            return json.loads(response_data.data)
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/producer/{service_id}"
+            self._log_api_error(
+                method_name="get_data_exchange_service_details",
+                api_url=api_url,
+                path_params={"service_id": service_id},
+                exception=e,
+            )
+            raise e
+
     def edit_data_exchange_service(self, service_id: int, update_payload: dict):
         """
         Edit an existing Data Exchange peering service (e.g., update prefixTags).
@@ -1782,10 +2081,13 @@ class GraphiantPortalClient:
         Args:
             service_id (int): ID of the service to update
             update_payload (dict): Update payload containing 'id' and 'policy' fields
+                (or, for client_to_server, just 'policy' with no 'type' key inside it)
 
         Returns:
             RESTResponse or MockResponse in check mode
         """
+        if "type" not in (update_payload.get("policy") or {}):
+            return self._edit_extranet_b2b_producer(service_id, update_payload)
         if getattr(self, "check_mode", False):
             LOG.info(
                 "[check_mode] edit_data_exchange_service would update service ID %s: %s",
@@ -1809,6 +2111,7 @@ class GraphiantPortalClient:
             )
             response_data = api_client.call_api(method, url, header_params, body, post_params)
             response_data.read()
+            self._raise_for_raw_status(response_data)
             LOG.info("edit_data_exchange_service: Successfully updated service ID: %s", service_id)
             return response_data
         except ApiException as e:
@@ -1818,6 +2121,63 @@ class GraphiantPortalClient:
                 api_url=api_url,
                 path_params={"service_id": service_id},
                 request_body=update_payload,
+                exception=e,
+            )
+            raise e
+
+    def _edit_extranet_b2b_producer(self, service_id: int, update_payload: dict):
+        """
+        Update a "client_to_server" Data Exchange service via the generic extranet producer API.
+
+        PUT /v1/extranet/b2b/producer/{id}
+
+        Body is {"policy": {...}} only — no "id" or "type" key (schema forbids additionalProperties).
+
+        Called via the raw API client — not yet bound in the released graphiant_sdk client.
+        TODO: replace with a bound SDK method call once graphiant-sdk >= 26.7.0 exposes one
+        for this endpoint (planned for a follow-up MR).
+
+        Args:
+            service_id (int): ID of the service to update
+            update_payload (dict): {"policy": {...}}
+
+        Returns:
+            RESTResponse or MockResponse in check mode
+        """
+        body = {"policy": update_payload.get("policy") or {}}
+        if getattr(self, "check_mode", False):
+            LOG.info(
+                "[check_mode] edit_data_exchange_service (client_to_server) would update service ID %s: %s",
+                service_id,
+                json.dumps(body, indent=2),
+            )
+            return type("MockResponse", (), {"id": service_id})()
+        try:
+            LOG.info("edit_data_exchange_service: Updating client_to_server service ID: %s", service_id)
+            api_client = self.api.api_client
+            method, url, header_params, req_body, post_params = api_client.param_serialize(
+                "PUT",
+                "/v1/extranet/b2b/producer/{id}",
+                path_params={"id": service_id},
+                header_params={
+                    "Authorization": self.bearer_token,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                body=body,
+            )
+            response_data = api_client.call_api(method, url, header_params, req_body, post_params)
+            response_data.read()
+            self._raise_for_raw_status(response_data)
+            LOG.info("edit_data_exchange_service: Successfully updated client_to_server service ID: %s", service_id)
+            return response_data
+        except ApiException as e:
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/producer/{service_id}"
+            self._log_api_error(
+                method_name="edit_data_exchange_service",
+                api_url=api_url,
+                path_params={"service_id": service_id},
+                request_body=body,
                 exception=e,
             )
             raise e

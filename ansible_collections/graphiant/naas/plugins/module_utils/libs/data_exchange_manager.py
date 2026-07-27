@@ -17,6 +17,7 @@ Deconfigure workflow consistency (with global_config_manager, site_manager):
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from typing import Any, Dict, Optional, Set
 
@@ -116,7 +117,8 @@ class DataExchangeManager(BaseManager):
         Args:
             config_yaml_file (str): Path to the YAML configuration file
             diff_mode (bool): When True, fetch existing service details to detect prefixTags
-                drift and populate diff_plan. Only set when the caller requested --diff output.
+                (and, for client_to_server, natTranslationMode) drift and populate diff_plan.
+                Only set when the caller requested --diff output.
 
         Returns:
             dict: Result with 'changed' status and lists of created/skipped items
@@ -150,6 +152,10 @@ class DataExchangeManager(BaseManager):
             except Exception as e:
                 LOG.warning("create_services: Could not fetch global routing policy summaries: %s", e)
 
+            # Cache LAN segment site/device maps across services in this run (see
+            # _validate_sites_and_devices_for_lan_segment)
+            site_map_cache: Dict[int, dict] = {}
+
             for service_config in services:
                 service_name = service_config.get("serviceName")
                 LOG.info("--------------------------------")
@@ -163,22 +169,23 @@ class DataExchangeManager(BaseManager):
                     LOG.info(
                         "Service '%s' already exists (ID: %s), skipping creation", service_name, existing_service.id
                     )
-                    # Drift detection: only when --diff requested (avoids extra API call otherwise)
-                    desired_prefix_tags = (service_config.get("policy") or {}).get("prefixTags") or []
-                    if diff_mode and desired_prefix_tags:
+                    # Drift detection: only when --diff requested (avoids extra API calls otherwise)
+                    service_type = service_config.get("type", "peering_service")
+                    policy_config = service_config.get("policy") or {}
+                    desired_prefix_tags = policy_config.get("prefixTags") or []
+                    has_nat_mode = service_type == "client_to_server" and bool(policy_config.get("natTranslationMode"))
+                    if diff_mode and (desired_prefix_tags or has_nat_mode):
                         try:
-                            current_details_dict = self.gsdk.get_data_exchange_service_details(existing_service.id)
-                            current_prefix_tags = (current_details_dict.get("policy") or {}).get("policy", {}).get(
-                                "prefixTags"
-                            ) or []
+                            current_details_dict = self.gsdk.get_data_exchange_service_details(
+                                existing_service.id, type=service_type
+                            )
+                            current_inner_policy = (current_details_dict.get("policy") or {}).get("policy") or {}
+                            current_prefix_tags = current_inner_policy.get("prefixTags") or []
 
-                            def _norm(tags):
-                                return sorted(
-                                    [{"prefix": t.get("prefix", ""), "tag": t.get("tag", "") or ""} for t in tags],
-                                    key=lambda x: x["prefix"],
-                                )
-
-                            if _norm(current_prefix_tags) != _norm(desired_prefix_tags):
+                            drifted = False
+                            if desired_prefix_tags and self._normalize_prefix_tags(
+                                current_prefix_tags
+                            ) != self._normalize_prefix_tags(desired_prefix_tags):
                                 LOG.info(
                                     "Service '%s' has drifted prefixTags (use update_services to apply)",
                                     service_name,
@@ -191,6 +198,32 @@ class DataExchangeManager(BaseManager):
                                         "after": {"prefixTags": desired_prefix_tags},
                                     }
                                 )
+                                drifted = True
+
+                            if has_nat_mode:
+                                # Resolve device names to IDs so the comparison lines up with the
+                                # already-ID-keyed natTranslationMode returned by the API
+                                self._resolve_nat_translation_device_ids(policy_config, service_name)
+                                desired_nat_mode = policy_config.get("natTranslationMode") or {}
+                                current_nat_mode = current_inner_policy.get("natTranslationMode") or {}
+                                if self._normalize_nat_translation_mode(
+                                    current_nat_mode
+                                ) != self._normalize_nat_translation_mode(desired_nat_mode):
+                                    LOG.info(
+                                        "Service '%s' has drifted natTranslationMode (use update_services to apply)",
+                                        service_name,
+                                    )
+                                    result["diff_plan"].append(
+                                        {
+                                            "device": service_name,
+                                            "branch": ("natTranslationMode (existing - use update_services to apply)"),
+                                            "before": {"natTranslationMode": current_nat_mode},
+                                            "after": {"natTranslationMode": desired_nat_mode},
+                                        }
+                                    )
+                                    drifted = True
+
+                            if drifted:
                                 result["drifted"].append(service_name)
                         except Exception as e:
                             LOG.warning("Could not fetch details for drift detection on '%s': %s", service_name, e)
@@ -198,6 +231,7 @@ class DataExchangeManager(BaseManager):
                     continue
 
                 if "policy" in service_config:
+                    lan_segment_names_by_id: Dict[int, str] = {}
                     # Resolve LAN segment ID if provided by name
                     if "serviceLanSegment" in service_config["policy"]:
                         lan_segment_name = service_config["policy"]["serviceLanSegment"]
@@ -205,20 +239,43 @@ class DataExchangeManager(BaseManager):
                             lan_segment_id = self.gsdk.get_lan_segment_id(lan_segment_name)
                             if lan_segment_id:
                                 service_config["policy"]["serviceLanSegment"] = lan_segment_id
+                                lan_segment_names_by_id[lan_segment_id] = lan_segment_name
                             else:
                                 raise ConfigurationError(
                                     f"LAN segment '{lan_segment_name}' not found for service '{service_name}'."
                                 )
 
                     # Resolve site or site list IDs if provided by names
-                    self._resolve_site_ids(service_config["policy"], service_name)
+                    site_names_by_id: Dict[int, str] = {}
+                    device_names_by_id: Dict[int, str] = {}
+                    self._resolve_site_ids(service_config["policy"], service_name, name_map=site_names_by_id)
                     self._resolve_site_list_ids(service_config["policy"], service_name)
                     # Resolve device names to device IDs in globalObjectOps (for routingPolicyOps / Graphiant filters)
                     self._resolve_global_object_ops_device_ids(service_config["policy"], service_name)
+                    # Resolve device names to device IDs in natTranslationMode (client_to_server NAT pools)
+                    self._resolve_nat_translation_device_ids(
+                        service_config["policy"], service_name, name_map=device_names_by_id
+                    )
                     # Validate that referenced Graphiant routing policy (filter) names exist
                     self._validate_global_object_ops_routing_policies(
                         service_config["policy"], service_name, existing_policy_names=existing_routing_policy_names
                     )
+                    # Validate NAT pool prefixes aren't reused across devices ("Duplicate entry" in the API/UI)
+                    self._validate_nat_pool_prefixes_unique(
+                        service_config["policy"], service_name, device_names_by_id=device_names_by_id
+                    )
+                    # Validate prefixTags/NAT pool prefixes are properly-aligned CIDR network addresses
+                    self._validate_service_prefixes_are_cidr(service_config["policy"], service_name)
+                    if service_config.get("type") == "client_to_server":
+                        # Validate sites belong to the LAN segment, and NAT edge devices belong to those sites
+                        self._validate_sites_and_devices_for_lan_segment(
+                            service_config["policy"],
+                            service_name,
+                            site_map_cache=site_map_cache,
+                            site_names_by_id=site_names_by_id,
+                            device_names_by_id=device_names_by_id,
+                            lan_segment_names_by_id=lan_segment_names_by_id,
+                        )
 
                 # Create service directly
                 LOG.info("Service configuration: %s", service_config)
@@ -294,15 +351,29 @@ class DataExchangeManager(BaseManager):
                         f"Service '{service_name}' not found. " "Use create_services to create new services."
                     )
                 service_id = existing_service.id
+                service_type = service_config.get("type", "peering_service")
 
                 # Get current service details for comparison and payload construction
-                current_details_dict = self.gsdk.get_data_exchange_service_details(service_id)
+                current_details_dict = self.gsdk.get_data_exchange_service_details(service_id, type=service_type)
                 current_outer_policy = current_details_dict.get("policy") or {}
                 current_inner_policy = current_outer_policy.get("policy") or {}
                 current_prefix_tags = current_inner_policy.get("prefixTags") or []
 
+                desired_policy = service_config.get("policy") or {}
                 # Desired prefixTags from config
-                desired_prefix_tags = (service_config.get("policy") or {}).get("prefixTags") or []
+                desired_prefix_tags = desired_policy.get("prefixTags") or []
+
+                if service_type == "client_to_server":
+                    self._update_client_to_server_service(
+                        service_name,
+                        service_id,
+                        current_inner_policy,
+                        current_prefix_tags,
+                        desired_policy,
+                        desired_prefix_tags,
+                        result,
+                    )
+                    continue
 
                 if not desired_prefix_tags:
                     raise ConfigurationError(
@@ -316,6 +387,12 @@ class DataExchangeManager(BaseManager):
                         f"Service '{service_name}': At least one prefix must remain after update. "
                         "Removing all prefixes is not allowed."
                     )
+
+                self._validate_cidr_prefixes(
+                    [t.get("prefix") for t in desired_prefix_tags if isinstance(t, dict)],
+                    service_name,
+                    "prefixTags",
+                )
 
                 # Normalize for idempotency comparison
                 def _norm(tags):
@@ -378,16 +455,143 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to update Data Exchange service: %s", e)
             raise ConfigurationError(f"Data Exchange service update failed: {e}")
 
-    def _resolve_site_ids(self, policy_config: dict, service_name: str) -> None:
+    @staticmethod
+    def _normalize_prefix_tags(tags) -> list:
+        return sorted(
+            [{"prefix": t.get("prefix", ""), "tag": t.get("tag", "") or ""} for t in (tags or [])],
+            key=lambda x: x["prefix"],
+        )
+
+    @staticmethod
+    def _normalize_nat_translation_mode(nat_mode) -> dict:
+        normalized: Dict[str, Any] = {}
+        for translation_type in ("centralized", "decentralized"):
+            block = (nat_mode or {}).get(translation_type)
+            if not isinstance(block, dict):
+                continue
+            prefixes = block.get("prefixes") or {}
+            normalized[translation_type] = {
+                str(device_id): sorted((device_prefixes or {}).get("prefixes") or [])
+                for device_id, device_prefixes in prefixes.items()
+            }
+        return normalized
+
+    def _update_client_to_server_service(
+        self,
+        service_name: str,
+        service_id: int,
+        current_inner_policy: dict,
+        current_prefix_tags: list,
+        desired_policy: dict,
+        desired_prefix_tags: list,
+        result: Dict[str, Any],
+    ) -> None:
+        """
+        Apply an update_services change for a client_to_server service.
+
+        Only prefixTags and/or natTranslationMode (NAT pools) can be changed; at least one
+        must be provided. Unlike peering_service, sites are kept under the "sites" key
+        (plural) and the PUT body has no "id"/"type" (see edit_data_exchange_service).
+        """
+        desired_nat_mode = desired_policy.get("natTranslationMode")
+        device_names_by_id: Dict[int, str] = {}
+        if desired_nat_mode:
+            self._resolve_nat_translation_device_ids(desired_policy, service_name, name_map=device_names_by_id)
+            # Validate NAT pool prefixes aren't reused across devices ("Duplicate entry" in the API/UI)
+            self._validate_nat_pool_prefixes_unique(desired_policy, service_name, device_names_by_id=device_names_by_id)
+
+        if not desired_prefix_tags and not desired_nat_mode:
+            raise ConfigurationError(
+                f"Service '{service_name}': update_services requires at least one of "
+                "'policy.prefixTags' or 'policy.natTranslationMode' for client_to_server services."
+            )
+
+        # Validate prefixTags/NAT pool prefixes are properly-aligned CIDR network addresses
+        self._validate_service_prefixes_are_cidr(
+            {"prefixTags": desired_prefix_tags, "natTranslationMode": desired_nat_mode}, service_name
+        )
+
+        current_nat_mode = current_inner_policy.get("natTranslationMode") or {}
+        prefix_tags_changed = bool(desired_prefix_tags) and self._normalize_prefix_tags(
+            current_prefix_tags
+        ) != self._normalize_prefix_tags(desired_prefix_tags)
+        nat_mode_changed = bool(desired_nat_mode) and self._normalize_nat_translation_mode(
+            current_nat_mode
+        ) != self._normalize_nat_translation_mode(desired_nat_mode)
+
+        if not prefix_tags_changed and not nat_mode_changed:
+            LOG.info("Service '%s' unchanged, skipping update", service_name)
+            result["skipped"].append(service_name)
+            return
+
+        if nat_mode_changed:
+            # Validate new NAT edge devices belong to the service's existing sites/LAN segment
+            self._validate_sites_and_devices_for_lan_segment(
+                {
+                    "serviceLanSegment": current_inner_policy.get("serviceLanSegment"),
+                    "sites": current_inner_policy.get("sites") or [],
+                    "natTranslationMode": desired_nat_mode,
+                },
+                service_name,
+                device_names_by_id=device_names_by_id,
+            )
+
+        if prefix_tags_changed:
+            result["diff_plan"].append(
+                {
+                    "device": service_name,
+                    "branch": "prefixTags",
+                    "before": {"prefixTags": current_prefix_tags},
+                    "after": {"prefixTags": desired_prefix_tags},
+                }
+            )
+        if nat_mode_changed:
+            result["diff_plan"].append(
+                {
+                    "device": service_name,
+                    "branch": "natTranslationMode",
+                    "before": {"natTranslationMode": current_nat_mode},
+                    "after": {"natTranslationMode": desired_nat_mode},
+                }
+            )
+
+        update_payload = {
+            "policy": {
+                "serviceLanSegment": current_inner_policy.get("serviceLanSegment"),
+                "sites": current_inner_policy.get("sites") or [],
+                "description": current_inner_policy.get("description", ""),
+                "prefixTags": desired_prefix_tags if prefix_tags_changed else current_prefix_tags,
+                "natTranslationMode": desired_nat_mode if nat_mode_changed else current_nat_mode,
+            },
+        }
+
+        LOG.info("update_services: Update payload for '%s': %s", service_name, update_payload)
+        self.gsdk.edit_data_exchange_service(service_id, update_payload)
+        LOG.info("Successfully updated service '%s' (ID: %s)", service_name, service_id)
+        result["updated"].append(service_name)
+        result["changed"] = True
+
+    def _resolve_site_ids(
+        self, policy_config: dict, service_name: str, name_map: Optional[Dict[int, str]] = None
+    ) -> None:
         """
         Resolve site names to site IDs in the policy configuration.
+
+        ``site`` (singular) is the peering_service key; ``sites`` (plural) is the
+        client_to_server key. Both wrap the same list of {sites, siteLists} entries.
 
         Args:
             policy_config (dict): Policy configuration to update
             service_name (str): Service name for error reporting
+            name_map: Optional dict populated with {site_id: site_name} for each name resolved,
+                so callers can render friendly names in later error messages (e.g.
+                _validate_sites_and_devices_for_lan_segment).
         """
-        if "site" in policy_config and isinstance(policy_config["site"], list):
-            for site_entry in policy_config["site"]:
+        for key in ("site", "sites"):
+            site_entries = policy_config.get(key)
+            if not isinstance(site_entries, list):
+                continue
+            for site_entry in site_entries:
                 if "sites" in site_entry and isinstance(site_entry["sites"], list):
                     resolved_site_ids = []
                     for site_name in site_entry["sites"]:
@@ -395,6 +599,8 @@ class DataExchangeManager(BaseManager):
                             site_id = self.gsdk.get_site_id(site_name)
                             if site_id:
                                 resolved_site_ids.append(site_id)
+                                if name_map is not None:
+                                    name_map[site_id] = site_name
                             else:
                                 raise ConfigurationError(f"Site '{site_name}' not found for service '{service_name}'.")
                         else:
@@ -405,12 +611,18 @@ class DataExchangeManager(BaseManager):
         """
         Resolve site list names to site list IDs in the policy configuration.
 
+        ``site`` (singular) is the peering_service key; ``sites`` (plural) is the
+        client_to_server key. Both wrap the same list of {sites, siteLists} entries.
+
         Args:
             policy_config (dict): Policy configuration to update
             service_name (str): Service name for error reporting
         """
-        if "site" in policy_config and isinstance(policy_config["site"], list):
-            for site_entry in policy_config["site"]:
+        for key in ("site", "sites"):
+            site_entries = policy_config.get(key)
+            if not isinstance(site_entries, list):
+                continue
+            for site_entry in site_entries:
                 if "siteLists" in site_entry and isinstance(site_entry["siteLists"], list):
                     resolved_site_list_ids = []
                     for site_list_name in site_entry["siteLists"]:
@@ -425,6 +637,147 @@ class DataExchangeManager(BaseManager):
                         else:
                             resolved_site_list_ids.append(site_list_name)  # Already an ID
                     site_entry["siteLists"] = resolved_site_list_ids
+
+    def _resolve_nat_translation_device_ids(
+        self, policy_config: dict, service_name: str, name_map: Optional[Dict[int, str]] = None
+    ) -> None:
+        """
+        Resolve device names to device IDs in policy.natTranslationMode (client_to_server services).
+
+        natTranslationMode.centralized/decentralized.prefixes keys are device names (e.g.
+        "edge-1-sdktest"); the API expects edge device IDs as keys, each mapped to
+        {"prefixes": [...]} NAT pool prefixes for that device.
+
+        Args:
+            policy_config (dict): Policy configuration to update (modified in place).
+            service_name (str): Service name for error reporting.
+            name_map: Optional dict populated with {device_id: device_name} for each name
+                resolved, so callers can render friendly names in later error messages (e.g.
+                _validate_sites_and_devices_for_lan_segment).
+        """
+        nat_mode = policy_config.get("natTranslationMode")
+        if not isinstance(nat_mode, dict):
+            return
+        for translation_type in ("centralized", "decentralized"):
+            translation = nat_mode.get(translation_type)
+            if not isinstance(translation, dict):
+                continue
+            prefixes = translation.get("prefixes")
+            if not isinstance(prefixes, dict):
+                continue
+            resolved = {}
+            for device_name, device_prefixes in prefixes.items():
+                device_id = self.gsdk.get_device_id(str(device_name))
+                if device_id is None:
+                    raise ConfigurationError(
+                        f"Device '{device_name}' not found for service '{service_name}' "
+                        f"(natTranslationMode.{translation_type}.prefixes keys must be device names)."
+                    )
+                if name_map is not None:
+                    name_map[device_id] = str(device_name)
+                resolved[str(device_id)] = device_prefixes
+            translation["prefixes"] = resolved
+
+    def _validate_nat_pool_prefixes_unique(
+        self, policy_config: dict, service_name: str, device_names_by_id: Optional[Dict[int, str]] = None
+    ) -> None:
+        """
+        Validate that no NAT pool prefix is reused across more than one edge device.
+
+        The API (and portal UI) rejects reusing the same NAT pool prefix on more than one
+        device with "Duplicate entry, IP address already configured." — catch it client-side
+        with a clearer, per-prefix message before submitting.
+
+        Args:
+            policy_config (dict): Resolved policy configuration (natTranslationMode device
+                keys already resolved to device IDs — see _resolve_nat_translation_device_ids).
+            service_name (str): Service name for error reporting.
+            device_names_by_id: Optional {device_id: device_name} map for friendlier error
+                messages; falls back to the raw device ID when a name isn't known.
+        """
+        nat_mode = policy_config.get("natTranslationMode")
+        if not isinstance(nat_mode, dict):
+            return
+        devices_by_prefix: Dict[str, Set[int]] = {}
+        for translation_type in ("centralized", "decentralized"):
+            block = nat_mode.get(translation_type)
+            if not isinstance(block, dict):
+                continue
+            for device_id_str, device_prefixes in (block.get("prefixes") or {}).items():
+                try:
+                    device_id = int(device_id_str)
+                except (TypeError, ValueError):
+                    continue
+                for prefix in (device_prefixes or {}).get("prefixes") or []:
+                    devices_by_prefix.setdefault(prefix, set()).add(device_id)
+
+        duplicates = {prefix: devs for prefix, devs in devices_by_prefix.items() if len(devs) > 1}
+        if duplicates:
+            details = "; ".join(
+                f"'{prefix}' used by {[self._label(d, device_names_by_id) for d in sorted(devs)]}"
+                for prefix, devs in sorted(duplicates.items())
+            )
+            raise ConfigurationError(
+                f"Service '{service_name}': NAT pool prefix(es) must be unique across devices: {details}."
+            )
+
+    @staticmethod
+    def _validate_cidr_prefixes(prefixes: list, service_name: str, context: str) -> None:
+        """
+        Validate that each prefix is a properly-aligned CIDR network address (host bits zero),
+        matching the portal UI's own validation: "Invalid prefix. Please make sure the network
+        address of CIDR is provided." A prefix like "162.131.7.69/31" is a valid host address
+        within a /31 block, but not the block's network address (162.131.7.68/31) — the API
+        rejects it even though the address itself is usable.
+
+        Args:
+            prefixes (list): Prefix strings to validate (e.g. ["162.131.7.68/31"]).
+            service_name (str): Service name for error reporting.
+            context (str): Where these prefixes came from, for error reporting (e.g.
+                "prefixTags" or "natTranslationMode.centralized").
+        """
+        for prefix in prefixes or []:
+            if not isinstance(prefix, str):
+                continue
+            try:
+                ipaddress.ip_network(prefix, strict=True)
+            except ValueError:
+                try:
+                    corrected = str(ipaddress.ip_network(prefix, strict=False))
+                    hint = f" (e.g. '{corrected}')"
+                except ValueError:
+                    hint = ""
+                raise ConfigurationError(
+                    f"Service '{service_name}': invalid {context} prefix '{prefix}'. Please make sure the "
+                    f"network address of the CIDR is provided{hint}."
+                )
+
+    def _validate_service_prefixes_are_cidr(self, policy_config: dict, service_name: str) -> None:
+        """
+        Validate policy.prefixTags and any natTranslationMode NAT pool prefixes are properly
+        aligned CIDR network addresses (see _validate_cidr_prefixes).
+
+        Args:
+            policy_config (dict): Policy configuration (natTranslationMode device keys may be
+                names or already-resolved IDs; not relevant here, only the prefix lists are checked).
+            service_name (str): Service name for error reporting.
+        """
+        prefix_tags = [t.get("prefix") for t in (policy_config.get("prefixTags") or []) if isinstance(t, dict)]
+        self._validate_cidr_prefixes(prefix_tags, service_name, "prefixTags")
+
+        nat_mode = policy_config.get("natTranslationMode")
+        if not isinstance(nat_mode, dict):
+            return
+        for translation_type in ("centralized", "decentralized"):
+            block = nat_mode.get(translation_type)
+            if not isinstance(block, dict):
+                continue
+            for device_prefixes in (block.get("prefixes") or {}).values():
+                self._validate_cidr_prefixes(
+                    (device_prefixes or {}).get("prefixes") or [],
+                    service_name,
+                    f"natTranslationMode.{translation_type}",
+                )
 
     def _resolve_global_object_ops_device_ids(self, policy_config: dict, service_name: str) -> None:
         """
@@ -495,6 +848,117 @@ class DataExchangeManager(BaseManager):
                 "or ensure the policy name exists in the portal."
             )
 
+    @staticmethod
+    def _label(entity_id: int, names_by_id: Optional[Dict[int, str]]) -> str:
+        """Render "name (id)" if a name is known, else just "id", for error messages."""
+        name = (names_by_id or {}).get(entity_id)
+        return f"'{name}' ({entity_id})" if name else str(entity_id)
+
+    def _validate_sites_and_devices_for_lan_segment(
+        self,
+        policy_config: dict,
+        service_name: str,
+        site_map_cache: Optional[Dict[int, dict]] = None,
+        site_names_by_id: Optional[Dict[int, str]] = None,
+        device_names_by_id: Optional[Dict[int, str]] = None,
+        lan_segment_names_by_id: Optional[Dict[int, str]] = None,
+    ) -> None:
+        """
+        Validate that configured sites belong to the LAN segment, and that any edge devices
+        referenced in natTranslationMode belong to one of the configured sites.
+
+        Requires policy_config["serviceLanSegment"] and site IDs under policy_config["site"]/
+        ["sites"] to already be resolved to IDs (see _resolve_site_ids), and any
+        natTranslationMode device keys to already be resolved to device IDs (see
+        _resolve_nat_translation_device_ids).
+
+        Args:
+            policy_config (dict): Resolved policy configuration.
+            service_name (str): Service name for error reporting.
+            site_map_cache: Optional dict of {lan_segment_id: site/device map} shared across
+                services being processed in the same run, to avoid refetching per service.
+            site_names_by_id, device_names_by_id, lan_segment_names_by_id: Optional
+                {id: name} maps (as populated by _resolve_site_ids/_resolve_nat_translation_device_ids
+                and the caller's LAN segment resolution) used to render names instead of raw
+                IDs in error messages. IDs with no known name fall back to the raw ID.
+
+        Raises ConfigurationError on a mismatch.
+        """
+        lan_segment_id = policy_config.get("serviceLanSegment")
+        if not isinstance(lan_segment_id, int):
+            return
+
+        selected_site_ids: Set[int] = set()
+        for key in ("site", "sites"):
+            for entry in policy_config.get(key) or []:
+                for site_id in entry.get("sites") or []:
+                    if isinstance(site_id, int):
+                        selected_site_ids.add(site_id)
+        if not selected_site_ids:
+            return
+
+        if site_map_cache is not None and lan_segment_id in site_map_cache:
+            site_map = site_map_cache[lan_segment_id]
+        else:
+            site_map = self.gsdk.get_lan_segment_site_device_map(lan_segment_id)
+            if site_map_cache is not None:
+                site_map_cache[lan_segment_id] = site_map
+
+        site_ids_on_segment = ((site_map.get("lanSegmentIds") or {}).get(str(lan_segment_id)) or {}).get(
+            "siteIds"
+        ) or {}
+        devices_by_site: Dict[int, Set[int]] = {}
+        # Device hostnames from the API response, used as a fallback name source below when
+        # the device wasn't resolved from a config name (e.g. it was given as a raw ID).
+        hostname_by_device_id: Dict[int, str] = {}
+        for site_id_str, site_data in site_ids_on_segment.items():
+            device_ids = set()
+            for entry in site_data.get("lanSegmentExists") or []:
+                device_id = entry.get("deviceId")
+                device_ids.add(device_id)
+                if device_id is not None and entry.get("hostname"):
+                    hostname_by_device_id[device_id] = entry["hostname"]
+            devices_by_site[int(site_id_str)] = device_ids
+        device_labels_by_id = {**hostname_by_device_id, **(device_names_by_id or {})}
+
+        lan_segment_label = self._label(lan_segment_id, lan_segment_names_by_id)
+
+        missing_sites = sorted(selected_site_ids - devices_by_site.keys())
+        if missing_sites:
+            site_labels = [self._label(sid, site_names_by_id) for sid in missing_sites]
+            raise ConfigurationError(
+                f"Service '{service_name}': site(s) {site_labels} are not part of LAN segment {lan_segment_label}."
+            )
+
+        nat_mode = policy_config.get("natTranslationMode")
+        if not isinstance(nat_mode, dict):
+            return
+        referenced_device_ids: Set[int] = set()
+        for translation_type in ("centralized", "decentralized"):
+            block = nat_mode.get(translation_type)
+            if not isinstance(block, dict):
+                continue
+            for device_id_str in block.get("prefixes") or {}:
+                try:
+                    referenced_device_ids.add(int(device_id_str))
+                except (TypeError, ValueError):
+                    continue
+        if not referenced_device_ids:
+            return
+
+        allowed_device_ids: Set[int] = set()
+        for site_id in selected_site_ids:
+            allowed_device_ids.update(devices_by_site.get(site_id) or set())
+
+        invalid_devices = sorted(referenced_device_ids - allowed_device_ids)
+        if invalid_devices:
+            device_labels = [self._label(did, device_labels_by_id) for did in invalid_devices]
+            site_labels = [self._label(sid, site_names_by_id) for sid in sorted(selected_site_ids)]
+            raise ConfigurationError(
+                f"Service '{service_name}': edge device(s) {device_labels} in natTranslationMode do not belong "
+                f"to the selected site(s) {site_labels} for LAN segment {lan_segment_label}."
+            )
+
     def get_services_summary(self) -> Dict[str, Any]:
         """
         Get summary of all Data Exchange services.
@@ -519,13 +983,22 @@ class DataExchangeManager(BaseManager):
                     # Get matched customers count
                     matched_customers = getattr(service, "matched_customers", 0)
 
-                    service_table.append([service.id, service.name, service.status, role, matched_customers])
+                    service_table.append(
+                        [
+                            service.id,
+                            service.name,
+                            getattr(service, "type", "") or "",
+                            service.status,
+                            role,
+                            matched_customers,
+                        ]
+                    )
 
                 LOG.info(
                     "Services Summary:\n%s",
                     tabulate(
                         service_table,
-                        headers=["ID", "Service Name", "Status", "Role", "Matched Customers"],
+                        headers=["ID", "Service Name", "Type", "Status", "Role", "Customers"],
                         tablefmt="grid",
                     ),
                 )
@@ -1172,6 +1645,21 @@ class DataExchangeManager(BaseManager):
                         f"Configuration error: 'servicePrefixes' must be specified "
                         f"for matching service '{service_name}' to customer '{customer_name}'."
                     )
+                self._validate_cidr_prefixes(
+                    [p.get("prefix") for p in service_prefixes if isinstance(p, dict)],
+                    service_name,
+                    "servicePrefixes",
+                )
+
+                nat_entries = [n for n in match_config.get("nat", []) if isinstance(n, dict)]
+                self._validate_cidr_prefixes(
+                    [n.get("prefix") for n in nat_entries if n.get("prefix")], service_name, "nat"
+                )
+                self._validate_cidr_prefixes(
+                    [n.get("outsideNatPrefix") for n in nat_entries if n.get("outsideNatPrefix")],
+                    service_name,
+                    "nat.outsideNatPrefix",
+                )
 
                 # Build match configuration for API call
                 match_payload = {
@@ -1287,6 +1775,9 @@ class DataExchangeManager(BaseManager):
 
             # Validate VPN profile existence before processing acceptances
             self._validate_vpn_profiles_for_acceptances(acceptances)
+
+            # Validate that all prefix fields are properly-aligned CIDR network addresses
+            self._validate_prefixes_for_acceptances(acceptances)
 
             # Process acceptances and log results
             result = self._process_multiple_acceptances(
@@ -1500,6 +1991,66 @@ class DataExchangeManager(BaseManager):
         except Exception as e:
             LOG.warning("_validate_vpn_profiles_for_acceptances: VPN profile validation failed: %s", e)
             raise
+
+    def _validate_prefixes_for_acceptances(self, acceptances) -> None:
+        """
+        Validate that all prefix fields across acceptances are properly-aligned CIDR network
+        addresses (see _validate_cidr_prefixes): nat[].prefix/translatedPrefix/outsideNatPrefix,
+        policy[].consumerPrefixes, and siteToSiteVpn routing.static.destinationPrefix (both the
+        legacy ipsecGatewayDetails and multi-peer ipsecGatewayPeers structures).
+
+        Args:
+            acceptances (list): List of acceptance configurations
+        """
+        for acceptance in acceptances:
+            customer_name = acceptance.get("customerName")
+            service_name = acceptance.get("serviceName")
+            label = (
+                f"{service_name}->{customer_name}"
+                if service_name and customer_name
+                else (customer_name or service_name or "acceptance")
+            )
+
+            nat_entries = [n for n in acceptance.get("nat", []) if isinstance(n, dict)]
+            self._validate_cidr_prefixes([n.get("prefix") for n in nat_entries if n.get("prefix")], label, "nat")
+            self._validate_cidr_prefixes(
+                [n.get("translatedPrefix") for n in nat_entries if n.get("translatedPrefix")],
+                label,
+                "nat.translatedPrefix",
+            )
+            self._validate_cidr_prefixes(
+                [n.get("outsideNatPrefix") for n in nat_entries if n.get("outsideNatPrefix")],
+                label,
+                "nat.outsideNatPrefix",
+            )
+
+            for policy_entry in acceptance.get("policy") or []:
+                if isinstance(policy_entry, dict):
+                    self._validate_cidr_prefixes(
+                        policy_entry.get("consumerPrefixes") or [], label, "policy.consumerPrefixes"
+                    )
+
+            site_to_site_vpn = acceptance.get("siteToSiteVpn") or {}
+            if "ipsecGatewayPeers" in site_to_site_vpn:
+                for peer in site_to_site_vpn["ipsecGatewayPeers"].get("remotePeers", []) or []:
+                    destination_prefixes = ((peer.get("routing") or {}).get("static") or {}).get(
+                        "destinationPrefix"
+                    ) or []
+                    peer_name = peer.get("name", "")
+                    self._validate_cidr_prefixes(
+                        destination_prefixes,
+                        label,
+                        f"siteToSiteVpn.ipsecGatewayPeers.remotePeers[{peer_name}].routing.static.destinationPrefix",
+                    )
+            elif "ipsecGatewayDetails" in site_to_site_vpn:
+                destination_prefixes = (
+                    (site_to_site_vpn["ipsecGatewayDetails"].get("routing") or {}).get("static") or {}
+                ).get("destinationPrefix") or []
+                self._validate_cidr_prefixes(
+                    destination_prefixes,
+                    label,
+                    "siteToSiteVpn.ipsecGatewayDetails.routing.static.destinationPrefix",
+                )
 
     def _process_multiple_acceptances(
         self, acceptances_config, matches_file=None, config_yaml_file=None, vault_bgp_md5=None, vault_psk=None

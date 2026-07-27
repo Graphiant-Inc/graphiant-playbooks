@@ -1,0 +1,37 @@
+# Sample Data Exchange Services Configuration - Client to Server
+# This file demonstrates how to configure a "client_to_server" Data Exchange service,
+# used for providing partners with access to your organization's services (as opposed
+# to "peering_service", which is for full network-level routing/segmentation with a partner).
+#
+# The system will:
+# 1. Read service configuration from the 'data_exchange_services' list
+# 2. Resolve LAN segment names to IDs
+# 3. Resolve site names to site IDs
+# 4. Resolve edge device names to device IDs in policy.natTranslationMode (NAT pools)
+# 5. POST to v1/extranet/b2b/producer with the payload
+#
+# NAT pools are mandatory for client_to_server services: policy.natTranslationMode.centralized.prefixes
+# keys are edge device names (resolved to device IDs); each value is a NAT pool prefix list for that
+# edge. A pool must be provided for every edge of the selected site(s), and each prefix must be
+# unique across devices (the API rejects reusing the same prefix on more than one device).
+
+data_exchange_services:
+  - serviceName: "de-partner-to-org-service-1"
+    type: "client_to_server"
+    policy:
+      serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
+      description: "de_partner_to_org_service_1_description"
+      prefixTags:
+        - prefix: "10.48.52.152/31"
+
+      sites:
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
+          siteLists: []
+
+      natTranslationMode:
+        centralized:
+          prefixes:
+            "edge-1-sdktest":  # Device name will be resolved to device ID
+              prefixes: ["162.131.7.64/31"]
+            "edge-2-sdktest":  # Device name will be resolved to device ID
+              prefixes: ["162.131.7.66/31", "162.131.7.68/31", "162.131.7.70/31"]

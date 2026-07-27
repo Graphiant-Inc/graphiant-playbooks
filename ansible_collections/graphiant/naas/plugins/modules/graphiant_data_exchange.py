@@ -46,7 +46,9 @@ options:
       - "The specific Data Exchange operation to perform."
       - "V(create_services): Create Data Exchange services from YAML configuration (Workflow 1)."
       - "Configuration file must contain I(data_exchange_services) list with service definitions."
-      - "Services define peering services with LAN segments, sites, and service prefixes."
+      - "Services define I(type: peering_service) (full network-level routing/segmentation with a"
+      - "partner) or I(type: client_to_server) (partner access to your organization's services) with"
+      - "LAN segments, sites, and service prefixes."
       - "Optional I(policy.globalObjectOps): keys are device names (resolved to device IDs) or device IDs;"
       - >-
         values can include I(routingPolicyOps) to attach Graphiant filters per device
@@ -55,14 +57,21 @@ options:
         Configure Graphiant filters first with M(graphiant.naas.graphiant_global_config) and
         I(configure_graphiant_filters).
       - >-
-        V(update_services): Update existing Data Exchange services (Workflow 1b). Only I(prefixTags) can
-        be changed. The service must already exist; use V(create_services) for new services.
-        Configuration file must contain I(data_exchange_services) list where each entry has
-        I(serviceName) and I(policy.prefixTags). At least one prefix must remain after the update.
+        For I(type: client_to_server), I(policy.natTranslationMode.centralized.prefixes) (or
+        I(decentralized)) is required: keys are edge device names (resolved to device IDs), values are
+        NAT pool prefixes for that edge. A pool must be provided for every edge of the selected site(s).
+      - >-
+        V(update_services): Update existing Data Exchange services (Workflow 1b). The service must
+        already exist; use V(create_services) for new services. Configuration file must contain
+        I(data_exchange_services) list where each entry has I(serviceName). For I(type: peering_service),
+        only I(policy.prefixTags) can be changed, and at least one prefix must remain after the update.
+        For I(type: client_to_server), I(policy.prefixTags) and/or I(policy.natTranslationMode) can be
+        changed; at least one of the two is required.
         Supports C(--check) and C(--diff) to preview changes before applying.
       - >-
         V(delete_services): Delete Data Exchange services from YAML configuration. Services must be
-        deleted after customers that depend on them.
+        deleted after customers that depend on them. Works for both I(peering_service) and
+        I(client_to_server) types.
       - "V(create_customers): Create Data Exchange customers from YAML configuration (Workflow 2)."
       - "Configuration file must contain I(data_exchange_customers) list with customer definitions."
       - "Customers can be non-Graphiant peers that can be invited to connect to services."
@@ -239,6 +248,24 @@ EXAMPLES = r"""
   graphiant.naas.graphiant_data_exchange:
     operation: create_services
     config_file: "de_workflows_configs/sample_data_exchange_services_scale.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+
+- name: Workflow 1 - Create a client_to_server Data Exchange service (with NAT pools)
+  graphiant.naas.graphiant_data_exchange:
+    operation: create_services
+    config_file: "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+
+- name: Workflow 1b - Update a client_to_server service's NAT pools
+  graphiant.naas.graphiant_data_exchange:
+    operation: update_services
+    config_file: "de_workflows_configs/sample_data_exchange_services_client_to_server_update.yaml"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -656,9 +683,13 @@ def main():
             drifted = details.get("drifted", [])
             if module.check_mode and getattr(module, "_diff", False) and drifted and not changed:
                 changed = True
+                drifted_fields = sorted(
+                    {entry["branch"].split(" (")[0] for entry in diff_plan if entry.get("device") in drifted}
+                )
+                fields_desc = "/".join(drifted_fields) if drifted_fields else "Configuration"
                 result_msg = (
                     f"Drift detected in {len(drifted)} service(s): {', '.join(drifted)}. "
-                    f"prefixTags differ from current state. "
+                    f"{fields_desc} differ from current state. "
                     f"Use update_services to apply changes."
                 )
 

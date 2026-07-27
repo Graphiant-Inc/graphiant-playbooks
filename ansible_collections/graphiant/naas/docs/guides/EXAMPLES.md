@@ -3167,13 +3167,21 @@ ansible-playbook playbooks/de_workflows/00_dataex_vpn_profile_prerequisites.yml
 
 ### Step 2: Create Data Exchange Services
 
+Data Exchange "Partner Services" come in two types, set via `type` on each entry in
+`data_exchange_services`:
+
+- `peering_service` (Peer to Peer): full network-level routing/segmentation with a partner — the
+  default type.
+- `client_to_server` (Client to Server): for providing partners with access to your organization's
+  services. Requires a NAT pool per edge device of the selected site(s), configured under
+  `policy.natTranslationMode`.
 
 ```bash
 ansible-playbook playbooks/de_workflows/01_dataex_create_services.yml --check
 ansible-playbook playbooks/de_workflows/01_dataex_create_services.yml
 ```
 
-To create Data Exchange services
+To create `peering_service` Data Exchange services
 
 ```yaml
 - name: Create Data Exchange Services
@@ -3193,7 +3201,37 @@ To create Data Exchange services
     msg: "{{ create_services_result.msg }}"
 ```
 
-To list Data Exchange services
+To create a `client_to_server` Data Exchange service (NAT pools)
+
+```yaml
+- name: Create a client_to_server Data Exchange service
+  graphiant.naas.graphiant_data_exchange:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: create_services
+    config_file: "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+    detailed_logs: true
+  register: create_c2s_result
+```
+
+See `de_workflows_configs/sample_data_exchange_services_client_to_server.yaml` for the full
+`natTranslationMode.centralized.prefixes` shape — keys are edge device names (resolved to device
+IDs), values are the NAT pool prefixes for that edge. Before creating, the module validates:
+
+- A NAT pool prefix is provided for every edge device of the selected site(s), and each site
+  actually belongs to `serviceLanSegment`, and each NAT device actually belongs to one of the
+  selected sites (checked via the portal's site/device topology).
+- Every prefix (`prefixTags` and NAT pool prefixes) is a properly-aligned CIDR network address —
+  e.g. `162.131.7.68/31` is valid, `162.131.7.69/31` is not (host bits set), matching the same
+  check the portal UI applies.
+- NAT pool prefixes are unique across devices — reusing the same prefix on two edges is rejected
+  with a clear per-device error instead of the API's generic "Duplicate entry" message.
+
+Any failure raises a `ConfigurationError` naming the site/device/LAN-segment involved, before any
+API call is made.
+
+To list Data Exchange services (both types)
 
 ```yaml
 - name: Get Data Exchange services summary
@@ -3207,6 +3245,74 @@ To list Data Exchange services
   ansible.builtin.debug:
     msg: "{{ services_summary.msg }}"
 ```
+
+The summary table includes a `Type` column (`peering_service` or `client_to_server`) alongside ID,
+Service Name, Status, Role, and Customers.
+
+### Step 2b: Update Data Exchange Services
+
+`update_services` changes an **existing** service in place; use `create_services` for new
+services. What can be changed depends on the service's `type`:
+
+- `peering_service`: only `policy.prefixTags` — at least one prefix must remain.
+- `client_to_server`: `policy.prefixTags` and/or `policy.natTranslationMode` — at least one of the
+  two must be provided. Any field left out is read from the existing service and preserved as-is.
+  The same NAT pool validations from `create_services` (CIDR alignment, per-device uniqueness,
+  site/LAN-segment/device membership) apply here too.
+
+```bash
+# Preview changes before applying
+ansible-playbook playbooks/de_workflows/01b_dataex_update_services.yml --check --diff
+# Apply
+ansible-playbook playbooks/de_workflows/01b_dataex_update_services.yml
+```
+
+To update a `peering_service`'s prefixTags
+
+```yaml
+- name: Update Data Exchange Services (peering_service prefixTags)
+  graphiant.naas.graphiant_data_exchange:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: update_services
+    config_file: "de_workflows_configs/sample_data_exchange_services_update.yaml"
+    detailed_logs: true
+  register: update_services_result
+
+- name: Display update result
+  ansible.builtin.debug:
+    msg: "{{ update_services_result.msg }}"
+```
+
+To update a `client_to_server` service's prefixTags and/or NAT pools
+
+```yaml
+- name: Update Data Exchange Services (client_to_server prefixTags/natTranslationMode)
+  graphiant.naas.graphiant_data_exchange:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: update_services
+    config_file: "de_workflows_configs/sample_data_exchange_services_client_to_server_update.yaml"
+    detailed_logs: true
+  register: update_c2s_result
+```
+
+Both operations are idempotent: re-running with the same config reports `changed: false` and skips.
+
+**Detecting drift without `update_services`:** running `create_services` with `--check --diff`
+against an already-existing service compares its current `prefixTags` (and, for
+`client_to_server`, `natTranslationMode`) against the config file and reports drift instead of
+silently skipping:
+
+```
+Drift detected in 1 service(s): de-service-1. prefixTags differ from current state. Use
+update_services to apply changes.
+```
+
+This is a preview only — no changes are made by `create_services` in this case; use
+`update_services` (as above) to actually apply them.
 
 ### Step 3: Create Data Exchange Customers
 

@@ -969,6 +969,58 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         )
         self.assertTrue(result["changed"], f"Expected restore to change the service, got: {result}")
 
+    def test_create_data_exchange_services_client_to_server(self):
+        """
+        Create a client_to_server Data Exchange service (NAT pools).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.create_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+        )
+
+    def test_create_data_exchange_services_client_to_server_idempotent(self):
+        """
+        Create the client_to_server service again with the same config — must be skipped (no change).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.create_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+        )
+        self.assertFalse(result["changed"], f"Expected no change on idempotent create_services, got: {result}")
+        self.assertTrue(result["skipped"], f"Expected service to be skipped, got: {result}")
+        self.assertFalse(result["created"], f"Expected no new services to be created, got: {result}")
+
+    def test_update_data_exchange_services_client_to_server(self):
+        """
+        Update the client_to_server service's prefixTags and NAT pools (natTranslationMode).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.update_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server_update.yaml"
+        )
+        self.assertTrue(result["changed"], f"Expected update to change the service, got: {result}")
+
+    def test_update_data_exchange_services_client_to_server_idempotent(self):
+        """
+        Update the client_to_server service again with the same config — must be skipped (no change).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.update_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server_update.yaml"
+        )
+        self.assertFalse(result["changed"], f"Expected no change on idempotent update, got: {result}")
+        self.assertTrue(result["skipped"], f"Expected service to be skipped, got: {result}")
+
+    def test_update_data_exchange_services_client_to_server_restore(self):
+        """
+        Restore the client_to_server service's prefixTags/NAT pools to their original values.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.update_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+        )
+        self.assertTrue(result["changed"], f"Expected restore to change the service, got: {result}")
+
     def test_delete_data_exchange_services(self):
         """
         Delete Data Exchange Services.
@@ -986,6 +1038,27 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         )
         self.assertFalse(result["changed"], f"Expected no change on idempotent delete_services, got: {result}")
         self.assertTrue(result["skipped"], f"Expected services to be skipped, got: {result}")
+        self.assertFalse(result["deleted"], f"Expected no services to be deleted, got: {result}")
+
+    def test_delete_data_exchange_services_client_to_server(self):
+        """
+        Delete the client_to_server Data Exchange service.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        graphiant_config.data_exchange.delete_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+        )
+
+    def test_delete_data_exchange_services_client_to_server_idempotent(self):
+        """
+        Delete the client_to_server service again — already deleted, must be skipped (no change).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.delete_services(
+            "de_workflows_configs/sample_data_exchange_services_client_to_server.yaml"
+        )
+        self.assertFalse(result["changed"], f"Expected no change on idempotent delete_services, got: {result}")
+        self.assertTrue(result["skipped"], f"Expected service to be skipped, got: {result}")
         self.assertFalse(result["deleted"], f"Expected no services to be deleted, got: {result}")
 
     def test_create_data_exchange_customers(self):
@@ -2476,6 +2549,13 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services'))
     suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_idempotent'))
     suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_restore'))
+    #   client_to_server service type (NAT pools)
+    suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services_client_to_server'))
+    suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_services_client_to_server_idempotent'))
+    suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_client_to_server'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_client_to_server_idempotent'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_client_to_server_restore'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_customers_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers'))
@@ -2504,6 +2584,8 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services_scale'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_customers'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services_client_to_server'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_services_client_to_server_idempotent'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_graphiant_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_prefix_lists'))
 
