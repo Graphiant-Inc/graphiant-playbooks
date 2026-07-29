@@ -5,10 +5,11 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 """
-Ansible module for managing Graphiant BGP peering and routing policies.
+Ansible module for managing Graphiant BGP peering, routing policies, and route aggregations.
 
 This module provides BGP management capabilities including:
 - BGP peering configuration and deconfiguration
+- BGP route aggregation configuration and deconfiguration
 - Policy attachment and detachment
 - Routing policy management
 """
@@ -16,24 +17,31 @@ This module provides BGP management capabilities including:
 DOCUMENTATION = r"""
 ---
 module: graphiant_bgp
-short_description: Manage Graphiant BGP peering and routing policies
+short_description: Manage Graphiant BGP peering, routing policies, and route aggregations
 description:
   - This module provides comprehensive BGP peering and routing policy management for Graphiant Edge devices.
   - Supports BGP peering neighbor configuration and deconfiguration.
   - Enables attachment and detachment of global BGP routing policies (filters) to BGP peers.
+  - Supports BGP route aggregation configuration per LAN segment.
+  - Neighbors and aggregations are independent — a segment can define either or both.
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
 version_added: "25.12.0"
 notes:
   - "BGP Operations:"
-  - "  - Configure: Create BGP peering neighbors and attach global BGP routing policies."
-  - "  - Deconfigure: Remove BGP peering neighbors (policies are automatically detached)."
-  - "  - Detach Policies: Detach global BGP routing policies from BGP peers without removing the peers."
+  - "  - Configure (state: present): Create BGP peering neighbors, route aggregations, and attach routing policies."
+  - "  - Deconfigure (state: absent): Remove BGP peering neighbors and route aggregations. Policies are detached."
+  - "  - Detach Policies: Detach global BGP routing policies from BGP peers without removing the peers or aggregations."
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves device names, site names, and policy names to IDs."
   - "All operations are idempotent and safe to run multiple times."
   - "Global BGP filters must be created using M(graphiant.naas.graphiant_global_config) module"
   - "before attaching to BGP peers."
+  - "BGP Aggregation config file fields per segment entry:"
+  - "  bgp_aggregations: list of aggregation entries, each with:"
+  - "    prefix (required): The network prefix to aggregate, e.g. 1.1.1.0/27."
+  - "    as_set (optional, default false): Include AS set information in the aggregated route."
+  - "    summary_only (optional, default false): Suppress advertisement of more-specific routes."
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:
@@ -43,15 +51,15 @@ options:
       - Required for all operations.
       - Can be an absolute path or relative path. Relative paths are resolved using the configured config_path.
       - Configuration files support Jinja2 templating syntax for dynamic generation.
-      - File must contain BGP peering neighbor definitions with device names, neighbor IPs, and policy references.
+      - File must contain either BGP peering neighbor definitions or route aggregation definitions, or both.
     type: str
     required: true
   operation:
     description:
       - "The specific BGP operation to perform."
-      - "V(configure): Configure BGP peering neighbors and attach global BGP routing policies."
-      - "V(deconfigure): Deconfigure BGP peering neighbors. Policies are automatically detached."
-      - "V(detach_policies): Detach global BGP routing policies from BGP peers without removing the peers."
+      - "V(configure): Configure BGP peering neighbors and/or route aggregations; attach global BGP routing policies."
+      - "V(deconfigure): Remove BGP peering neighbors and/or route aggregations. Policies are automatically detached."
+      - "V(detach_policies): Detach global BGP routing policies from BGP peers without removing peers or aggregations."
     type: str
     choices:
       - configure
@@ -59,9 +67,10 @@ options:
       - detach_policies
   state:
     description:
-      - "The desired state of the BGP peering."
+      - "The desired state of the BGP configuration."
       - "V(present): Maps to V(configure) when O(operation) not specified."
       - "V(absent): Maps to V(deconfigure) when O(operation) not specified."
+      - "Removes all neighbors and aggregations listed in the config file."
     type: str
     choices: [ present, absent ]
     default: present
@@ -101,7 +110,7 @@ author:
 """
 
 EXAMPLES = r"""
-- name: Configure BGP peering and attach policies
+- name: Configure BGP peering, route aggregations and attach policies
   graphiant.naas.graphiant_bgp:
     operation: configure
     bgp_config_file: "sample_bgp_peering.yaml"
@@ -120,7 +129,7 @@ EXAMPLES = r"""
     password: "{{ graphiant_password }}"
     detailed_logs: true
 
-- name: Deconfigure BGP peering
+- name: Deconfigure BGP peering and aggregations
   graphiant.naas.graphiant_bgp:
     operation: deconfigure
     bgp_config_file: "sample_bgp_peering.yaml"
@@ -136,7 +145,7 @@ EXAMPLES = r"""
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
 
-- name: Deconfigure BGP peering using state parameter
+- name: Deconfigure BGP peering and aggregations using state parameter
   graphiant.naas.graphiant_bgp:
     state: absent
     bgp_config_file: "sample_bgp_peering.yaml"

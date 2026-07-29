@@ -2408,21 +2408,91 @@ segments:
 
 ## BGP Configuration
 
+### Configure BGP peering and/or route aggregations
+
 ```yaml
-# Configure BGP peering
-- name: Configure BGP peering
+- name: Configure BGP peering and route aggregations
   graphiant.naas.graphiant_bgp:
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
     bgp_config_file: "sample_bgp_peering.yaml"
-    operation: "configure"
+    operation: configure
     detailed_logs: true
 ```
 
 Run:
 ```bash
-ansible-playbook playbooks/complete_network_setup.yml
+ansible-playbook playbooks/complete_network_setup.yml --tags bgp,peering --check
+ansible-playbook playbooks/complete_network_setup.yml --tags bgp,peering
+```
+
+### Deconfigure BGP peering and route aggregations
+
+Removes all neighbors and aggregations listed in the config file.
+
+```yaml
+- name: Deconfigure BGP peering and route aggregations
+  graphiant.naas.graphiant_bgp:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    bgp_config_file: "sample_bgp_peering.yaml"
+    operation: deconfigure
+```
+
+Run:
+```bash
+ansible-playbook playbooks/complete_network_setup.yml --tags deconfigure_bgp_peering --check
+ansible-playbook playbooks/complete_network_setup.yml --tags deconfigure_bgp_peering
+```
+
+### Detach routing policies (leaves neighbors and aggregations intact)
+
+```yaml
+- name: Detach BGP routing policies
+  graphiant.naas.graphiant_bgp:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    bgp_config_file: "sample_bgp_peering.yaml"
+    operation: detach_policies
+```
+
+### Config file structure — `sample_bgp_peering.yaml`
+
+Each device entry supports `route_policies` (device-level policy attachment), `neighbors` (BGP peers), and `bgp_aggregations` per segment. Neighbors and aggregations are independent — a segment may define either or both.
+
+```yaml
+bgp_peering:
+  - <device_name>:
+      route_policies:           # [OPTIONAL] Attach global BGP routing policies at device level
+        - <policy_name>
+      segments:
+        - lan_segment: <name>
+          neighbors:            # [OPTIONAL] BGP neighbor peers
+            - remote_ipv4_address: <ip>   # [REQUIRED]
+              peer_as: <asn>              # [REQUIRED]
+              local_interface: <iface>    # [OPTIONAL]
+              ipv4_inbound_filter: <policy_name>   # [OPTIONAL]
+              ipv4_outbound_filter: <policy_name>  # [OPTIONAL]
+              ipv6_inbound_filter: <policy_name>   # [OPTIONAL]
+              ipv6_outbound_filter: <policy_name>  # [OPTIONAL]
+              hold_timer: 90              # [OPTIONAL] seconds (default: 90)
+              keepalive_timer: 30         # [OPTIONAL] seconds (default: 30)
+              ebgp_multi_hop: 1           # [OPTIONAL] TTL (default: 1)
+              as_override: false          # [OPTIONAL] default: false
+              remote_private_as: false    # [OPTIONAL] default: false
+              allow_as_in: 1             # [OPTIONAL] local AS repeat count
+              send_community: true        # [OPTIONAL] default: true
+              md5_password: "secret"      # [OPTIONAL]
+              bfd: false                  # [OPTIONAL] default: false
+              minimum_interval: 1000      # [OPTIONAL] BFD ms, Range: 250-30000 (default: 1000)
+              local_multiplier: 3         # [OPTIONAL] BFD multiplier, Range: 1-255 (default: 3)
+          bgp_aggregations:     # [OPTIONAL] Route aggregations for this segment
+            - prefix: 1.1.1.0/27          # [REQUIRED] Prefix to aggregate (CIDR)
+              as_set: false               # [OPTIONAL] Include AS set info (default: false)
+              summary_only: false         # [OPTIONAL] Suppress more-specific routes (default: false)
 ```
 
 ## Global Configuration Objects

@@ -15,6 +15,7 @@
     "segments": {
         {% for entry in segments %}
             "{{ entry.lan_segment }}": {
+                {% if entry.neighbors %}
                 "bgpNeighbors": {
                     {% for neighbor in entry.neighbors %}
                         "{{ neighbor.remote_ipv4_address }}": {
@@ -116,7 +117,26 @@
                             {% endif %}
                         },
                     {% endfor %}
+                }{% if entry.bgp_aggregations %},{% endif %}
+                {% endif %}
+                {% if entry.bgp_aggregations %}
+                "bgpAggregations": {
+                    {% for aggregation in entry.bgp_aggregations %}
+                        "{{ aggregation.prefix }}": {
+                            {% if action != "delete" %}
+                                "config": {
+                                    "prefix": "{{ aggregation.prefix }}",
+                                    "asSet": {{ aggregation.as_set | default('false') }},
+                                    "summaryOnly": {{ aggregation.summary_only | default('false') }},
+                                    "id": "{{ aggregation.prefix }}"
+                                }
+                            {% else %}
+                                "config": null
+                            {% endif %}
+                        },
+                    {% endfor %}
                 }
+                {% endif %}
             },
         {% endfor %}
     }

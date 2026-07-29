@@ -1,7 +1,26 @@
+# BGP Peering Configuration
+# ============================================================
+# Configure BGP neighbors, routing policy attachments, and route aggregations
+# per device and LAN segment.
+#
+# Top-level structure:
+#   bgp_peering:
+#     - YOUR_DEVICE_NAME:
+#         route_policies: [OPTIONAL] Global routing policies to attach at the device level.
+#                         Must be created first using graphiant_global_config.
+#         segments:       [REQUIRED] List of LAN segments to configure BGP on.
+#           - lan_segment: YOUR_LAN_SEGMENT_NAME
+#             neighbors:        [OPTIONAL] List of BGP neighbor peers.
+#             bgp_aggregations: [OPTIONAL] List of prefixes to aggregate.
+#
+# Note: Each segment may define neighbors, bgp_aggregations, or both.
+# ============================================================
+
 bgp_peering:
   - edge-1-sdktest:
-      # BGP IPv4 peer configuration with Global routing policies attached 
-      route_policies:
+      # Example: BGP neighbors and route aggregations on the same segment,
+      # with global routing policies attached at the device level.
+      route_policies:                       # [OPTIONAL] Global routing policy names to attach at device level
         - demo_bgp_inbound_filter
         - demo_bgp_outbound_filter
       segments:
@@ -23,8 +42,13 @@ bgp_peering:
               bfd: true
               minimum_interval: 1200 # in milliseconds, Range: 250-30000 (default: 1000)
               local_multiplier: 4 # Range: 1-255 (default: 3)
+          bgp_aggregations:
+            - prefix: 1.1.1.0/27      # [REQUIRED] Network prefix to aggregate (CIDR notation)
+              as_set: true            # [OPTIONAL] Include AS set info in aggregated route (default: false)
+              summary_only: true      # [OPTIONAL] Suppress more-specific routes (default: false)
 
   - edge-2-sdktest:
+      # Example: BGP neighbors only, multiple segments, no aggregations.
       route_policies:
         - demo_bgp_inbound_filter
         - demo_bgp_outbound_filter
@@ -48,3 +72,12 @@ bgp_peering:
               local_interface: GigabitEthernet8/0/0.30
               ipv4_inbound_filter: demo_bgp_inbound_filter
               ipv4_outbound_filter: demo_bgp_outbound_filter
+
+  - edge-3-sdktest:
+      # Example: BGP aggregations only, no neighbors.
+      segments:
+        - lan_segment: lan-segment-3
+          bgp_aggregations:
+            - prefix: 1.1.1.0/27      # [REQUIRED] Network prefix to aggregate (CIDR notation)
+              as_set: true            # [OPTIONAL] Include AS set info in aggregated route (default: false)
+              summary_only: true      # [OPTIONAL] Suppress more-specific routes (default: false)

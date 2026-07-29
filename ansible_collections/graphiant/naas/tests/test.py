@@ -2509,7 +2509,7 @@ if __name__ == '__main__':
     # Deconfigure prefix and port list
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_prefix_and_port_list'))
 
-    # Global Configuration Management and BGP Peering
+    # Global Configuration Management, BGP Peering and BGP Aggregation
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_prefix_lists'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_global_config_bgp_filters'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_bgp_peering'))

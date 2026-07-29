@@ -24,7 +24,7 @@ This collection provides Ansible modules to automate:
 - DHCP relay on main interfaces and VLAN subinterfaces
 - LAG (Link Aggregation Group) interface configuration
 - Interface MACsec (802.1AE) configuration and monitoring on Edge/Gateway devices
-- BGP peering management (including BFD — Bidirectional Forwarding Detection)
+- BGP peering management (including BFD — Bidirectional Forwarding Detection) and route aggregation
 - Site-to-Site VPN configuration (static and BGP routing)
 - Global configuration objects (prefix sets, BGP filters, VPN profiles, LAN segments)
 - Site management and object attachments
@@ -74,7 +74,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_lag_interfaces` | Manage LAG interfaces configuration |
 | `graphiant_macsec` | Configure interface MACsec (802.1AE) on Edge/Gateway devices |
 | `graphiant_macsec_info` | Query MACsec monitoring status (secure/unsecure) per interface |
-| `graphiant_bgp` | Manage BGP peering and routing policies (including BFD) |
+| `graphiant_bgp` | Manage BGP peering, routing policies (including BFD), and route aggregations |
 | `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
 | `graphiant_sites` | Manage sites and site attachments |
@@ -684,7 +684,7 @@ Configuration files use YAML format with optional Jinja2 templating. Sample file
 - `sample_dhcp_relay_config.yaml` - DHCP relay on main interfaces and VLAN subinterfaces (`edge.interfaces.*.ipv4/ipv6.dhcp.dhcpRelay`)
 - `sample_lag_interface_config.yaml` - LAG interface configurations
 - `sample_macsec.yaml` - Interface MACsec (PSK/SAK) configuration; CAK via `vault_devices_macsec_psk` in `vault_secrets.yml`
-- `sample_bgp_peering.yaml` - BGP peering configurations
+- `sample_bgp_peering.yaml` - BGP peering configurations and route aggregations (`bgp_aggregations` per segment — `prefix`, `as_set`, `summary_only`; segments may define neighbors, aggregations, or both)
 - `sample_global_*.yaml` - Global configuration objects
 - `sample_device_config_payload.yaml` - Raw device configuration payloads (Edge/Gateway Device types)
 - `sample_device_config_core_device_payload.yaml` - Raw device configuration payloads (Core Device type)
