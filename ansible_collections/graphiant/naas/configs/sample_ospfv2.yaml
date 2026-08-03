@@ -1,0 +1,223 @@
+# Sample OSPFv2 Configuration for Graphiant Playbooks
+#
+#
+# KEY CONCEPTS BEFORE YOU EDIT THIS FILE
+# ---------------------------------------
+# 1. routerId is REQUIRED the first time OSPF is configured on a segment.
+#    Once a segment already has an OSPF process, routerId can be omitted to
+#    leave it unchanged (only include it if you're changing it).
+#
+# 2. defaultOriginate and adminDistance can ONLY be set once at least one
+#    area exists for that segment -- either already on the device, or being
+#    created in this SAME push. Setting them with zero areas raises an error.
+#
+# 3. areaId is REQUIRED the first time a given area (by 'name') is created.
+#    Once an area already exists, areaId can be omitted if you're only
+#    updating something else about it (e.g. adding an interface).
+#
+# 4. Defaults are only applied when creating something NEW (a new area, a
+#    new interface). If you're updating something that already exists on the
+#    device, omitted fields are left untouched -- they are NOT reset to
+#    defaults. This is a sparse/partial-update model, not a full replace.
+#
+# SECURITY: MD5 Authentication Keys
+# -----------------------------------
+# Precedence (YAML wins if non-null; vault fills null/absent):
+#   1. YAML non-null value  →  used as-is (dev/local testing only; do not commit secrets)
+#   2. YAML null or absent  →  looked up from vault_ospf_md5_passwords, keyed by
+#                              device name -> interface name
+#   3. Not in YAML AND not in vault  →  authentication left unset (interface
+#                                       has no MD5 auth configured)
+#
+# Recommended production workflow: same as other secrets in this collection --
+# fetch from your organization's secrets store, pass as module params via
+# include_vars, no_log: true. See configs/vault_secrets.yml.example.
+#
+# DECONFIGURE (REMOVAL) CONCEPTS
+# -----------------------------------
+# Deconfigure is run with --tags deconfigure, against the SAME YAML file
+# shown below (segments -> ospfv2 -> areas / redistribution / etc.) -- no
+# separate deconfigure-shaped file needed. Under deconfigure, each area and
+# each redistribution protocol is identified by its key alone (`name` /
+# `protocol`) and removed ENTIRELY, including everything nested under it
+# (all of that area's interfaces, their bfd/authentication/intervals, etc).
+# Every other field on the entry -- areaId, type, interfaces and their
+# settings, metric, metricType -- is ignored for this decision. This is the
+# same convention every other manager in this collection uses (e.g.
+# static routes key a deletion off `destinationPrefix` alone, regardless of
+# nextHops/description/administrativeDistance also being present).
+#
+# 1. Removing a WHOLE area (and all its interfaces): list it under `areas`
+#    with its `name` -- whether or not you also include areaId, type, or a
+#    full `interfaces` list alongside it (as in the configure examples
+#    above) makes no difference; the whole area is deleted.
+#
+# 2. Removing a redistribution protocol: list it under `redistribution`
+#    with its `protocol` -- again regardless of whether metric/metricType
+#    are also present. Removes that protocol entirely from the segment.
+#
+# 3. Turning OFF defaultOriginate while the process/areas stay configured:
+#    give `defaultOriginate: "disabled"` -- an explicit value, NOT null.
+#    This is a scalar process-level setting (not a named container), so it
+#    is addressed by value rather than by key presence.
+#
+# 4. Resetting adminDistance back to its default: give
+#    `adminDistance: null`. Also a scalar setting, addressed by explicit
+#    null rather than by key presence.
+#    NOTE: adminDistance and defaultOriginate are ALSO reset automatically
+#    by the backend once a segment reaches zero remaining areas -- you do
+#    not need to deconfigure them yourself if you're already removing the
+#    segment's last area.
+#
+# 5. Clearing routerId ("manual") is a TWO-STEP process, and can ONLY
+#    happen once the segment already has ZERO areas and ZERO redistribution
+#    entries left, confirmed from a PRIOR run:
+#      Step A: deconfigure (or otherwise remove) every area and every
+#              redistribution entry on the segment first. Confirm on the
+#              portal that the segment shows no OSPF areas/redistribution
+#              before continuing.
+#      Step B: in a SEPARATE, SUBSEQUENT run, give `routerId: null` by
+#              itself, with no `areas` or `redistribution` in that same run.
+#    Requesting `routerId: null` in the SAME run that also removes the
+#    segment's last area/redistribution entry will NOT clear it yet -- the
+#    module detects this and logs that router ID removal is deferred until
+#    a follow-up run confirms the segment is fully clear. This mirrors
+#    confirmed live API behavior, not a limitation of the module.
+#
+# 6. Deconfigure is idempotent for areas, redistribution protocols, and
+#    defaultOriginate -- running the same deconfigure block twice reports
+#    no changes the second time if the target is already gone.
+#
+# Running `--tags deconfigure` against the `ospfv2:` block below as-is will
+# remove BOTH areas on edge-1-sdktest's two segments and the one area on
+# edge-2-sdktest's segment, along with all of their interfaces and
+# redistribution protocols.
+
+ospfv2:
+
+  # =========================================================================
+  # Device 1: edge-1-sdktest -- two LAN segments, demonstrating a fuller
+  # range of options (multiple areas, multiple interfaces, all three
+  # redistribution protocol examples).
+  # =========================================================================
+  - edge-1-sdktest:
+      segments:
+
+        - lanSegment: lan-1-test
+          ospfv2:
+            # REQUIRED the first time OSPF is configured on this segment.
+            routerId: "2.2.2.2"
+
+            # Optional. options("unconditional", "conditional", "disabled")
+            # Only valid once >=1 area exists (see areas below, created in
+            # this same push). Omit this line to leave defaultOriginate
+            # untouched on an already-configured segment.
+            defaultOriginate: "disabled"
+
+            # Optional. Same "requires >=1 area" rule as defaultOriginate.
+            # Omit this line to leave adminDistance untouched.
+            # range (1-255)
+            adminDistance: 100
+
+            areas:
+              - name: "CoreArea"          # REQUIRED
+                areaId: "0.0.0.0"         # REQUIRED when this area is new
+                # Optional. Default when creating a new area: "normal".
+                # NOTE: as of this writing, "normal" is the only area type
+                # exposed by the Graphiant Portal UI
+                type: normal
+
+                interfaces:
+                  # Interface #1: full field set, BFD enabled.
+                  - interfaceName: "GigabitEthernet7/0/0"   # REQUIRED
+                    # Optional. Default when interface is new: "point_to_point".
+                    # options ("point_to_point", "broadcast")
+                    type: point_to_point
+                    # Optional. Default when interface is new: 10.
+                    helloInterval: 10
+                    # Optional. Default when interface is new: 40.
+                    deadInterval: 40
+                    # Optional. Default when interface is new: 5000.
+                    retransmitInterval: 5000
+                    # Optional. Omit entirely to leave BFD disabled (default
+                    # for a new interface: {"enabled": false}).
+                    bfd:
+                      enabled: true
+                      # Optional, only meaningful when enabled: true.
+                      minimumInterval: 1000
+                      # Optional, only meaningful when enabled: true.
+                      multiplier: 3
+
+                  # Interface #2: MD5 authentication instead of BFD.
+                  - interfaceName: "GigabitEthernet7/0/0.19"   # REQUIRED
+                    # All other interface fields omitted here -- since this
+                    # is also a NEW interface, type/helloInterval/deadInterval/
+                    # retransmitInterval/bfd will all be auto-filled with
+                    # their defaults by the module; you don't need to repeat
+                    # them if the defaults are fine.
+                    authentication:
+                      keyId: 1
+                      # if key is set to null → looked up from vault_ospf_md5_passwords, keyed
+                      # by device 'edge-1-sdktest' -> interface
+                      # 'GigabitEthernet6/0/0'. Set to a real string here only
+                      # for local/dev testing.
+                      key: "hello"
+
+            # Optional list. Each entry adds one redistribution protocol.
+            # Protocol types: bgp, static, connected
+            redistribution:
+              - protocol: bgp             # REQUIRED per entry
+                # Optional. Default when interface is new: 1.
+                # range (1-16777215)
+                metric: 1
+                # Optional. Default when interface is new: "type_2".
+                # options ("type_1", "type_2")
+                metricType: type_2
+              - protocol: static
+                metric: 2
+                metricType: type_2
+              - protocol: connected
+                metric: 5
+                metricType: type_1
+
+        - lanSegment: lan-7-test
+          ospfv2:
+            routerId: "3.3.3.3"
+            defaultOriginate: "disabled"
+            adminDistance: 110
+            areas:
+              - name: "GlobArea"
+                areaId: "1"
+                type: normal
+                interfaces:
+                  - interfaceName: "GigabitEthernet7/0/0.18"
+            redistribution:
+              - protocol: connected
+                metric: 5
+                metricType: type_1
+
+  # =========================================================================
+  # Device 2: edge-2-sdktest -- single LAN segment, minimal example showing
+  # the smallest valid configuration (just routerId + one area + one bare
+  # interface, everything else defaulted).
+  # =========================================================================
+  - edge-2-sdktest:
+      segments:
+
+        - lanSegment: lan-1-test
+          ospfv2:
+            routerId: "4.4.4.4"          # REQUIRED (first-time OSPF on this segment)
+            # defaultOriginate and adminDistance omitted here entirely --
+            # both are optional, and this example shows the minimal path.
+            areas:
+              - name: "RemoteArea"       # REQUIRED
+                areaId: "2"              # REQUIRED (new area)
+                # type omitted -- defaults to "normal" since this is a new area.
+                interfaces:
+                  - interfaceName: "GigabitEthernet8/0/0"   # REQUIRED, only field needed
+                    # Every other interface field omitted -- type defaults to
+                    # "point_to_point", intervals default to 10/40/5000, BFD
+                    # defaults to disabled. Nothing else needs to be specified
+                    # for a working interface.
+            # redistribution omitted entirely -- fully optional; segment has
+            # OSPF areas/interfaces but redistributes nothing into OSPF.

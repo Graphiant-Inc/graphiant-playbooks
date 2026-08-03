@@ -17,6 +17,7 @@ from .dhcp_relay_interface_manager import DhcpRelayInterfaceManager
 from .lag_interface_manager import LagInterfaceManager
 from .site_to_site_vpn_manager import SiteToSiteVpnManager
 from .static_routes_manager import StaticRoutesManager
+from .ospfv2_manager import OSPFv2Manager
 from .ntp_manager import NtpManager
 from .traffic_policy_manager import TrafficPolicyManager
 from .security_policy_manager import SecurityPolicyManager
@@ -99,6 +100,7 @@ class GraphiantConfig:
             self.prefix_port_list = PrefixAndPortListManager(self.config_utils)
             self.macsec = MacsecManager(self.config_utils)
             self.nat_policy = NatPolicyManager(self.config_utils)
+            self.ospfv2 = OSPFv2Manager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -135,4 +137,5 @@ class GraphiantConfig:
             "prefix_port_list": hasattr(self, "prefix_port_list") and self.prefix_port_list is not None,
             "macsec": hasattr(self, "macsec") and self.macsec is not None,
             "nat_policy": hasattr(self, "nat_policy") and self.nat_policy is not None,
+            "ospfv2": hasattr(self, "ospfv2") and self.ospfv2 is not None,
         }

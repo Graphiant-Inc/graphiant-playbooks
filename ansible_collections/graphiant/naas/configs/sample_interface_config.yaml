@@ -32,9 +32,17 @@ interfaces:
         - vlan: 18
           lan: lan-7-test
           ipv4: 10.1.17.1/24
-          ipv6: 2001:db8:10:1:17::1/64
+          ipv6: 2001:db8:20:1:17::1/64
           description: Segment lan-7-test interface
           alias: Gig7.18
+          v4TcpMss: 1392
+          v6TcpMss: 1220
+        - vlan: 19
+          lan: lan-1-test
+          ipv4: 10.1.19.1/24
+          ipv6: 2001:db8:30:1:19::1/64
+          description: Segment lan-1-test interface
+          alias: Gig7.19
           v4TcpMss: 1392
           v6TcpMss: 1220
 
@@ -52,7 +60,7 @@ interfaces:
     # LAN interface and Multiple LAN Sub-Interfaces(VLANs) with Static IPv4/IPv6 assignments
     - name: GigabitEthernet8/0/0
       ipv4: 10.2.11.1/24
-      ipv6: 2001:db8:10:2:11::1/64
+      ipv6: 2001:db8:40:2:11::1/64
       lan: lan-1-test
       description: Segment-1 interface
       maxTransmissionUnit: 1500
@@ -67,7 +75,7 @@ interfaces:
         - vlan: 29
           lan: lan-8-test
           ipv4: 10.2.18.1/24
-          ipv6: 2001:db8:10:2:18::1/64
+          ipv6: 2001:db8:50:2:18::1/64
           description: Segment-8 interface
           alias: Gig8.29
           v4TcpMss: 1392
@@ -82,7 +90,7 @@ interfaces:
     # WAN Sub-Interface with IPv4/IPv6 assignment
     - name: GigabitEthernet5/0/0
       circuit: c-gigabitethernet5-0-0
-      ipv4: 100.200.1.1/24
+      ipv4: 100.210.1.1/24
       adminStatus: false
       maxTransmissionUnit: 1450
       subinterfaces:
@@ -101,7 +109,7 @@ interfaces:
     # LAN Interface and Sub-Interface (VLAN) with Static IPv4/IPv6 assignment
     - name: GigabitEthernet8/0/0
       ipv4: 10.3.17.1/24
-      ipv6: 2001:db8:10:3:17::1/64
+      ipv6: 2001:db8:70:3:17::1/64
       lan: lan-7-test
       description: Segment-7 interface
       mtu: 1450

@@ -3143,6 +3143,73 @@ Deconfigure deletes only the objects listed in the YAML (per device) by setting 
     msg: "{{ ntp_deconfigure_result.msg }}"
 ```
 
+## OSPFv2 Configuration
+
+### Module: graphiant.naas.graphiant_ospfv2
+
+`graphiant_ospfv2` manages OSPFv2 processes under `edge.segments.<segment>.ospfv2` (areas, per-area interfaces, redistribution). Reads `configs/sample_ospfv2.yaml`; **configure** builds the full area/interface/redistribution payload, **deconfigure** removes only the areas (by `name`) and redistribution entries (by `protocol`) listed in the YAML — other areas/redistribution on the same segment are left untouched.
+
+**Prerequisites:** The following must be configured before running `ospfv2_management.yml`:
+
+- **LAN segments** — run `lan_segments_management.yml --tag configure` first; each entry's `lanSegment` must match an existing segment name.
+- **LAN interfaces** — run `interface_management.yml --tag lan` first; every `areas[].interfaces[].interfaceName` must already exist on that segment. The module does not pre-validate interface names against live device state (unlike `graphiant_edge_services`/`graphiant_dhcp_relay`) — an unknown interface name fails at the API, not in Ansible.
+- **BGP peering** (only needed if you set `redistribution: - protocol: bgp`) — configure BGP first (`graphiant_bgp` / `bgp_peering_management.yml`); OSPF will accept the redistribution config regardless, but nothing is actually redistributed until BGP has routes to offer.
+
+Idempotent: configure compares the desired process to existing device state per segment and skips the push when already matched (`changed: false`).
+
+With `--check`, nothing is pushed; would-be payloads are logged with a `[check_mode]` prefix. With `--diff`, pending changes appear in Ansible `diff` (`before` / `after`) and `details.diff_plan`.
+
+### Playbook
+
+```bash
+ansible-playbook playbooks/ospfv2_management.yml --tags configure --check
+ansible-playbook playbooks/ospfv2_management.yml --tags configure --check --diff
+ansible-playbook playbooks/ospfv2_management.yml --tags configure
+ansible-playbook playbooks/ospfv2_management.yml --tags deconfigure --check
+ansible-playbook playbooks/ospfv2_management.yml --tags deconfigure --check --diff
+ansible-playbook playbooks/ospfv2_management.yml --tags deconfigure
+```
+
+### Configure OSPFv2
+
+```yaml
+- name: Configure OSPFv2
+  graphiant.naas.graphiant_ospfv2:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    ospfv2_config_file: "sample_ospfv2.yaml"
+    detailed_logs: true
+    state: present
+  register: ospfv2_configure_result
+
+- name: Display result message (includes detailed logs)
+  ansible.builtin.debug:
+    msg: "{{ ospfv2_configure_result.msg }}"
+```
+
+### Deconfigure OSPFv2
+
+Deconfigure removes only the areas (by `name`) and redistribution entries (by `protocol`) listed in the YAML — other OSPF config on the same segment is left in place.
+
+```yaml
+- name: Deconfigure OSPFv2
+  graphiant.naas.graphiant_ospfv2:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: deconfigure
+    ospfv2_config_file: "sample_ospfv2.yaml"
+    detailed_logs: true
+    state: absent
+  register: ospfv2_deconfigure_result
+
+- name: Display result message (includes detailed logs)
+  ansible.builtin.debug:
+    msg: "{{ ospfv2_deconfigure_result.msg }}"
+```
+
 ## Static Routes
 
 Static routes are managed under `edge.segments.<segment>.staticRoutes`.

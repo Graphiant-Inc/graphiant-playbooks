@@ -1528,6 +1528,34 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure static routes result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Deconfigure static routes idempotency failed"
 
+    def test_configure_ospfv2(self):
+        """
+        Configure OSPFv2.
+
+        Second run should be idempotent (changed=False) if desired state already matches.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.ospfv2.configure("sample_ospfv2.yaml")
+        LOG.info("Configure OSPFv2 result: %s", result)
+        result2 = graphiant_config.ospfv2.configure("sample_ospfv2.yaml")
+        LOG.info("Configure OSPFv2 result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure OSPFv2 idempotency failed"
+
+    def test_deconfigure_ospfv2(self):
+        """
+        Deconfigure (delete) OSPFv2 listed in the YAML file.
+
+        Second run should be idempotent (changed=False) when OSPFv2 is already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.ospfv2.deconfigure("sample_ospfv2.yaml")
+        LOG.info("Deconfigure OSPFv2 result: %s", result)
+        result2 = graphiant_config.ospfv2.deconfigure("sample_ospfv2.yaml")
+        LOG.info("Deconfigure OSPFv2 result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure OSPFv2 idempotency failed"
+
     def test_configure_global_ntp(self):
         """
         Configure Global NTP objects.
@@ -2805,6 +2833,16 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_detach_nat_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_nat_policy_module_params'))
 
+    # OSPFv2 Management Tests
+    # Pre-req: LAN segments referenced by OSPF
+    suite.addTest(TestGraphiantPlaybooks('test_configure_global_lan_segments'))
+    # Pre-req: creates lan-1-test/lan-7-test etc.
+    suite.addTest(TestGraphiantPlaybooks('test_configure_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_ospfv2'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_ospfv2'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
+
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
 
@@ -2827,4 +2865,5 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_syslog_targets'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_syslog_targets'))
     '''
+
     unittest.TextTestRunner(verbosity=2).run(suite)
