@@ -1411,103 +1411,67 @@ class GraphiantPortalClient:
 
     # Data Exchange API Methods
 
-    def create_data_exchange_services(self, service_config: dict):
+    def create_data_exchange_services(self, service_config: dict) -> dict:
         """
-        Create a new Data Exchange service.
+        Create a new Data Exchange service via the generic extranet producer API.
+
+        POST /v1/extranet/b2b/producer (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_producer_post``); used for both "peering_service" and
+        "client_to_server" services — previously "peering_service" was created via the
+        peering-specific ``v1_extranets_b2b_peering_producer_post``.
 
         Args:
             service_config (dict): Service configuration containing:
                 - serviceName: Service name
-                - type: Service type (e.g., "peering_service", "client_to_server")
-                - policy: Service policy configuration
+                - type: Service type ("peering_service" or "client_to_server")
+                - policy: Service policy configuration. "peering_service" configs carry
+                  "site" (singular) and a "type" key inside policy; both are translated
+                  here since the generic policy schema uses "sites" (plural, same inner
+                  shape) and forbids a "type" key.
 
         Returns:
-            dict: Created service response
+            dict: Created service response (contains "id"), camelCase keys to match the
+                shape callers previously got from the raw/typed peering response.
         """
-        if service_config.get("type") == "client_to_server":
-            return self._create_extranet_b2b_producer(service_config)
-        if getattr(self, "check_mode", False):
-            LOG.info(
-                "[check_mode] create_data_exchange_services would create: %s", json.dumps(service_config, indent=2)
-            )
-            return type("MockResponse", (), {"id": 0})()
-        try:
-            LOG.info("create_data_exchange_services: Creating service '%s'", service_config.get("serviceName"))
-            response = self.api.v1_extranets_b2b_peering_producer_post(
-                authorization=self.bearer_token, v1_extranets_b2b_peering_producer_post_request=service_config
-            )
-            LOG.info("create_data_exchange_services: Successfully created service with ID: %s", response.id)
-            return response
-        except ApiException as e:
-            # Log the actual API endpoint URL and request body for debugging
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/producer"
-            self._log_api_error(
-                method_name="create_data_exchange_services", api_url=api_url, request_body=service_config, exception=e
-            )
-            raise e
-
-    def _create_extranet_b2b_producer(self, service_config: dict) -> dict:
-        """
-        Create a "client_to_server" Data Exchange service via the generic extranet producer API.
-
-        POST /v1/extranet/b2b/producer
-
-        This endpoint (and its NAT-capable policy schema) is not yet exposed by the released
-        graphiant_sdk client, so it is called directly via the raw API client, following the
-        same pattern as get_data_exchange_service_details/edit_data_exchange_service below.
-
-        TODO: replace with a bound SDK method call once graphiant-sdk >= 26.7.0 exposes one
-        for this endpoint (planned for a follow-up MR).
-
-        Args:
-            service_config (dict): {"serviceName", "type": "client_to_server", "policy": {...}}
-
-        Returns:
-            dict: Created service response (contains "id")
-        """
+        service_type = service_config.get("type", "peering_service")
         policy = dict(service_config.get("policy") or {})
         policy.pop("type", None)
+        if "site" in policy:
+            policy["sites"] = policy.pop("site")
         request_body = {
             "serviceName": service_config.get("serviceName"),
-            "serviceType": "client_to_server",
+            "serviceType": service_type,
             "policy": policy,
         }
         if getattr(self, "check_mode", False):
+            # Construct the real SDK request model (not just json.dumps the raw dict) so a
+            # payload that wouldn't pass pydantic schema validation — or an installed
+            # graphiant-sdk too old to even have this model (pre-26.7.0) — fails check mode
+            # too, instead of only surfacing on the real (non-check) run.
+            try:
+                validated_payload_dict = graphiant_sdk.V1ExtranetB2bProducerPostRequest.model_validate(
+                    request_body
+                ).to_dict()
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"create_data_exchange_services: Payload failed SDK schema validation: {sdk_e}"
+                ) from sdk_e
             LOG.info(
-                "[check_mode] create_data_exchange_services (client_to_server) would create: %s",
-                json.dumps(request_body, indent=2),
+                "[check_mode] create_data_exchange_services would create: %s",
+                json.dumps(validated_payload_dict, indent=2),
             )
             return {"id": 0}
         try:
             LOG.info(
-                "create_data_exchange_services: Creating client_to_server service '%s'",
+                "create_data_exchange_services: Creating %s service '%s'",
+                service_type,
                 service_config.get("serviceName"),
             )
-            api_client = self.api.api_client
-            method, url, header_params, body, post_params = api_client.param_serialize(
-                "POST",
-                "/v1/extranet/b2b/producer",
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body=request_body,
+            response = self.api.v1_extranet_b2b_producer_post(
+                authorization=self.bearer_token, v1_extranet_b2b_producer_post_request=request_body
             )
-            response_data = api_client.call_api(method, url, header_params, body, post_params)
-            response_data.read()
-            LOG.info(
-                "create_data_exchange_services: Raw producer POST response (status %s): %s",
-                getattr(response_data, "status", "?"),
-                response_data.data,
-            )
-            self._raise_for_raw_status(response_data)
-            result = json.loads(response_data.data)
-            LOG.info(
-                "create_data_exchange_services: Successfully created client_to_server service with ID: %s",
-                result.get("id"),
-            )
-            return result
+            LOG.info("create_data_exchange_services: Successfully created service with ID: %s", response.id)
+            return response.model_dump(by_alias=True, exclude_none=True)
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/producer"
             self._log_api_error(
@@ -1521,20 +1485,20 @@ class GraphiantPortalClient:
     def get_data_exchange_services_summary(self):
         """
         Get summary of all Data Exchange services, of any type (peering_service and
-        client_to_server).
+        client_to_server), via GET /v1/extranet/b2b/services/summary?serviceType=<type>,
+        called once per type.
 
-        Merges two sources:
-        - GET /v1/extranets-b2b-general/services-summary (legacy, SDK-bound): always
-          available; the source of truth for peering_service entries.
-        - GET /v1/extranet/b2b/services/summary (generic, raw call — not yet bound in the
-          SDK): returns every service regardless of type, including client_to_server, which
-          the legacy endpoint silently omits. Not guaranteed to be deployed on every tenant
-          yet, so a failure here is logged and swallowed rather than raised — callers still
-          get the legacy result set (peering_service creates/updates/deletes keep working
-          unchanged even on tenants without the new endpoint).
+        Called via the raw API client, not the graphiant-sdk 26.7.0-bound
+        ``v1_extranet_b2b_services_summary_get`` — that generated method takes no query
+        parameters at all, and live testing confirmed the endpoint returns an empty
+        ``services`` list without the ``serviceType`` filter. Confirmed (via live testing)
+        that filtering by ``serviceType=peering_service`` returns peering_service entries
+        the same way ``serviceType=client_to_server`` already did, so the old
+        ``/v1/extranets-b2b-general/services-summary`` endpoint is no longer needed here.
 
-        TODO: replace the generic raw call with a bound SDK method call once graphiant-sdk
-        >= 26.7.0 exposes one for this endpoint (planned for a follow-up MR).
+        A failure fetching one service type is logged and swallowed rather than raised, so
+        a tenant that doesn't yet support one type (or has none) doesn't break the summary
+        for the other.
 
         Returns:
             SimpleNamespace with an ``.info`` list of SimpleNamespace service entries
@@ -1542,81 +1506,45 @@ class GraphiantPortalClient:
             method, matching the shape callers previously got from the legacy SDK response.
         """
         info_by_id = {}
-        try:
-            LOG.info("get_data_exchange_services_summary: Retrieving services summary (legacy)")
-            legacy_response = self.api.v1_extranets_b2b_general_services_summary_get(authorization=self.bearer_token)
-            LOG.info(
-                "get_data_exchange_services_summary: Raw legacy summary response: %s",
-                [s.to_dict() for s in (legacy_response.info or [])],
-            )
-            for service in legacy_response.info or []:
-                info_by_id[service.id] = SimpleNamespace(
-                    id=service.id,
-                    name=service.name,
-                    # This legacy endpoint predates client_to_server and only ever lists
-                    # peering-style services; its "type"/"matchedCustomers" fields are
-                    # confirmed absent from the raw response (not even null) on live tenants,
-                    # so default rather than leave the summary table blank.
-                    type=getattr(service, "type", None) or "peering_service",
-                    status=service.status,
-                    is_publisher=getattr(service, "is_publisher", False),
-                    matched_customers=getattr(service, "matched_customers", 0) or 0,
+        for service_type in ("peering_service", "client_to_server"):
+            try:
+                LOG.info("get_data_exchange_services_summary: Retrieving services summary (%s)", service_type)
+                api_client = self.api.api_client
+                method, url, header_params, body, post_params = api_client.param_serialize(
+                    "GET",
+                    "/v1/extranet/b2b/services/summary",
+                    query_params={"serviceType": service_type},
+                    header_params={
+                        "Authorization": self.bearer_token,
+                        "Accept": "application/json",
+                    },
+                    body=None,
                 )
-        except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-general/services-summary"
-            self._log_api_error(method_name="get_data_exchange_services_summary", api_url=api_url, exception=e)
-            raise e
-
-        try:
-            # serviceType is not listed as a query parameter in the openapi spec for this
-            # endpoint, but omitting it returns an empty "{}" body (confirmed against a live
-            # tenant) — the backend requires it. peering_service is already covered by the
-            # legacy call above, so only client_to_server is queried here.
-            LOG.info(
-                "get_data_exchange_services_summary: Retrieving services summary "
-                "(generic, serviceType=client_to_server)"
-            )
-            api_client = self.api.api_client
-            method, url, header_params, body, post_params = api_client.param_serialize(
-                "GET",
-                "/v1/extranet/b2b/services/summary",
-                query_params={"serviceType": "client_to_server"},
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Accept": "application/json",
-                },
-                body=None,
-            )
-            response_data = api_client.call_api(method, url, header_params, body, post_params)
-            response_data.read()
-            LOG.info(
-                "get_data_exchange_services_summary: Raw generic summary response (status %s): %s",
-                getattr(response_data, "status", "?"),
-                response_data.data,
-            )
-            self._raise_for_raw_status(response_data)
-            raw = json.loads(response_data.data)
-            generic_services = raw.get("services") or []
-            for svc in generic_services:
-                svc_id = svc.get("id")
-                info_by_id[svc_id] = SimpleNamespace(
-                    id=svc_id,
-                    name=svc.get("serviceName"),
-                    type=svc.get("serviceType"),
-                    status=svc.get("status"),
-                    is_publisher=svc.get("isPublisher", False),
-                    matched_customers=svc.get("totalCustomers", 0),
+                response_data = api_client.call_api(method, url, header_params, body, post_params)
+                response_data.read()
+                self._raise_for_raw_status(response_data)
+                services = json.loads(response_data.data).get("services") or []
+                for svc in services:
+                    info_by_id[svc["id"]] = SimpleNamespace(
+                        id=svc["id"],
+                        name=svc.get("serviceName"),
+                        type=svc.get("serviceType") or service_type,
+                        status=svc.get("status"),
+                        is_publisher=svc.get("isPublisher", False),
+                        matched_customers=svc.get("totalCustomers", 0) or 0,
+                    )
+                LOG.info(
+                    "get_data_exchange_services_summary: %s summary contributed %s service(s)",
+                    service_type,
+                    len(services),
                 )
-            LOG.info(
-                "get_data_exchange_services_summary: Generic summary contributed %s service(s)",
-                len(generic_services),
-            )
-        except Exception as e:  # pylint: disable=broad-except
-            LOG.warning(
-                "get_data_exchange_services_summary: Generic extranet services summary unavailable "
-                "(tenant may not yet support client_to_server services, or it has none): %s",
-                e,
-            )
+            except Exception as e:  # pylint: disable=broad-except
+                LOG.warning(
+                    "get_data_exchange_services_summary: %s summary unavailable "
+                    "(tenant may not yet support this service type, or it has none): %s",
+                    service_type,
+                    e,
+                )
 
         info = list(info_by_id.values())
         LOG.info("get_data_exchange_services_summary: Successfully retrieved %s services", len(info))
@@ -1678,55 +1606,88 @@ class GraphiantPortalClient:
             LOG.error("get_data_exchange_service_id_by_name: Error finding service ID for '%s': %s", service_name, e)
             return None
 
-    def create_data_exchange_customers(self, customer_config: dict):
+    def create_data_exchange_customers(self, customer_config: dict) -> dict:
         """
-        Create a new Data Exchange customer.
+        Create a new Data Exchange customer via the generic extranet customers API.
+
+        POST /v1/extranet/b2b/customers (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_customers_post``) — previously created via the peering-specific
+        ``v1_extranets_b2b_peering_customer_post``.
 
         Args:
             customer_config (dict): Customer configuration containing:
                 - name: Customer name
                 - type: Customer type (e.g., "non_graphiant_peer")
-                - invite: Customer invite configuration
+                - invite: {"adminEmail": [...], "maximumNumberOfSites": N} — "adminEmail"
+                  (singular) is the existing config key; translated to "adminEmails"
+                  (plural) here since the generic invite schema renamed the field.
 
         Returns:
-            dict: Created customer response
+            dict: Created customer response (contains "id"), camelCase keys to match the
+                shape callers previously got from the typed peering response.
         """
+        invite = dict(customer_config.get("invite") or {})
+        if "adminEmail" in invite:
+            invite["adminEmails"] = invite.pop("adminEmail")
+        request_body = {
+            "name": customer_config.get("name"),
+            "type": customer_config.get("type"),
+            "invite": invite,
+        }
         if getattr(self, "check_mode", False):
+            # See create_data_exchange_services: validate against the real SDK request model
+            # so schema mismatches / a too-old installed graphiant-sdk surface in check mode too.
+            try:
+                validated_payload_dict = graphiant_sdk.V1ExtranetB2bCustomersPostRequest.model_validate(
+                    request_body
+                ).to_dict()
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"create_data_exchange_customers: Payload failed SDK schema validation: {sdk_e}"
+                ) from sdk_e
             LOG.info(
-                "[check_mode] create_data_exchange_customers would create: %s", json.dumps(customer_config, indent=2)
+                "[check_mode] create_data_exchange_customers would create: %s",
+                json.dumps(validated_payload_dict, indent=2),
             )
-            return type("MockResponse", (), {"id": 0})()
+            return {"id": 0}
         try:
             LOG.info("create_data_exchange_customers: Creating customer '%s'", customer_config.get("name"))
-            response = self.api.v1_extranets_b2b_peering_customer_post(
-                authorization=self.bearer_token, v1_extranets_b2b_peering_customer_post_request=customer_config
+            response = self.api.v1_extranet_b2b_customers_post(
+                authorization=self.bearer_token, v1_extranet_b2b_customers_post_request=request_body
             )
             LOG.info("create_data_exchange_customers: Successfully created customer with ID: %s", response.id)
-            return response
+            return response.model_dump(by_alias=True, exclude_none=True)
         except ApiException as e:
-            # Log the actual API endpoint URL and request body for debugging
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/customers"
             self._log_api_error(
-                method_name="create_data_exchange_customers", api_url=api_url, request_body=customer_config, exception=e
+                method_name="create_data_exchange_customers",
+                api_url=api_url,
+                request_body=request_body,
+                exception=e,
             )
             raise e
 
     def get_data_exchange_customers_summary(self):
         """
-        Get summary of all Data Exchange customers.
+        Get summary of all Data Exchange customers via the generic extranet customers API.
+
+        GET /v1/extranet/b2b/customers/summary (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_customers_summary_get``) — previously
+        ``v1_extranets_b2b_general_customers_summary_get``. The response item shape
+        (id, name, type, status, adminEmails, matchedServices, updatedAt) is identical
+        between the two, so no field translation is needed here.
 
         Returns:
             dict: Customers summary response
         """
         try:
             LOG.info("get_data_exchange_customers_summary: Retrieving customers summary")
-            response = self.api.v1_extranets_b2b_general_customers_summary_get(authorization=self.bearer_token)
+            response = self.api.v1_extranet_b2b_customers_summary_get(authorization=self.bearer_token)
             customers_count = len(response.customers) if response.customers else 0
             LOG.info("get_data_exchange_customers_summary: Successfully retrieved %s customers", customers_count)
             return response
         except ApiException as e:
-            # Log the actual API endpoint URL for debugging
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-general/customers-summary"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/customers/summary"
             self._log_api_error(method_name="get_data_exchange_customers_summary", api_url=api_url, exception=e)
             raise e
 
@@ -1766,7 +1727,15 @@ class GraphiantPortalClient:
 
     def get_matched_services_for_customer(self, customer_id: int):
         """
-        Get list of services already matched to a specific customer.
+        Get list of services already matched to a specific customer via the generic
+        extranet customers API.
+
+        GET /v1/extranet/b2b/customers/{id}/matches/summary (bound in graphiant-sdk
+        >= 26.7.0 as ``v1_extranet_b2b_customers_id_matches_summary_get``) — previously
+        the peering-specific ``v1_extranets_b2b_peering_match_services_summary_id_get``.
+
+        The response wrapper field is renamed from "services" to "matches"; each item's
+        shape is otherwise unchanged (callers only read ``.name`` off each item).
 
         Args:
             customer_id (int): ID of the customer
@@ -1776,24 +1745,25 @@ class GraphiantPortalClient:
         """
         try:
             LOG.info("get_matched_services_for_customer: Retrieving matched services for customer ID: %s", customer_id)
-            response = self.api.v1_extranets_b2b_peering_match_services_summary_id_get(
+            response = self.api.v1_extranet_b2b_customers_id_matches_summary_get(
                 authorization=self.bearer_token, id=customer_id
             )
 
-            services = getattr(response, "services", None) if response else None
-            if services:
+            matches = getattr(response, "matches", None) if response else None
+            if matches:
                 LOG.info(
                     "get_matched_services_for_customer: Found %s matched services for customer %s",
-                    len(services),
+                    len(matches),
                     customer_id,
                 )
-                return services
+                return matches
             else:
                 LOG.info("get_matched_services_for_customer: No matched services found for customer %s", customer_id)
                 return []
 
         except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/match/services/summary"
+            host = self.api.api_client.configuration.host
+            api_url = f"{host}/v1/extranet/b2b/customers/{customer_id}/matches/summary"
             self._log_api_error(
                 method_name="get_matched_services_for_customer",
                 api_url=api_url,
@@ -1807,8 +1777,19 @@ class GraphiantPortalClient:
 
     def get_matching_customers_for_service(self, service_id: int):
         """
-        Get list of customers matched to a specific service (producer view).
-        This API returns match_id for each customer-service match.
+        Get list of customers matched to a specific service (producer view), via the
+        generic extranet producer API. This API returns match_id for each
+        customer-service match.
+
+        GET /v1/extranet/b2b/producer/{id}/customers (bound in graphiant-sdk >= 26.7.0
+        as ``v1_extranet_b2b_producer_id_customers_get``) — previously the
+        peering-specific ``v1_extranets_b2b_peering_producer_id_matching_customers_summary_get``.
+
+        The response wrapper field is renamed from "info" to "customers"; each item is
+        wrapped in a SimpleNamespace exposing "customer_name" (renamed from "name") and
+        "emails"/"peer_type" (renamed from "adminEmails"/"type") to match the shape
+        callers already read (data_exchange_manager.py); "customer_id", "match_id",
+        "matched_services", "status", "updated_at" are unchanged.
 
         Args:
             service_id (int): ID of the service
@@ -1818,24 +1799,37 @@ class GraphiantPortalClient:
         """
         try:
             LOG.info("get_matching_customers_for_service: Retrieving matching customers for service ID: %s", service_id)
-            response = self.api.v1_extranets_b2b_peering_producer_id_matching_customers_summary_get(
+            response = self.api.v1_extranet_b2b_producer_id_customers_get(
                 authorization=self.bearer_token, id=service_id
             )
 
-            if response and hasattr(response, "info") and response.info is not None:
+            customers = getattr(response, "customers", None) if response else None
+            if customers is not None:
                 LOG.info(
                     "get_matching_customers_for_service: Found %s matching customers for service %s",
-                    len(response.info),
+                    len(customers),
                     service_id,
                 )
-                return response.info
+                return [
+                    SimpleNamespace(
+                        customer_id=c.customer_id,
+                        customer_name=c.name,
+                        emails=c.admin_emails,
+                        match_id=c.match_id,
+                        matched_services=c.matched_services,
+                        peer_type=c.type,
+                        status=c.status,
+                        updated_at=c.updated_at,
+                    )
+                    for c in customers
+                ]
             else:
                 LOG.info("get_matching_customers_for_service: No matching customers found for service %s", service_id)
                 return []
 
         except ApiException as e:
             host = self.api.api_client.configuration.host
-            api_url = f"{host}/v1/extranets-b2b-peering/producer/{service_id}/matching-customers-summary"
+            api_url = f"{host}/v1/extranet/b2b/producer/{service_id}/customers"
             self._log_api_error(
                 method_name="get_matching_customers_for_service",
                 api_url=api_url,
@@ -1849,7 +1843,11 @@ class GraphiantPortalClient:
 
     def delete_data_exchange_customer(self, customer_id: int):
         """
-        Delete a Data Exchange customer.
+        Delete a Data Exchange customer via the generic extranet customers API.
+
+        DELETE /v1/extranet/b2b/customers/{id} (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_customers_id_delete``) — previously deleted via the
+        peering-specific ``v1_extranets_b2b_peering_customer_id_delete``.
 
         Args:
             customer_id (int): ID of the customer to delete
@@ -1862,14 +1860,11 @@ class GraphiantPortalClient:
             return type("MockResponse", (), {})()
         try:
             LOG.info("delete_data_exchange_customer: Deleting customer with ID: %s", customer_id)
-            response = self.api.v1_extranets_b2b_peering_customer_id_delete(
-                authorization=self.bearer_token, id=customer_id
-            )
+            response = self.api.v1_extranet_b2b_customers_id_delete(authorization=self.bearer_token, id=customer_id)
             LOG.info("delete_data_exchange_customer: Successfully deleted customer with ID: %s", customer_id)
             return response
         except ApiException as e:
-            # Log the actual API endpoint URL for debugging
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer/{customer_id}"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/customers/{customer_id}"
             self._log_api_error(
                 method_name="delete_data_exchange_customer",
                 api_url=api_url,
@@ -1880,10 +1875,16 @@ class GraphiantPortalClient:
 
     def get_data_exchange_customer_details(self, customer_id: int) -> dict:
         """
-        Get detailed information about a specific Data Exchange customer.
+        Get detailed information about a specific Data Exchange customer via the generic
+        extranet customers API.
 
-        GET /v1/extranets-b2b-peering/customer/{id}
-        Returns: {customerName, type, emails, numSites}
+        GET /v1/extranet/b2b/customers/{id}/details (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_customers_id_details_get``) — previously fetched via a raw call
+        to the peering-specific /v1/extranets-b2b-peering/customer/{id}.
+
+        Returns: {name, type, status, numSites, emails} — "emails" is translated back from
+        the generic response's "adminEmails" since callers (data_exchange_manager.py) read
+        "emails"/"numSites" from this dict unchanged from the old peering response shape.
 
         Args:
             customer_id (int): ID of the customer to retrieve
@@ -1893,26 +1894,17 @@ class GraphiantPortalClient:
         """
         try:
             LOG.info("get_data_exchange_customer_details: Retrieving customer details for ID: %s", customer_id)
-            api_client = self.api.api_client
-            method, url, header_params, body, post_params = api_client.param_serialize(
-                "GET",
-                "/v1/extranets-b2b-peering/customer/{id}",
-                path_params={"id": customer_id},
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Accept": "application/json",
-                },
-                body=None,
+            response = self.api.v1_extranet_b2b_customers_id_details_get(
+                authorization=self.bearer_token, id=customer_id
             )
-            response_data = api_client.call_api(method, url, header_params, body, post_params)
-            response_data.read()
-            self._raise_for_raw_status(response_data)
             LOG.info(
                 "get_data_exchange_customer_details: Successfully retrieved customer details for ID: %s", customer_id
             )
-            return json.loads(response_data.data)
+            details = response.model_dump(by_alias=True, exclude_none=True)
+            details["emails"] = details.pop("adminEmails", [])
+            return details
         except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer/{customer_id}"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/customers/{customer_id}/details"
             self._log_api_error(
                 method_name="get_data_exchange_customer_details",
                 api_url=api_url,
@@ -1923,51 +1915,60 @@ class GraphiantPortalClient:
 
     def edit_data_exchange_customer(self, customer_id: int, update_payload: dict):
         """
-        Edit an existing Data Exchange customer (update adminEmail list).
+        Edit an existing Data Exchange customer (update adminEmail list) via the generic
+        extranet customers API.
 
-        PUT /v1/extranets-b2b-peering/customer/{id}
+        PUT /v1/extranet/b2b/customers/{id} (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_customers_id_put``) — previously called via a raw PUT to the
+        peering-specific /v1/extranets-b2b-peering/customer/{id}.
+
+        Body is {"invite": {...}} only — no "id" or "status" key (the generic schema
+        forbids them); "invite.adminEmail" (singular, the existing config key) is
+        translated to "adminEmails" (plural) since the generic invite schema renamed it.
 
         Args:
             customer_id (int): ID of the customer to update
             update_payload (dict): Payload: {"id": id, "status": "",
-                "invite": {"adminEmail": [...], "maximumNumberOfSites": n}}
+                "invite": {"adminEmail": [...], "maximumNumberOfSites": n}} — "id"/"status"
+                are accepted for backward compatibility but ignored (not sent).
 
         Returns:
-            RESTResponse or MockResponse in check mode
+            V1ExtranetB2bCustomersIdPutResponse or MockResponse in check mode
         """
+        invite = dict(update_payload.get("invite") or {})
+        if "adminEmail" in invite:
+            invite["adminEmails"] = invite.pop("adminEmail")
+        body = {"invite": invite}
         if getattr(self, "check_mode", False):
+            # See create_data_exchange_services: validate against the real SDK request model
+            # so schema mismatches / a too-old installed graphiant-sdk surface in check mode too.
+            try:
+                validated_body = graphiant_sdk.V1ExtranetB2bCustomersIdPutRequest.model_validate(body).to_dict()
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"edit_data_exchange_customer: Payload failed SDK schema validation for "
+                    f"customer ID {customer_id}: {sdk_e}"
+                ) from sdk_e
             LOG.info(
                 "[check_mode] edit_data_exchange_customer would update customer ID %s: %s",
                 customer_id,
-                json.dumps(update_payload, indent=2),
+                json.dumps(validated_body, indent=2),
             )
             return type("MockResponse", (), {"id": customer_id})()
         try:
             LOG.info("edit_data_exchange_customer: Updating customer ID: %s", customer_id)
-            api_client = self.api.api_client
-            method, url, header_params, body, post_params = api_client.param_serialize(
-                "PUT",
-                "/v1/extranets-b2b-peering/customer/{id}",
-                path_params={"id": customer_id},
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body=update_payload,
+            response = self.api.v1_extranet_b2b_customers_id_put(
+                authorization=self.bearer_token, id=customer_id, v1_extranet_b2b_customers_id_put_request=body
             )
-            response_data = api_client.call_api(method, url, header_params, body, post_params)
-            response_data.read()
-            self._raise_for_raw_status(response_data)
             LOG.info("edit_data_exchange_customer: Successfully updated customer ID: %s", customer_id)
-            return response_data
+            return response
         except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/customer/{customer_id}"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/customers/{customer_id}"
             self._log_api_error(
                 method_name="edit_data_exchange_customer",
                 api_url=api_url,
                 path_params={"customer_id": customer_id},
-                request_body=update_payload,
+                request_body=body,
                 exception=e,
             )
             raise e
@@ -2022,14 +2023,11 @@ class GraphiantPortalClient:
         """
         Get a "client_to_server" Data Exchange service via the generic extranet producer API.
 
-        GET /v1/extranet/b2b/producer/{id}
+        GET /v1/extranet/b2b/producer/{id} (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_producer_id_get``).
 
         Returns: {id, policy: {serviceName, serviceType, policy: {...natTranslationMode, ...}}, status}
         (same policy.policy.* nesting as the legacy /v1/extranets-b2b/{id}/producer response).
-
-        Called via the raw API client — not yet bound in the released graphiant_sdk client.
-        TODO: replace with a bound SDK method call once graphiant-sdk >= 26.7.0 exposes one
-        for this endpoint (planned for a follow-up MR).
 
         Args:
             service_id (int): ID of the service to retrieve
@@ -2042,26 +2040,13 @@ class GraphiantPortalClient:
                 "get_data_exchange_service_details: Retrieving client_to_server service details for ID: %s",
                 service_id,
             )
-            api_client = self.api.api_client
-            method, url, header_params, body, post_params = api_client.param_serialize(
-                "GET",
-                "/v1/extranet/b2b/producer/{id}",
-                path_params={"id": service_id},
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Accept": "application/json",
-                },
-                body=None,
-            )
-            response_data = api_client.call_api(method, url, header_params, body, post_params)
-            response_data.read()
-            self._raise_for_raw_status(response_data)
+            response = self.api.v1_extranet_b2b_producer_id_get(authorization=self.bearer_token, id=service_id)
             LOG.info(
                 "get_data_exchange_service_details: Successfully retrieved client_to_server service details "
                 "for ID: %s",
                 service_id,
             )
-            return json.loads(response_data.data)
+            return response.model_dump(by_alias=True, exclude_none=True)
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/producer/{service_id}"
             self._log_api_error(
@@ -2074,9 +2059,19 @@ class GraphiantPortalClient:
 
     def edit_data_exchange_service(self, service_id: int, update_payload: dict):
         """
-        Edit an existing Data Exchange peering service (e.g., update prefixTags).
+        Edit an existing Data Exchange service (e.g., update prefixTags), via the
+        generic extranet producer API.
 
-        PUT /v1/extranets-b2b-peering/producer/{id}
+        PUT /v1/extranet/b2b/producer/{id} (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_producer_id_put``); used for both "peering_service" and
+        "client_to_server" services — previously "peering_service" was updated via a
+        raw call to the peering-specific /v1/extranets-b2b-peering/producer/{id}.
+
+        Translates the existing peering-shaped payload {"id", "policy": {"type",
+        "site", ...}} the same way create_data_exchange_services does: drops the
+        top-level "id" (the generic schema is {"policy": {...}} only) and, inside
+        "policy", drops "type" and renames "site" (singular) to "sites" (plural, same
+        inner shape) — the generic schema forbids "type" there.
 
         Args:
             service_id (int): ID of the service to update
@@ -2084,93 +2079,37 @@ class GraphiantPortalClient:
                 (or, for client_to_server, just 'policy' with no 'type' key inside it)
 
         Returns:
-            RESTResponse or MockResponse in check mode
+            V1ExtranetB2bProducerIdPutResponse or MockResponse in check mode
         """
-        if "type" not in (update_payload.get("policy") or {}):
-            return self._edit_extranet_b2b_producer(service_id, update_payload)
+        policy = dict(update_payload.get("policy") or {})
+        policy.pop("type", None)
+        if "site" in policy:
+            policy["sites"] = policy.pop("site")
+        body = {"policy": policy}
+
         if getattr(self, "check_mode", False):
+            # See create_data_exchange_services: validate against the real SDK request model
+            # so schema mismatches / a too-old installed graphiant-sdk surface in check mode too.
+            try:
+                validated_body = graphiant_sdk.V1ExtranetB2bProducerIdPutRequest.model_validate(body).to_dict()
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"edit_data_exchange_service: Payload failed SDK schema validation for "
+                    f"service ID {service_id}: {sdk_e}"
+                ) from sdk_e
             LOG.info(
                 "[check_mode] edit_data_exchange_service would update service ID %s: %s",
                 service_id,
-                json.dumps(update_payload, indent=2),
+                json.dumps(validated_body, indent=2),
             )
             return type("MockResponse", (), {"id": service_id})()
         try:
             LOG.info("edit_data_exchange_service: Updating service ID: %s", service_id)
-            api_client = self.api.api_client
-            method, url, header_params, body, post_params = api_client.param_serialize(
-                "PUT",
-                "/v1/extranets-b2b-peering/producer/{id}",
-                path_params={"id": service_id},
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body=update_payload,
+            response = self.api.v1_extranet_b2b_producer_id_put(
+                authorization=self.bearer_token, id=service_id, v1_extranet_b2b_producer_id_put_request=body
             )
-            response_data = api_client.call_api(method, url, header_params, body, post_params)
-            response_data.read()
-            self._raise_for_raw_status(response_data)
             LOG.info("edit_data_exchange_service: Successfully updated service ID: %s", service_id)
-            return response_data
-        except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/producer/{service_id}"
-            self._log_api_error(
-                method_name="edit_data_exchange_service",
-                api_url=api_url,
-                path_params={"service_id": service_id},
-                request_body=update_payload,
-                exception=e,
-            )
-            raise e
-
-    def _edit_extranet_b2b_producer(self, service_id: int, update_payload: dict):
-        """
-        Update a "client_to_server" Data Exchange service via the generic extranet producer API.
-
-        PUT /v1/extranet/b2b/producer/{id}
-
-        Body is {"policy": {...}} only — no "id" or "type" key (schema forbids additionalProperties).
-
-        Called via the raw API client — not yet bound in the released graphiant_sdk client.
-        TODO: replace with a bound SDK method call once graphiant-sdk >= 26.7.0 exposes one
-        for this endpoint (planned for a follow-up MR).
-
-        Args:
-            service_id (int): ID of the service to update
-            update_payload (dict): {"policy": {...}}
-
-        Returns:
-            RESTResponse or MockResponse in check mode
-        """
-        body = {"policy": update_payload.get("policy") or {}}
-        if getattr(self, "check_mode", False):
-            LOG.info(
-                "[check_mode] edit_data_exchange_service (client_to_server) would update service ID %s: %s",
-                service_id,
-                json.dumps(body, indent=2),
-            )
-            return type("MockResponse", (), {"id": service_id})()
-        try:
-            LOG.info("edit_data_exchange_service: Updating client_to_server service ID: %s", service_id)
-            api_client = self.api.api_client
-            method, url, header_params, req_body, post_params = api_client.param_serialize(
-                "PUT",
-                "/v1/extranet/b2b/producer/{id}",
-                path_params={"id": service_id},
-                header_params={
-                    "Authorization": self.bearer_token,
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                body=body,
-            )
-            response_data = api_client.call_api(method, url, header_params, req_body, post_params)
-            response_data.read()
-            self._raise_for_raw_status(response_data)
-            LOG.info("edit_data_exchange_service: Successfully updated client_to_server service ID: %s", service_id)
-            return response_data
+            return response
         except ApiException as e:
             api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/producer/{service_id}"
             self._log_api_error(
@@ -2184,24 +2123,77 @@ class GraphiantPortalClient:
 
     def match_service_to_customer(self, match_config: dict):
         """
-        Match a service to a customer with specific prefix configurations.
+        Match a service to a customer with specific prefix configurations, via the
+        generic extranet matches API.
+
+        POST /v1/extranet/b2b/matches (bound in graphiant-sdk >= 26.7.0 as
+        ``v1_extranet_b2b_matches_post``) — previously the peering-specific
+        ``v1_extranets_b2b_peering_match_service_to_customer_post``.
+
+        Translates the existing peering-shaped payload {"id", "service": {"id",
+        "servicePrefixes", "nat"}} to the generic shape {"customerId", "match":
+        {"serviceId", "servicePrefixes", "natTranslationMode": {"peerToPeer":
+        {"prefixes": [...]}}}} — the flat "nat" list (each {"prefix",
+        "outsideNatPrefix"}) maps 1:1 onto "natTranslationMode.peerToPeer.prefixes"
+        (identical item shape), just nested one level deeper under the same
+        natTranslationMode wrapper client_to_server services use for their
+        centralized/decentralized NAT pools. ``service.natTranslationMode`` is also
+        accepted directly (the new-shape key, e.g. {"peerToPeer": {"prefixes": [...]}})
+        as an alternative to "nat" for callers who'd rather write the API shape as-is;
+        if both are given, "natTranslationMode" wins.
+
+        For "client_to_server" services, ``service.consumerPrefixes`` (a flat list of
+        the customer's own prefixes) is passed through as ``match.consumerPrefixes``
+        unchanged — confirmed against the portal UI's own request for this case, which
+        sends no "nat"/"natTranslationMode" at all, only "consumerPrefixes".
 
         Args:
             match_config (dict): Match configuration containing:
                 - id: Customer ID
-                - service: Service configuration with prefixes and NAT settings
+                - service: Service configuration with prefixes and either NAT settings
+                  ("nat", or the new-shape "natTranslationMode" directly, for
+                  peering_service) or "consumerPrefixes" (for client_to_server)
 
         Returns:
             dict: Match response with matchId
         """
+        service_config = match_config.get("service") or {}
+        match_body: dict = {
+            "serviceId": service_config.get("id"),
+            "servicePrefixes": service_config.get("servicePrefixes") or [],
+        }
+        nat_translation_mode = service_config.get("natTranslationMode")
+        nat_entries = service_config.get("nat") or []
+        if nat_translation_mode:
+            match_body["natTranslationMode"] = nat_translation_mode
+        elif nat_entries:
+            match_body["natTranslationMode"] = {"peerToPeer": {"prefixes": nat_entries}}
+        consumer_prefixes = service_config.get("consumerPrefixes") or []
+        if consumer_prefixes:
+            match_body["consumerPrefixes"] = consumer_prefixes
+        request_body = {"customerId": match_config.get("id"), "match": match_body}
+
         if getattr(self, "check_mode", False):
-            LOG.info("[check_mode] match_service_to_customer would match: %s", json.dumps(match_config, indent=2))
+            # See create_data_exchange_services: validate against the real SDK request model
+            # so schema mismatches / a too-old installed graphiant-sdk surface in check mode too.
+            try:
+                validated_payload_dict = graphiant_sdk.V1ExtranetB2bMatchesPostRequest.model_validate(
+                    request_body
+                ).to_dict()
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"match_service_to_customer: Payload failed SDK schema validation: {sdk_e}"
+                ) from sdk_e
+            LOG.info(
+                "[check_mode] match_service_to_customer would match: %s",
+                json.dumps(validated_payload_dict, indent=2),
+            )
             return type("MockResponse", (), {"match_id": 0, "timestamp": None})()
         try:
             LOG.info("match_service_to_customer: Matching service to customer")
-            response = self.api.v1_extranets_b2b_peering_match_service_to_customer_post(
+            response = self.api.v1_extranet_b2b_matches_post(
                 authorization=self.bearer_token,
-                v1_extranets_b2b_peering_match_service_to_customer_post_request=match_config,
+                v1_extranet_b2b_matches_post_request=request_body,
             )
             LOG.info(
                 "match_service_to_customer: Successfully matched service to customer with matchId: %s",
@@ -2209,10 +2201,9 @@ class GraphiantPortalClient:
             )
             return response
         except ApiException as e:
-            # Log the actual API endpoint URL and request body for debugging
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/match/service-to-customer"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/matches"
             self._log_api_error(
-                method_name="match_service_to_customer", api_url=api_url, request_body=match_config, exception=e
+                method_name="match_service_to_customer", api_url=api_url, request_body=request_body, exception=e
             )
             raise e
 
@@ -2247,7 +2238,19 @@ class GraphiantPortalClient:
 
     def accept_data_exchange_service(self, match_id, acceptance_payload):
         """
-        Accept a Data Exchange service invitation.
+        Accept a Data Exchange service invitation, via the generic extranet matches API.
+
+        POST /v1/extranet/b2b/matches/{matchId}/consumer (bound in graphiant-sdk >=
+        26.7.0 as ``v1_extranet_b2b_matches_match_id_consumer_post``) — previously the
+        peering-specific ``v1_extranets_b2b_peering_consumer_match_id_post``.
+
+        ``acceptance_payload`` is already built in the generic API's own shape by
+        ``DataExchangeManager._resolve_acceptance_names_to_ids`` — {"id", "policy":
+        {"sites", "consumerLanSegments", "siteToSiteVpn", "globalObjectOps",
+        "natTranslationMode" (peering_service only)}}. The only rename left here is
+        top-level "id" -> "serviceId" (not user-facing — computed internally, never
+        read from a config file); "customerId" is never sent (the customer is already
+        identified by match_id in the URL path).
 
         Args:
             match_id (int): The match ID to accept
@@ -2256,17 +2259,11 @@ class GraphiantPortalClient:
         Returns:
             API response object
         """
+        request_body = {"serviceId": acceptance_payload.get("id"), "policy": acceptance_payload.get("policy") or {}}
+
         try:
-            sdk_request = graphiant_sdk.V1ExtranetsB2bPeeringConsumerMatchIdPostRequest(
-                id=acceptance_payload.get("id"),
-                customer_id=acceptance_payload.get("customerId"),
-                site_information=acceptance_payload.get("siteInformation"),
-                nat=acceptance_payload.get("nat"),
-                policy=acceptance_payload.get("policy"),
-                site_to_site_vpn=acceptance_payload.get("siteToSiteVpn"),
-                global_object_ops=acceptance_payload.get("globalObjectOps"),
-            )
-            sdk_serialized = json.dumps(sdk_request.to_dict(), indent=2)
+            validated = graphiant_sdk.V1ExtranetB2bMatchesMatchIdConsumerPostRequest.model_validate(request_body)
+            sdk_serialized = json.dumps(validated.to_dict(), indent=2)
         except Exception as sdk_e:
             if getattr(self, "check_mode", False):
                 raise ValidationError(
@@ -2283,7 +2280,7 @@ class GraphiantPortalClient:
                 (
                     format_config_payload_for_log(json.loads(sdk_serialized))
                     if sdk_serialized is not None
-                    else format_config_payload_for_log(acceptance_payload)
+                    else format_config_payload_for_log(request_body)
                 ),
             )
             return type("MockResponse", (), {})()
@@ -2295,21 +2292,20 @@ class GraphiantPortalClient:
                     match_id,
                     format_config_payload_for_log(json.loads(sdk_serialized)),
                 )
-            # Use the correct method with match_id as path parameter
-            response = self.api.v1_extranets_b2b_peering_consumer_match_id_post(
+            response = self.api.v1_extranet_b2b_matches_match_id_consumer_post(
                 authorization=self.bearer_token,
-                match_id=match_id,  # Use match_id as the path parameter
-                v1_extranets_b2b_peering_consumer_match_id_post_request=acceptance_payload,
+                match_id=match_id,
+                v1_extranet_b2b_matches_match_id_consumer_post_request=request_body,
             )
             LOG.info("accept_data_exchange_service: Successfully accepted match %s", match_id)
             return response
         except ApiException as e:
-            api_url = f"{self.api.api_client.configuration.host}/v1/extranets-b2b-peering/consumer/{match_id}"
+            api_url = f"{self.api.api_client.configuration.host}/v1/extranet/b2b/matches/{match_id}/consumer"
             self._log_api_error(
                 method_name="accept_data_exchange_service",
                 api_url=api_url,
                 path_params={"match_id": match_id},
-                request_body=acceptance_payload,
+                request_body=request_body,
                 exception=e,
             )
             raise e

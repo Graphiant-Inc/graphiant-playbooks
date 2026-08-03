@@ -34,7 +34,8 @@ options:
     description:
       - "The specific information to query."
       - "V(services_summary): Get summary of all Data Exchange services with tabulated output."
-      - "Returns service details including IDs, names, status, role, and matched customers count."
+      - "Returns service details including IDs, names, I(type) (V(peering_service) or"
+      - "V(client_to_server)), status, role, and matched customers count."
       - "V(customers_summary): Get summary of all Data Exchange customers with tabulated output."
       - "Returns customer details including IDs, names, type, status, and matched services count."
       - "V(service_health): Get service health monitoring information for all matched customers."
@@ -152,26 +153,28 @@ msg:
   type: str
   returned: always
   sample: |
-    Data Exchange Services Summary:
-    +------------------+----------------------------------+--------+------+-------------------+
-    | Service Name     | Service ID                       | Status | Role | Matched Customers |
-    +==================+==================================+========+======+===================+
-    | de-service-1     | 12345678-1234-1234-1234-12345678 | Active | Both | 2                 |
-    +------------------+----------------------------------+--------+------+-------------------+
+    Services Summary:
+    +------+---------------+------------------+--------+-----------+-------------+
+    |   ID | Service Name  | Type             | Status | Role      |   Customers |
+    +======+===============+==================+========+===========+=============+
+    | 8568 | de-service-1  | peering_service  | ACTIVE | Publisher |           2 |
+    +------+---------------+------------------+--------+-----------+-------------+
 result_data:
   description:
     - Result data from the query operation, including structured data for summary and health operations.
-    - For summary operations, contains service/customer details with IDs, names, status, and counts.
+    - For summary operations, contains service/customer details with IDs, names, I(type)
+      (V(peering_service) or V(client_to_server)), status, role, and counts.
     - For health operations, contains health metrics for all matched customers.
   type: dict
   returned: always
   sample:
-    services:
-      - service_id: "12345678-1234-1234-1234-12345678"
-        service_name: "de-service-1"
-        status: "Active"
-        role: "Both"
-        matched_customers_count: 2
+    info:
+      - id: 8568
+        name: "de-service-1"
+        type: "peering_service"
+        status: "ACTIVE"
+        is_publisher: true
+        matched_customers: 2
 query:
   description:
     - The query that was performed.

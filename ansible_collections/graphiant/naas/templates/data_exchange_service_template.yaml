@@ -1,13 +1,22 @@
 # yamllint disable-file
 # Data Exchange Service Template
 # This template is not used to generate the API payload for Data Exchange service creation
+#
+# Wire payload validated against graphiant_sdk models: create -> V1ExtranetB2bProducerPostRequest,
+# update -> V1ExtranetB2bProducerIdPutRequest (see gcsdk_client.py create_data_exchange_services /
+# edit_data_exchange_service). Those model classes are the authoritative field list.
+#
+# "policy.sites" matches the API field name directly ("policy.site", singular, is also
+# accepted as a legacy alternative — not needed in new configs). "type" is top-level only;
+# the API forbids a "type"/"serviceType" key inside "policy" itself.
+# For "client_to_server" services, "policy.natTranslationMode" (NAT pools, keyed by edge
+# device name) is also required — see sample_data_exchange_services_client_to_server.yaml.
 
 serviceName: "{{ service_name }}"
-type: "{{ service_type }}"  # Example: "peering_service"
+type: "{{ service_type }}"  # Example: "peering_service" or "client_to_server"
 policy:
   serviceLanSegment: {{ lan_segment_id }}
-  type: "{{ service_type }}"
-  site:
+  sites:
     - sites: {{ site_ids }}
       siteLists: []
   description: "{{ service_description }}"

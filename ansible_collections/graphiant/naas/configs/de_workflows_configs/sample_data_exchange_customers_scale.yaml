@@ -4,13 +4,13 @@
 # The system will:
 # 1. Read customer configuration from the 'data_exchange_customers' list
 # 2. Check if customer already exists (idempotent operation)
-# 3. POST to v1/extranets-b2b-peering/customer with the payload
+# 3. POST to v1/extranet/b2b/customers with the payload
 
 data_exchange_customers:
   - name: "FinanceBank-001"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin001@financebank.com"
         - "support001@financebank.com"
       maximumNumberOfSites: 4
@@ -18,7 +18,7 @@ data_exchange_customers:
   - name: "FinanceBank-002"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin002@financebank.com"
         - "support002@financebank.com"
       maximumNumberOfSites: 6
@@ -26,7 +26,7 @@ data_exchange_customers:
   - name: "FinanceBank-003"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin003@financebank.com"
         - "support003@financebank.com"
       maximumNumberOfSites: 8
@@ -34,7 +34,7 @@ data_exchange_customers:
   - name: "FinanceBank-004"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin004@financebank.com"
         - "support004@financebank.com"
       maximumNumberOfSites: 4
@@ -42,7 +42,7 @@ data_exchange_customers:
   - name: "FinanceBank-005"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin005@financebank.com"
         - "support005@financebank.com"
       maximumNumberOfSites: 10
@@ -50,7 +50,7 @@ data_exchange_customers:
   - name: "FinanceBank-006"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin006@financebank.com"
         - "support006@financebank.com"
       maximumNumberOfSites: 6
@@ -58,7 +58,7 @@ data_exchange_customers:
   - name: "FinanceBank-007"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin007@financebank.com"
         - "support007@financebank.com"
       maximumNumberOfSites: 8
@@ -66,7 +66,7 @@ data_exchange_customers:
   - name: "FinanceBank-008"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin008@financebank.com"
         - "support008@financebank.com"
       maximumNumberOfSites: 4
@@ -74,7 +74,7 @@ data_exchange_customers:
   - name: "FinanceBank-009"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin009@financebank.com"
         - "support009@financebank.com"
       maximumNumberOfSites: 12
@@ -82,7 +82,7 @@ data_exchange_customers:
   - name: "FinanceBank-010"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin010@financebank.com"
         - "support010@financebank.com"
       maximumNumberOfSites: 6
@@ -90,7 +90,7 @@ data_exchange_customers:
   - name: "FinanceBank-011"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin011@financebank.com"
         - "support011@financebank.com"
       maximumNumberOfSites: 8
@@ -98,7 +98,7 @@ data_exchange_customers:
   - name: "FinanceBank-012"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin012@financebank.com"
         - "support012@financebank.com"
       maximumNumberOfSites: 4
@@ -106,7 +106,7 @@ data_exchange_customers:
   - name: "FinanceBank-013"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin013@financebank.com"
         - "support013@financebank.com"
       maximumNumberOfSites: 10
@@ -114,7 +114,7 @@ data_exchange_customers:
   - name: "FinanceBank-014"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin014@financebank.com"
         - "support014@financebank.com"
       maximumNumberOfSites: 6
@@ -122,7 +122,7 @@ data_exchange_customers:
   - name: "FinanceBank-015"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin015@financebank.com"
         - "support015@financebank.com"
       maximumNumberOfSites: 8
@@ -130,7 +130,7 @@ data_exchange_customers:
   - name: "FinanceBank-016"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin016@financebank.com"
         - "support016@financebank.com"
       maximumNumberOfSites: 4
@@ -138,7 +138,7 @@ data_exchange_customers:
   - name: "FinanceBank-017"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin017@financebank.com"
         - "support017@financebank.com"
       maximumNumberOfSites: 14
@@ -146,7 +146,7 @@ data_exchange_customers:
   - name: "FinanceBank-018"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin018@financebank.com"
         - "support018@financebank.com"
       maximumNumberOfSites: 6
@@ -154,7 +154,7 @@ data_exchange_customers:
   - name: "FinanceBank-019"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin019@financebank.com"
         - "support019@financebank.com"
       maximumNumberOfSites: 8
@@ -162,7 +162,7 @@ data_exchange_customers:
   - name: "FinanceBank-020"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin020@financebank.com"
         - "support020@financebank.com"
       maximumNumberOfSites: 4
@@ -170,7 +170,7 @@ data_exchange_customers:
   - name: "FinanceBank-021"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin021@financebank.com"
         - "support021@financebank.com"
       maximumNumberOfSites: 10
@@ -178,7 +178,7 @@ data_exchange_customers:
   - name: "FinanceBank-022"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin022@financebank.com"
         - "support022@financebank.com"
       maximumNumberOfSites: 6
@@ -186,7 +186,7 @@ data_exchange_customers:
   - name: "FinanceBank-023"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin023@financebank.com"
         - "support023@financebank.com"
       maximumNumberOfSites: 8
@@ -194,7 +194,7 @@ data_exchange_customers:
   - name: "FinanceBank-024"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin024@financebank.com"
         - "support024@financebank.com"
       maximumNumberOfSites: 4
@@ -202,7 +202,7 @@ data_exchange_customers:
   - name: "FinanceBank-025"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin025@financebank.com"
         - "support025@financebank.com"
       maximumNumberOfSites: 12
@@ -210,7 +210,7 @@ data_exchange_customers:
   - name: "FinanceBank-026"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin026@financebank.com"
         - "support026@financebank.com"
       maximumNumberOfSites: 6
@@ -218,7 +218,7 @@ data_exchange_customers:
   - name: "FinanceBank-027"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin027@financebank.com"
         - "support027@financebank.com"
       maximumNumberOfSites: 8
@@ -226,7 +226,7 @@ data_exchange_customers:
   - name: "FinanceBank-028"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin028@financebank.com"
         - "support028@financebank.com"
       maximumNumberOfSites: 4
@@ -234,7 +234,7 @@ data_exchange_customers:
   - name: "FinanceBank-029"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin029@financebank.com"
         - "support029@financebank.com"
       maximumNumberOfSites: 16
@@ -242,7 +242,7 @@ data_exchange_customers:
   - name: "FinanceBank-030"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin030@financebank.com"
         - "support030@financebank.com"
       maximumNumberOfSites: 6
@@ -250,7 +250,7 @@ data_exchange_customers:
   - name: "FinanceBank-031"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin031@financebank.com"
         - "support031@financebank.com"
       maximumNumberOfSites: 8
@@ -258,7 +258,7 @@ data_exchange_customers:
   - name: "FinanceBank-032"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin032@financebank.com"
         - "support032@financebank.com"
       maximumNumberOfSites: 4
@@ -266,7 +266,7 @@ data_exchange_customers:
   - name: "FinanceBank-033"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin033@financebank.com"
         - "support033@financebank.com"
       maximumNumberOfSites: 10
@@ -274,7 +274,7 @@ data_exchange_customers:
   - name: "FinanceBank-034"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin034@financebank.com"
         - "support034@financebank.com"
       maximumNumberOfSites: 6
@@ -282,7 +282,7 @@ data_exchange_customers:
   - name: "FinanceBank-035"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin035@financebank.com"
         - "support035@financebank.com"
       maximumNumberOfSites: 8
@@ -290,7 +290,7 @@ data_exchange_customers:
   - name: "FinanceBank-036"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin036@financebank.com"
         - "support036@financebank.com"
       maximumNumberOfSites: 4
@@ -298,7 +298,7 @@ data_exchange_customers:
   - name: "FinanceBank-037"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin037@financebank.com"
         - "support037@financebank.com"
       maximumNumberOfSites: 18
@@ -306,7 +306,7 @@ data_exchange_customers:
   - name: "FinanceBank-038"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin038@financebank.com"
         - "support038@financebank.com"
       maximumNumberOfSites: 6
@@ -314,7 +314,7 @@ data_exchange_customers:
   - name: "FinanceBank-039"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin039@financebank.com"
         - "support039@financebank.com"
       maximumNumberOfSites: 8
@@ -322,7 +322,7 @@ data_exchange_customers:
   - name: "FinanceBank-040"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin040@financebank.com"
         - "support040@financebank.com"
       maximumNumberOfSites: 4
@@ -330,7 +330,7 @@ data_exchange_customers:
   - name: "FinanceBank-041"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin041@financebank.com"
         - "support041@financebank.com"
       maximumNumberOfSites: 10
@@ -338,7 +338,7 @@ data_exchange_customers:
   - name: "FinanceBank-042"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin042@financebank.com"
         - "support042@financebank.com"
       maximumNumberOfSites: 6
@@ -346,7 +346,7 @@ data_exchange_customers:
   - name: "FinanceBank-043"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin043@financebank.com"
         - "support043@financebank.com"
       maximumNumberOfSites: 8
@@ -354,7 +354,7 @@ data_exchange_customers:
   - name: "FinanceBank-044"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin044@financebank.com"
         - "support044@financebank.com"
       maximumNumberOfSites: 4
@@ -362,7 +362,7 @@ data_exchange_customers:
   - name: "FinanceBank-045"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin045@financebank.com"
         - "support045@financebank.com"
       maximumNumberOfSites: 20
@@ -370,7 +370,7 @@ data_exchange_customers:
   - name: "FinanceBank-046"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin046@financebank.com"
         - "support046@financebank.com"
       maximumNumberOfSites: 6
@@ -378,7 +378,7 @@ data_exchange_customers:
   - name: "FinanceBank-047"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin047@financebank.com"
         - "support047@financebank.com"
       maximumNumberOfSites: 8
@@ -386,7 +386,7 @@ data_exchange_customers:
   - name: "FinanceBank-048"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin048@financebank.com"
         - "support048@financebank.com"
       maximumNumberOfSites: 4
@@ -394,7 +394,7 @@ data_exchange_customers:
   - name: "FinanceBank-049"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin049@financebank.com"
         - "support049@financebank.com"
       maximumNumberOfSites: 12
@@ -402,7 +402,7 @@ data_exchange_customers:
   - name: "FinanceBank-050"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails: 
         - "admin050@financebank.com"
         - "support050@financebank.com"
       maximumNumberOfSites: 6

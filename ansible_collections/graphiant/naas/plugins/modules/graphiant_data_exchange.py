@@ -40,6 +40,13 @@ notes:
   - "Check mode (C(--check)) is supported. In check mode, the module runs all logic (config load, validation,"
   - "name-to-ID resolution) but the API client skips write operations and logs payloads with C([check_mode])."
   - "Use C(--check) to validate accept_invitation without making API calls."
+  - >-
+    accept_invitation's recommended config file structure (26.7.0+) mirrors the generic B2B
+    API payload directly (everything nested under I(policy)). The old flat peering-specific
+    structure is still accepted — auto-detected and translated internally, the same
+    backward-compatible alias pattern used elsewhere in this module. See O(config_file) for
+    the key mapping and sample_data_exchange_acceptance_legacy.yaml for a full example in the
+    old shape.
 options:
   operation:
     description:
@@ -66,7 +73,9 @@ options:
         I(data_exchange_services) list where each entry has I(serviceName). For I(type: peering_service),
         only I(policy.prefixTags) can be changed, and at least one prefix must remain after the update.
         For I(type: client_to_server), I(policy.prefixTags) and/or I(policy.natTranslationMode) can be
-        changed; at least one of the two is required.
+        changed; at least one of the two is required. Known API limitation: once an IP is added to a
+        device's NAT pool it cannot be removed via update_services — only adding new prefixes is
+        supported (confirmed against the portal UI, not specific to this module).
         Supports C(--check) and C(--diff) to preview changes before applying.
       - >-
         V(delete_services): Delete Data Exchange services from YAML configuration. Services must be
@@ -76,13 +85,14 @@ options:
       - "Configuration file must contain I(data_exchange_customers) list with customer definitions."
       - "Customers can be non-Graphiant peers that can be invited to connect to services."
       - "Existing customers are skipped (idempotent). When run with C(--check) and C(--diff), detects"
-      - "I(adminEmail) drift on existing customers and surfaces it as a diff — no changes are made;"
-      - "to apply email changes use V(update_customers) instead."
+      - "I(invite.adminEmails) drift on existing customers and surfaces it as a diff — no changes are"
+      - "made; to apply email changes use V(update_customers) instead."
       - >-
         V(update_customers): Update email list on existing Data Exchange customers (Workflow 2b).
-        Only I(invite.adminEmail) can be changed. The customer must already exist; use
+        Only I(invite.adminEmails) can be changed. The customer must already exist; use
         V(create_customers) for new customers. Configuration file must contain
-        I(data_exchange_customers) list where each entry has I(name) and I(invite.adminEmail).
+        I(data_exchange_customers) list where each entry has I(name) and I(invite.adminEmails)
+        (I(invite.adminEmail), singular, is accepted as a legacy alias).
         Supports C(--check) and C(--diff) to preview changes before applying.
       - >-
         V(delete_customers): Delete Data Exchange customers from YAML configuration. Customers must be
@@ -135,9 +145,31 @@ options:
       - per service attaches Graphiant routing policies to devices (device names resolved to IDs).
       - For V(create_customers), V(update_customers), or V(delete_customers), file must contain
         I(data_exchange_customers) list.
-      - For V(match_service_to_customers), file must contain I(data_exchange_matches) list.
-      - For V(accept_invitation), file must contain I(data_exchange_acceptances) list. Optional I(globalObjectOps)
-      - per acceptance attaches Graphiant routing policies to gateway devices (device names resolved to IDs).
+      - >-
+        For V(match_service_to_customers), file must contain I(data_exchange_matches) list. Each entry needs
+        I(natTranslationMode.peerToPeer.prefixes) (for I(type: peering_service) services, matches the API
+        payload directly; the flat I(nat) list is accepted as a legacy alias) or I(consumerPrefixes) (for
+        I(type: client_to_server) services) — the two service types use different match-time fields.
+      - For V(accept_invitation), file must contain I(data_exchange_acceptances) list. Optional
+        I(policy.globalObjectOps) per acceptance attaches Graphiant routing policies to gateway
+        devices (device names resolved to IDs).
+      - >-
+        V(accept_invitation) config shape mirrors the C(/v1/extranet/b2b/matches/{id}/consumer) API payload
+        directly: everything nests under a top-level I(policy) key — I(policy.sites) (site/siteList names),
+        I(policy.consumerLanSegments) (list of I(lanSegment)/I(consumerPrefixes) entries),
+        I(policy.siteToSiteVpn), and I(policy.globalObjectOps). I(policy.natTranslationMode.peerToPeer.prefixes)
+        applies only to I(type: peering_service) and must be omitted entirely for I(type: client_to_server)
+        (see sample_data_exchange_acceptance_client_to_server.yaml). I(routingPolicyTable) stays a top-level
+        sibling of I(policy), not nested inside it.
+      - >-
+        V(accept_invitation) configs written for the old peering-specific API (flat top-level
+        I(siteInformation), I(policy) as a list, I(nat), I(siteToSiteVpn) at the top level) are
+        still accepted — auto-detected (by I(policy) being a list rather than a dict) and
+        translated internally, the same backward-compatible alias pattern as I(site)/I(sites)
+        and I(adminEmail)/I(adminEmails) above. New configs should still prefer the
+        I(policy)-nested shape since it maps 1:1 to the wire payload; see
+        sample_data_exchange_acceptance.yaml for that shape and
+        sample_data_exchange_acceptance_legacy.yaml for the old shape and key mapping.
       - Match responses are saved to I(output/) directory near the configuration file.
     type: str
   matches_file:
@@ -211,7 +243,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.6.0
+  - "graphiant-sdk >= 26.6.0 (>= 26.7.0 required for type=client_to_server)"
   - tabulate
 
 seealso:
@@ -296,7 +328,7 @@ EXAMPLES = r"""
   ansible.builtin.debug:
     msg: "{{ update_services_result.msg }}"
 
-- name: Workflow 2 - Preview customer creation and detect adminEmail drift (check + diff)
+- name: Workflow 2 - Preview customer creation and detect adminEmails drift (check + diff)
   graphiant.naas.graphiant_data_exchange:
     operation: create_customers
     config_file: "de_workflows_configs/sample_data_exchange_customers.yaml"
@@ -306,7 +338,7 @@ EXAMPLES = r"""
     detailed_logs: true
   register: create_customers_result
   # Run playbook with: ansible-playbook playbook.yml --check --diff
-  # Existing customers with changed adminEmail show a diff and suggest using update_customers
+  # Existing customers with changed adminEmails show a diff and suggest using update_customers
 
 - name: Workflow 2 - Create Data Exchange customers
   graphiant.naas.graphiant_data_exchange:
@@ -330,6 +362,21 @@ EXAMPLES = r"""
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
     detailed_logs: true
+
+- name: Workflow 2b - Update adminEmails on an existing Data Exchange customer
+  graphiant.naas.graphiant_data_exchange:
+    operation: update_customers
+    config_file: "de_workflows_configs/sample_data_exchange_customers_update.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+  register: update_customers_result
+  # Run playbook with: ansible-playbook playbook.yml --check --diff
+
+- name: Display customer update result
+  ansible.builtin.debug:
+    msg: "{{ update_customers_result.msg }}"
 
 - name: Workflow 3 - Match Data Exchange services to customers
   graphiant.naas.graphiant_data_exchange:
@@ -371,6 +418,21 @@ EXAMPLES = r"""
     # Omit matches_file to use API lookup (works after invitation has been accepted once,
     # when the service is visible to the consumer tenant). Or provide it explicitly:
     # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    detailed_logs: true
+  register: accept_result
+
+- name: Display acceptance result
+  ansible.builtin.debug:
+    msg: "{{ accept_result.msg }}"
+
+- name: Workflow 4 - Accept a client_to_server invitation (same policy shape, no "natTranslationMode" key)
+  graphiant.naas.graphiant_data_exchange:
+    operation: accept_invitation
+    config_file: "de_workflows_configs/sample_data_exchange_acceptance_client_to_server.yaml"
+    matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
@@ -535,7 +597,7 @@ diff:
     - Ansible C(--diff) output showing before/after state for each changed item.
     - Returned for V(create_services), V(update_services), V(create_customers), and V(update_customers)
       when the playbook is run with C(--diff) and at least one item would change.
-    - For V(create_customers) with C(--check --diff), shows I(adminEmail) drift on existing customers
+    - For V(create_customers) with C(--check --diff), shows I(adminEmails) drift on existing customers
       (C(before) = current emails, C(after) = desired emails) with a note to use V(update_customers).
     - For new items, C(before) is empty and C(after) is the full target config.
     - For updates and drift, C(before) shows current values and C(after) shows target values.
@@ -736,7 +798,7 @@ def main():
                 changed = True
                 result_msg = (
                     f"Drift detected in {len(drifted)} customer(s): {', '.join(drifted)}. "
-                    f"adminEmail differs from current state. "
+                    f"adminEmails differs from current state. "
                     f"Use update_customers to apply changes."
                 )
 

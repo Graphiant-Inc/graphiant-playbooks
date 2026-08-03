@@ -4,12 +4,26 @@
 # The system will:
 # 1. Read customer configuration from the 'data_exchange_customers' list
 # 2. Check if customer already exists (idempotent operation)
-# 3. POST to v1/extranets-b2b-peering/customer with the payload
+# 3. POST to v1/extranet/b2b/customers with the payload
+#
+# "invite.adminEmails" here matches the API field name directly. Portal UI capture of
+# this exact scenario (customer "FinanceInc" -> id 4074) for cross-checking:
+#   POST /v1/extranet/b2b/customers
+#   {"name":"FinanceInc","type":"non_graphiant_peer",
+#    "invite":{"adminEmails":["finance@financeinc.com"],"maximumNumberOfSites":2}}
+#   -> {"id": 4074, "invite": {"adminEmails": ["finance@financeinc.com"], "maximumNumberOfSites": 2}}
+#   GET /v1/extranet/b2b/customers/summary
+#   -> {"customers": [{"id":4074,"name":"FinanceInc","type":"non_graphiant_peer",
+#        "adminEmails":["finance@financeinc.com"],"status":"EXTRANET_SERVICE_STATUS_INACTIVE"}]}
+#   (status flips to "EXTRANET_SERVICE_STATUS_ACTIVE" once this customer is matched to a service)
+#
+# Note: "invite.adminEmail" (singular) is also still accepted as a legacy alternative,
+# for anyone with older configs already written that way — not needed in new configs.
 
 data_exchange_customers:
   - name: "FinanceInc"
     type: "non_graphiant_peer"
     invite:
-      adminEmail: 
+      adminEmails:
         - "finance@financeinc.com"
       maximumNumberOfSites: 2

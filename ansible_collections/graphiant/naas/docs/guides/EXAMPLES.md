@@ -3390,7 +3390,7 @@ This is a preview only — no changes are made by `create_services` in this case
 # Dry-run (validates config)
 ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check
 
-# Dry-run with diff: shows which customers would be created, and detects adminEmail drift on existing customers
+# Dry-run with diff: shows which customers would be created, and detects adminEmails drift on existing customers
 ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
 
 # Apply
@@ -3401,7 +3401,7 @@ ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml \
   -e config_file=de_workflows_configs/sample_data_exchange_customers.yaml
 ```
 
-> **Drift detection**: running with `--check --diff` compares the desired `adminEmail` list against the current portal state for existing customers. If they differ, a diff is shown with a note to use `update_customers` to apply the change.
+> **Drift detection**: running with `--check --diff` compares the desired `invite.adminEmails` list (`invite.adminEmail`, singular, is also accepted) against the current portal state for existing customers. If they differ, a diff is shown with a note to use `update_customers` to apply the change.
 
 To create Data Exchange Customers
 
@@ -3436,6 +3436,32 @@ To list Data Exchange Customers
     msg: "{{ customers_summary.msg }}"
 ```
 
+### Step 3b: Update Data Exchange Customers
+
+`update_customers` changes `invite.adminEmails` on an **existing** customer; use `create_customers`
+for new customers. Idempotent: re-running with the same emails reports `changed: false`.
+
+```bash
+# Preview changes before applying
+ansible-playbook playbooks/de_workflows/02b_dataex_update_customers.yml --check --diff
+# Apply
+ansible-playbook playbooks/de_workflows/02b_dataex_update_customers.yml
+```
+
+```yaml
+- name: Update Data Exchange customers
+  graphiant.naas.graphiant_data_exchange:
+    <<: *graphiant_client_params
+    operation: update_customers
+    config_file: "de_workflows_configs/sample_data_exchange_customers_update.yaml"
+    detailed_logs: true
+  register: update_customers_result
+
+- name: Display update result
+  ansible.builtin.debug:
+    msg: "{{ update_customers_result.msg }}"
+```
+
 ### Step 4: Match Services to Customers
 
 ```bash
@@ -3458,6 +3484,7 @@ ansible-playbook playbooks/de_workflows/03_dataex_match_services_to_customers.ym
     config_file: "de_workflows_configs/sample_data_exchange_matches.yaml"
     # config_file: "de_workflows_configs/sample_data_exchange_matches_scale.yaml" # Scale testing
     # config_file: "de_workflows_configs/sample_data_exchange_matches_scale2.yaml" # Scale testing2
+    # config_file: "de_workflows_configs/sample_data_exchange_matches_client_to_server.yaml" # client_to_server
     detailed_logs: true
   register: match_result
 
@@ -3466,7 +3493,18 @@ ansible-playbook playbooks/de_workflows/03_dataex_match_services_to_customers.ym
     msg: "{{ match_result.msg }}"
 ```
 
+For `peering_service`, each entry needs `natTranslationMode.peerToPeer.prefixes` (a flat `nat` list
+is also accepted as a legacy alias). For `client_to_server`, use `consumerPrefixes` instead — no NAT
+translation is configured at match time (see `sample_data_exchange_matches_client_to_server.yaml`).
+
 ### Step 5: Accept Invitations (in the proxy/consumer tenant)
+
+> **Recommended shape**: the config file structure mirrors the API payload directly — everything
+> nests under a top-level `policy` key. The old flat structure (top-level `siteInformation`, `nat`,
+> `policy` as a list, `siteToSiteVpn`) is still accepted — auto-detected and translated internally,
+> the same backward-compatible alias pattern used elsewhere in this module (not a breaking change).
+> See `sample_data_exchange_acceptance.yaml` for the recommended shape and
+> `sample_data_exchange_acceptance_legacy.yaml` for the old shape and key mapping.
 
 `matches_file` is **optional**:
 - **Omit it** when the service is already visible in the consumer tenant via API (e.g. after a previous acceptance or if the producer has already shared it). This is the common case for idempotent re-runs.
@@ -3548,6 +3586,12 @@ ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml \
     # Scale testing2
     # config_file: "de_workflows_configs/sample_data_exchange_acceptance_scale2.yaml"
     # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_scale2_responses_latest.json"
+    # client_to_server (same shape, but omits policy.natTranslationMode)
+    # config_file: "de_workflows_configs/sample_data_exchange_acceptance_client_to_server.yaml"
+    # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_client_to_server_responses_latest.json"
+    # Legacy flat shape (still supported; auto-translated internally — see that file's header)
+    # config_file: "de_workflows_configs/sample_data_exchange_acceptance_legacy.yaml"
+    # matches_file: "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
     detailed_logs: true
   register: accept_result
 
@@ -3565,27 +3609,29 @@ Use `ipsecGatewayPeers` for all new configs (requires `graphiant_sdk >= 26.6.0`)
 Each `remotePeers` entry is one customer VPN device. Graphiant provisions one IPSec interface per peer on **every** gateway device at the site (`tunnel1` → gw-device-1, `tunnel2` → gw-device-2). Interface naming: `{ipsecGatewayPeers.name}-{peer.name}`. Leave `insideIpv4Cidr`, `psk`, and `localIkePeerIdentity` as `null` — the playbook auto-fills them from the portal APIs.
 
 ```yaml
-siteToSiteVpn:
-  ipsecGatewayPeers:
-    name: "s2s-FinanceInc"      # prefix for interface names: s2s-FinanceInc-peer-1, ...
-    routing:
-      bgp:                       # shared across all peers
-        peerAsn: 65501
-        # ... see sample_data_exchange_acceptance.yaml for full BGP config
-    remotePeers:
-      - name: "peer-1"
-        destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
-        mtu: 1400
-        tcpMss: 1360
-        remoteIkePeerIdentity: "0.0.0.0"
-        ikeInitiator: false
-        tunnel1: { insideIpv4Cidr: null, insideIpv6Cidr: null, psk: null, localIkePeerIdentity: null }
-        tunnel2: { insideIpv4Cidr: null, insideIpv6Cidr: null, psk: null, localIkePeerIdentity: null }
-        vpnProfile: "vpnprofile-global-test"
-      - name: "peer-2"           # add peer-3, peer-4, ... as needed
-        # ... same structure as peer-1
-  region: "us-central-1 (Chicago)"
-  emails: ["finance@financeinc.com"]
+policy:                        # everything nests under "policy" (matches the API payload)
+  # ... sites, natTranslationMode, consumerLanSegments — see sample_data_exchange_acceptance.yaml
+  siteToSiteVpn:
+    ipsecGatewayPeers:
+      name: "s2s-FinanceInc"      # prefix for interface names: s2s-FinanceInc-peer-1, ...
+      routing:
+        bgp:                       # shared across all peers
+          peerAsn: 65501
+          # ... see sample_data_exchange_acceptance.yaml for full BGP config
+      remotePeers:
+        - name: "peer-1"
+          destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
+          mtu: 1400
+          tcpMss: 1360
+          remoteIkePeerIdentity: "0.0.0.0"
+          ikeInitiator: false
+          tunnel1: { insideIpv4Cidr: null, insideIpv6Cidr: null, psk: null, localIkePeerIdentity: null }
+          tunnel2: { insideIpv4Cidr: null, insideIpv6Cidr: null, psk: null, localIkePeerIdentity: null }
+          vpnProfile: "vpnprofile-global-test"
+        - name: "peer-2"           # add peer-3, peer-4, ... as needed
+          # ... same structure as peer-1
+    region: "us-central-1 (Chicago)"
+    emails: ["finance@financeinc.com"]
 ```
 
 > **HTTP 500 "must include IPSec gateway details"** — two causes: (1) **Old SDK** (`<= 26.5.0`): `ipsecGatewayPeers` is silently dropped by `.to_dict()` — upgrade to `graphiant_sdk >= 26.6.0` and check the `SDK-serialized payload` log to confirm. (2) **Config missing both keys**: add `ipsecGatewayPeers` or `ipsecGatewayDetails` under `siteToSiteVpn`.

@@ -78,7 +78,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_site_to_site_vpn` | Manage Site-to-Site VPN (static and BGP routing) on edge devices |
 | `graphiant_global_config` | Manage global configuration objects |
 | `graphiant_sites` | Manage sites and site attachments |
-| `graphiant_data_exchange` | Manage Data Exchange workflows (create/update/delete services and customers, match, accept invitation).|
+| `graphiant_data_exchange` | Manage Data Exchange workflows (create/update/delete services and customers, match, accept invitation); supports `peering_service` and `client_to_server` service types.|
 | `graphiant_data_exchange_info` | Query Data Exchange info (services summary, customers summary, service health) |
 | `graphiant_device_config` | Push raw device configurations to Edge, Gateway, and Core devices |
 | `graphiant_ntp` | Manage NTP objects |
@@ -424,8 +424,8 @@ The `playbooks/de_workflows/` directory contains playbooks for Data Exchange ope
 | `00_dataex_*_prerequisites.yml` | Prerequisites setup (LAN interfaces, segments, VPN profiles) |
 | `01_dataex_create_services.yml` | Create Data Exchange services. Supports `--check` and `--check --diff` |
 | `01b_dataex_update_services.yml` | Update `prefixTags` on existing services. Supports `--check --diff` |
-| `02_dataex_create_customers.yml` | Create Data Exchange customers. Supports `--check --diff` to detect `adminEmail` drift on existing customers. Custom config: `-e config_file=...` |
-| `02b_dataex_update_customers.yml` | Update `adminEmail` on existing customers. Supports `--check --diff` |
+| `02_dataex_create_customers.yml` | Create Data Exchange customers. Supports `--check --diff` to detect `adminEmails` drift on existing customers. Custom config: `-e config_file=...` |
+| `02b_dataex_update_customers.yml` | Update `adminEmails` on existing customers. Supports `--check --diff` |
 | `03_dataex_match_services_to_customers.yml` | Match services to customers; saves match responses to `output/`. Custom config: `-e config_file=...` |
 | `04_dataex_delete_customers.yml` | Delete customers (idempotent — already-absent customers are skipped) |
 | `05_dataex_delete_services.yml` | Delete services (idempotent — already-absent services are skipped) |
@@ -529,7 +529,7 @@ Use `ansible-playbook ... --check` or set `check_mode: true` on a task to run wi
 
 **Full-mode nuances:** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_dhcp_relay`, `graphiant_traffic_policy`, `graphiant_security_policy`, and `graphiant_nat_policy` read device state in check mode and set `changed` from whether an apply would be needed. For `graphiant_nat_policy`, the segment attachment safety check and absent no-op pruning are skipped in check mode so that a full deconfigure workflow (detach + deconfigure) can be previewed with `--check --diff` without running the real detach step first. For LWS, omit `localWebServerPasswordForce` after a successful set—force re-pushes every run because the portal stores a hash. `graphiant_data_exchange_info` and `graphiant_macsec_info` are always read-only. `graphiant_data_exchange` skips mutating writes in check mode; see that module's `attributes.check_mode` for details.
 
-**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, `graphiant_dhcp_relay`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_nat_policy`, `graphiant_data_exchange`, `graphiant_ntp`, `graphiant_static_routes`, and `graphiant_site_to_site_vpn` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmail` drift on existing customers with a hint to use `update_customers`. For `graphiant_site_to_site_vpn`, secrets (`presharedKey`, `md5Password`) are redacted in diff output. For `graphiant_dhcp_relay`, diff shows per-interface relay server lists under `edge.interfaces`.
+**Diff mode (`--diff`):** `graphiant_device_system`, `graphiant_edge_services`, `graphiant_prefix_port_list`, `graphiant_macsec`, `graphiant_dhcp_relay`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_nat_policy`, `graphiant_data_exchange`, `graphiant_ntp`, `graphiant_static_routes`, and `graphiant_site_to_site_vpn` support `--diff`. Use `--check --diff` or `--diff` to see `before`/`after` and `details.diff_plan`. For `graphiant_data_exchange`, diff is available for `create_services`, `update_services`, `create_customers`, and `update_customers`; in `--check --diff` mode, `create_customers` also surfaces `adminEmails` drift on existing customers with a hint to use `update_customers`. For `graphiant_site_to_site_vpn`, secrets (`presharedKey`, `md5Password`) are redacted in diff output. For `graphiant_dhcp_relay`, diff shows per-interface relay server lists under `edge.interfaces`.
 
 **Example: run playbooks in check mode (dry run)**
 
@@ -546,7 +546,7 @@ ansible-playbook playbooks/ntp_management.yml --tags configure --check --diff
 ansible-playbook playbooks/static_routes_management.yml --tags configure --check --diff
 ansible-playbook playbooks/dhcp_relay_interface_management.yml --tags configure --check --diff
 ansible-playbook playbooks/site_to_site_vpn.yml --tag create --check --diff --vault-password-file configs/vault-password-file.sh
-# Data Exchange: check + diff to preview creates and detect adminEmail drift on existing customers
+# Data Exchange: check + diff to preview creates and detect adminEmails drift on existing customers
 ansible-playbook playbooks/de_workflows/02_dataex_create_customers.yml --check --diff
 # Data Exchange: validate accept_invitation before applying (provide matches_file if service not visible via API)
 ansible-playbook playbooks/de_workflows/07_dataex_accept_invitation.yml --check \

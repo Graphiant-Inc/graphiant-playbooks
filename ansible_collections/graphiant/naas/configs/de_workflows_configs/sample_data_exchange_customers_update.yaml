@@ -1,9 +1,17 @@
 # Sample Data Exchange Customers Update Configuration
 # Used with: operation: update_customers
 #
-# Only 'name' and 'invite.adminEmail' are required.
-# The customer must already exist (use create_customers to create new customers).
+# Only 'name' and 'invite.adminEmails' (or the legacy 'invite.adminEmail', singular) are
+# required. The customer must already exist (use create_customers to create new customers).
 # 'numSites' (maximumNumberOfSites) is preserved from the existing customer configuration.
+#
+# PUT /v1/extranet/b2b/customers/{id} — body is {"invite": {...}} only, no "id"/"status"
+# (the old peering-shaped payload's "id"/"status" keys are dropped). "invite.adminEmails"
+# here matches the API field name directly. For customer id 4074 (see
+# sample_data_exchange_customers.yaml), this would send:
+#   PUT /v1/extranet/b2b/customers/4074
+#   {"invite": {"adminEmails": ["finance@financeinc.com", "admin@financeinc.com"],
+#                "maximumNumberOfSites": 2}}
 #
 # Rules:
 # - The customer must already exist.
@@ -18,6 +26,6 @@
 data_exchange_customers:
   - name: "FinanceInc"
     invite:
-      adminEmail:
+      adminEmails:
         - "finance@financeinc.com"
         - "admin@financeinc.com"

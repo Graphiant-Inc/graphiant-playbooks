@@ -1,9 +1,16 @@
 # yamllint disable-file
 # Data Exchange Customer Template
 # This template is not used to generate the API payload for Data Exchange customer creation
+#
+# Wire payload validated against graphiant_sdk models: create -> V1ExtranetB2bCustomersPostRequest,
+# update -> V1ExtranetB2bCustomersIdPutRequest (see gcsdk_client.py create_data_exchange_customers /
+# edit_data_exchange_customer). Those model classes are the authoritative field list.
+#
+# "invite.adminEmails" matches the API field name directly ("invite.adminEmail", singular,
+# is also accepted as a legacy alternative — not needed in new configs).
 
 name: "{{ customer_name }}"
 type: "{{ customer_type }}"  # Default is "graphiant_peer" if not specified
 invite:
-  adminEmail: {{ admin_emails }}
+  adminEmails: {{ admin_emails }}
   maximumNumberOfSites: {{ max_sites }}  # Default is 5 if not specified

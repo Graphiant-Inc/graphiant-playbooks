@@ -1,9 +1,18 @@
 # yamllint disable-file
 # Data Exchange Match Template
 # This template is not used to generate the API payload for Data Exchange service matching
+#
+# Wire payload validated against graphiant_sdk model V1ExtranetB2bMatchesPostRequest (see
+# gcsdk_client.py match_service_to_customer) — the authoritative field list.
+#
+# "natTranslationMode.peerToPeer.prefixes" matches the API field name directly (peering_service
+# only; a flat "nat" list is also accepted as a legacy alternative — not needed in new configs).
+# client_to_server services use "consumerPrefixes" instead — see
+# sample_data_exchange_matches_client_to_server.yaml.
 
-id: {{ customer_id }}
-service:
-  id: {{ service_id }}
-  servicePrefixes: {{ selected_service_prefixes }}
-  nat: {{ nat_configurations }}
+customerName: "{{ customer_name }}"
+serviceName: "{{ service_name }}"
+servicePrefixes: {{ selected_service_prefixes }}
+natTranslationMode:
+  peerToPeer:
+    prefixes: {{ nat_configurations }}

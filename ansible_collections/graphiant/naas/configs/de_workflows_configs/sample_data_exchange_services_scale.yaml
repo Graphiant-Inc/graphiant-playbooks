@@ -5,15 +5,14 @@
 # 1. Read service configuration from the 'data_exchange_services' list
 # 2. Check if service already exists (idempotent operation)
 # 3. Resolve LAN segment and site names to IDs
-# 4. POST to v1/extranets-b2b-peering/producer with the payload
+# 4. POST to v1/extranet/b2b/producer with the payload
 
 data_exchange_services:
   - serviceName: "de-service-scale-001"
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_001_description"
@@ -27,8 +26,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_002_description"
@@ -42,8 +40,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_003_description"
@@ -57,8 +54,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_004_description"
@@ -72,8 +68,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_005_description"
@@ -87,8 +82,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_006_description"
@@ -102,8 +96,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_007_description"
@@ -117,8 +110,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_008_description"
@@ -132,8 +124,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_009_description"
@@ -147,8 +138,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_010_description"
@@ -162,8 +152,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_011_description"
@@ -177,8 +166,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_012_description"
@@ -192,8 +180,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_013_description"
@@ -207,8 +194,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_014_description"
@@ -222,8 +208,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_015_description"
@@ -237,8 +222,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_016_description"
@@ -252,8 +236,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_017_description"
@@ -267,8 +250,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_018_description"
@@ -282,8 +264,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_019_description"
@@ -297,8 +278,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_020_description"
@@ -312,8 +292,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_021_description"
@@ -327,8 +306,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_022_description"
@@ -342,8 +320,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_023_description"
@@ -357,8 +334,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_scale_024_description"

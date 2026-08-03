@@ -4,11 +4,28 @@
 #
 # Flow:
 #   Producer (MSP) creates a Data Exchange service and matches it to a customer.
-#   Consumer (this side) calls POST v1/extranets-b2b-peering/consumer/{match_id} to accept.
+#   Consumer (this side) calls POST v1/extranet/b2b/matches/{matchId}/consumer to accept.
 #   The playbook resolves all human-readable names (site, region, LAN segment, device) to IDs.
 #
 # Key: data_exchange_acceptances  — always a list, even for a single acceptance.
-
+#
+# ── Data Exchange peering-specific -> generic B2B API migration ──────────────────────────
+# This file's structure mirrors the actual API request directly: everything lives under a
+# single "policy" key (matching "policy" in the wire payload), with "sites" (was
+# "siteInformation", top-level), "consumerLanSegments" (was "policy", top-level — a list of
+# {lanSegment, consumerPrefixes} keyed by LAN segment ID once resolved), "natTranslationMode"
+# (was "nat", peering_service only — omit entirely for client_to_server, see
+# sample_data_exchange_acceptance_client_to_server.yaml), "siteToSiteVpn" and
+# "globalObjectOps" (both moved from top-level under "policy").
+#
+# The OLD flat structure (top-level siteInformation/nat/policy-as-a-list/siteToSiteVpn/
+# globalObjectOps) is still fully supported — accept_invitation auto-detects it and translates
+# it internally, the same backward-compatible alias pattern used for create_services/
+# create_customers/match_service_to_customers' old key names. See
+# sample_data_exchange_acceptance_legacy.yaml for a full worked example in the old shape and
+# the exact key mapping. Recommended for new configs regardless: this file's shape, since it
+# maps 1:1 to the wire payload.
+#
 # ── ipsecGatewayPeers vs ipsecGatewayDetails ───────────────────────────────────
 # ipsecGatewayPeers  (NEW — use for all new configs; requires graphiant_sdk >= 26.6.0)
 #   Supports N remote peers (one entry per customer VPN device). BGP routing is shared
@@ -61,118 +78,119 @@ data_exchange_acceptances:
   - customerName: "FinanceInc"    # Resolved to customer ID via Data Exchange customers API
     serviceName: "de-service-1"   # Resolved to service ID and match ID via matches file
 
-    # Site Information — where this service is terminated (by name, resolved to ID)
-    siteInformation:
-      - sites: ["site-sjc-sdktest"]   # One or more site names
-        siteLists: []                 # Optional: site list names (empty = direct site selection)
-
-    # NAT Configuration (optional)
-    # Maps producer service prefixes to optional translated prefixes.
-    # Use translatedPrefix if the producer prefix overlaps with the consumer network.
-    nat:
-      - prefix: "10.1.1.0/24"         # Producer service prefix (from the Data Exchange service)
-        tag: "s-1-prefix1"            # Corresponding tag from the service prefix definitions
-        # translatedPrefix: null      # Optional: NAT the producer prefix to avoid overlap
-        # outsideNatPrefix: null      # Optional: outside NAT prefix
-
-    # Policy — LAN segments and the consumer prefixes advertised into each segment
     policy:
-      - lanSegment: "customer-1-segment"   # LAN segment name (resolved to segment ID)
-        consumerPrefixes:
-          - "10.101.0.0/24"               # Consumer's own prefixes advertised
+      # Site Information — where this service is terminated (by name, resolved to ID)
+      sites:
+        - sites: ["site-sjc-sdktest"]   # One or more site names
+          siteLists: []                 # Optional: site list names (empty = direct site selection)
 
-    # Site-to-Site VPN Configuration
-    siteToSiteVpn:
+      # NAT Configuration (optional; peering_service only — omit entirely for client_to_server)
+      # Maps producer service prefixes to optional translated prefixes.
+      # Use outsideNatPrefix if the producer prefix overlaps with the consumer network.
+      natTranslationMode:
+        peerToPeer:
+          prefixes:
+            - prefix: "10.1.1.0/24"         # Producer service prefix (from the Data Exchange service)
+              # outsideNatPrefix: null      # Optional: outside NAT prefix
 
-      # ── Multi-peer IPSec gateway (ipsecGatewayPeers) ─────────────────────────
-      # Use this for all new configurations. Supports 1..N remote peers.
-      # Do NOT mix with ipsecGatewayDetails in the same acceptance.
-      ipsecGatewayPeers:
+      # LAN segments and the consumer prefixes advertised into each segment
+      consumerLanSegments:
+        - lanSegment: "customer-1-segment"   # LAN segment name (resolved to segment ID)
+          consumerPrefixes:
+            - "10.101.0.0/24"               # Consumer's own prefixes advertised
 
-        name: "s2s-FinanceInc"   # prefix for interface names: {name}-{peer.name}
+      # Site-to-Site VPN Configuration
+      siteToSiteVpn:
 
-        # Routing shared across all peers (one BGP neighbor per peer per tunnel per gateway)
-        routing:
-          # static:
-          #   destinationPrefix:
-          #     - "10.101.0.0/24"                    # Customer's own /24 network
-          bgp:
-            peerAsn: 65501
-            holdTimer: 180        # portal default: 90s
-            keepaliveTimer: 60
-            md5Password: null  # null → looked up from vault_data_exchange_bgp_md5_passwords by customerName
-            # To set explicitly (bypasses vault): md5Password: {md5_password: "your-password"}
-            sendCommunity: true   # portal default: false
-            addressFamilies:
-              ipv4:
-                family:
-                  addressFamily: "ipv4"
-                  inboundPolicy:
-                    policy: "test_bgp_inbound_filter"
-                  outboundPolicy:
-                    policy: "test_bgp_outbound_filter"
-              ipv6:
-                family:
-                  addressFamily: "ipv6"
-                  inboundPolicy: {}
-                  outboundPolicy: {}
+        # ── Multi-peer IPSec gateway (ipsecGatewayPeers) ─────────────────────────
+        # Use this for all new configurations. Supports 1..N remote peers.
+        # Do NOT mix with ipsecGatewayDetails in the same acceptance.
+        ipsecGatewayPeers:
 
-        # One entry per customer VPN device. Add peer-3, peer-4, ... as needed.
-        remotePeers:
+          name: "s2s-FinanceInc"   # prefix for interface names: {name}-{peer.name}
 
-          - name: "peer-1"
-            destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
-            mtu: 1400                        # standard for IPSec over 1500-byte internet
-            tcpMss: 1360                     # MTU - 40 bytes IP/TCP headers
-            remoteIkePeerIdentity: "0.0.0.0" # customer IKE identity (WAN IP or FQDN)
-            ikeInitiator: false              # customer device initiates IKE
-            # localIkePeerIdentity: auto-set to each gateway's WAN IP (leave null)
-            # psk: null → vault or API auto-fill (see secrets section in header above)
-            tunnel1:
-              insideIpv4Cidr: null
-              insideIpv6Cidr: null
-              psk: null
-              localIkePeerIdentity: null
-            tunnel2:
-              insideIpv4Cidr: null
-              insideIpv6Cidr: null
-              psk: null
-              localIkePeerIdentity: null
-            vpnProfile: "vpnprofile-global-test"
+          # Routing shared across all peers (one BGP neighbor per peer per tunnel per gateway)
+          routing:
+            # static:
+            #   destinationPrefix:
+            #     - "10.101.0.0/24"                    # Customer's own /24 network
+            bgp:
+              peerAsn: 65501
+              holdTimer: 180        # portal default: 90s
+              keepaliveTimer: 60
+              md5Password: null  # null → looked up from vault_data_exchange_bgp_md5_passwords by customerName
+              # To set explicitly (bypasses vault): md5Password: {md5_password: "your-password"}
+              sendCommunity: true   # portal default: false
+              addressFamilies:
+                ipv4:
+                  family:
+                    addressFamily: "ipv4"
+                    inboundPolicy:
+                      policy: "test_bgp_inbound_filter"
+                    outboundPolicy:
+                      policy: "test_bgp_outbound_filter"
+                ipv6:
+                  family:
+                    addressFamily: "ipv6"
+                    inboundPolicy: {}
+                    outboundPolicy: {}
 
-          - name: "peer-2"
-            destinationAddress: "0.0.0.0"
-            mtu: 1400
-            tcpMss: 1360
-            remoteIkePeerIdentity: "0.0.0.0"
-            ikeInitiator: false
-            tunnel1:
-              insideIpv4Cidr: null
-              insideIpv6Cidr: null
-              psk: null
-              localIkePeerIdentity: null
-            tunnel2:
-              insideIpv4Cidr: null
-              insideIpv6Cidr: null
-              psk: null
-              localIkePeerIdentity: null
-            vpnProfile: "vpnprofile-global-test-2"
+          # One entry per customer VPN device. Add peer-3, peer-4, ... as needed.
+          remotePeers:
 
-      # Graphiant region where the gateway devices are located (resolved to regionId).
-      region: "us-central-1 (Chicago)"
+            - name: "peer-1"
+              destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
+              mtu: 1400                        # standard for IPSec over 1500-byte internet
+              tcpMss: 1360                     # MTU - 40 bytes IP/TCP headers
+              remoteIkePeerIdentity: "0.0.0.0" # customer IKE identity (WAN IP or FQDN)
+              ikeInitiator: false              # customer device initiates IKE
+              # localIkePeerIdentity: auto-set to each gateway's WAN IP (leave null)
+              # psk: null → vault or API auto-fill (see secrets section in header above)
+              tunnel1:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              tunnel2:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              vpnProfile: "vpnprofile-global-test"
 
-      # Email addresses for service notifications.
-      emails: ["finance@financeinc.com"]
+            - name: "peer-2"
+              destinationAddress: "0.0.0.0"
+              mtu: 1400
+              tcpMss: 1360
+              remoteIkePeerIdentity: "0.0.0.0"
+              ikeInitiator: false
+              tunnel1:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              tunnel2:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              vpnProfile: "vpnprofile-global-test-2"
 
-    # Optional: attach routing policies to specific gateway devices involved in the acceptance.
-    # Device names are resolved to device IDs by the playbook.
-    globalObjectOps:
-      "gw-2-sdktest":
-        routingPolicyOps:
-          "Policy-Clt1-Primary": "Attach"
-      "gw-4-sdktest":
-        routingPolicyOps:
-          "Policy-Clt1-Primary": "Attach"
+        # Graphiant region where the gateway devices are located (resolved to regionId).
+        region: "us-central-1 (Chicago)"
+
+        # Email addresses for service notifications.
+        emails: ["finance@financeinc.com"]
+
+      # Optional: attach routing policies to specific gateway devices involved in the acceptance.
+      # Device names are resolved to device IDs by the playbook.
+      globalObjectOps:
+        "gw-2-sdktest":
+          routingPolicyOps:
+            "Policy-Clt1-Primary": "Attach"
+        "gw-4-sdktest":
+          routingPolicyOps:
+            "Policy-Clt1-Primary": "Attach"
 
 # ── Multiple acceptances ───────────────────────────────────────────────────────
 # To accept multiple invitations in one playbook run, add more entries to the list:

@@ -1,0 +1,44 @@
+# Sample Data Exchange Matches Configuration - Client to Server
+# This file demonstrates how to match a "client_to_server" Data Exchange service to a
+# customer (as opposed to "peering_service", which uses sample_data_exchange_matches.yaml
+# and a "nat" NAT-translation key instead of "consumerPrefixes").
+#
+# The system will:
+# 1. Read match configuration from the 'data_exchange_matches' list
+# 2. Resolve customer and service names to IDs
+# 3. Use the specified servicePrefixes (user-selected, not all service prefixes)
+# 4. POST to v1/extranet/b2b/matches with the payload
+#
+# consumerPrefixes (required for client_to_server matches): the customer's own
+# prefix(es) that will be granted access to the matched service's servicePrefixes.
+# Unlike peering_service, no NAT translation is configured at match time — confirmed
+# against the portal UI's own request for this case, which sends no "nat" field at all.
+#
+# Portal UI capture of this exact scenario (customer "FinanceInc" -> id 4074, service
+# "de-partner-to-org-service-1" -> id 8540, matching sample_data_exchange_services_
+# client_to_server.yaml's two prefixTags), for cross-checking:
+#   POST /v1/extranet/b2b/matches
+#   {"customerId":4074,"match":{"serviceId":8540,
+#     "servicePrefixes":[
+#       {"prefix":"10.48.52.152/31","tag":"de-partner-to-org-service-1-prefix-1"},
+#       {"prefix":"10.48.52.154/31","tag":"de-partner-to-org-service-1-prefix-2"}],
+#     "consumerPrefixes":["10.101.2.0/24"]}}
+#   -> {"matches": [...], "matchId": 6537}
+#   GET /v1/extranet/b2b/customers/4074/matches/summary
+#   -> {"matches": [{"id":8540,"name":"de-partner-to-org-service-1",
+#        "serviceType":"client_to_server","matchedCustomers":1,
+#        "status":"EXTRANET_SERVICE_STATUS_INACTIVE"}]}
+#   GET /v1/extranet/b2b/producer/8540/customers
+#   -> {"customers": [{"customerId":"4074","name":"FinanceInc","matchedServices":2,
+#        "status":"EXTRANET_SERVICE_STATUS_INACTIVE","matchId":6537}]}
+
+data_exchange_matches:
+  - customerName: "FinanceInc"
+    serviceName: "de-partner-to-org-service-1"
+    servicePrefixes: # Select specific service prefixes to include
+      - prefix: "10.48.52.152/31"
+        tag: "de-partner-to-org-service-1-prefix-1"
+      - prefix: "10.48.52.154/31"
+        tag: "de-partner-to-org-service-1-prefix-2"
+    consumerPrefixes:
+      - "10.101.2.0/24"

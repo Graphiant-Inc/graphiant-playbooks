@@ -1,0 +1,110 @@
+---
+# Sample Data Exchange Service Acceptance Configuration - Client to Server
+# Used in Workflow 7: Data Exchange - Accept Invitation (Non-Graphiant Customer)
+#
+# Confirmed via a live portal UI capture (accept-b2b-service/client_to_server wizard) that
+# accepting a client_to_server service uses the exact same
+# POST /v1/extranet/b2b/matches/{matchId}/consumer endpoint and payload shape as
+# peering_service (see sample_data_exchange_acceptance.yaml) — policy.sites,
+# policy.consumerLanSegments, policy.siteToSiteVpn (full BGP/IPSec), and
+# policy.globalObjectOps are all identical in structure. The ONLY difference:
+# client_to_server has NO "policy.natTranslationMode" key at all — its NAT pools are
+# producer-side, configured at service creation
+# (see sample_data_exchange_services_client_to_server.yaml's policy.natTranslationMode),
+# not per-acceptance. This file simply omits that key.
+#
+# Everything else in this file follows the same rules as sample_data_exchange_acceptance.yaml
+# — see that file's header comments for the ipsecGatewayPeers, secrets (PSK/BGP MD5), and
+# multi-acceptance details, all of which apply unchanged here. That file's header also has
+# the migration instructions if you have an acceptance config written in the old (pre-generic
+# API) structure — this collection no longer supports that structure for accept_invitation.
+
+data_exchange_acceptances:
+  - customerName: "FinanceInc"                          # Resolved to customer ID via Data Exchange customers API
+    serviceName: "de-partner-to-org-service-1"           # Resolved to service ID and match ID via matches file
+
+    policy:
+      # Site Information — where this service is terminated (by name, resolved to ID)
+      sites:
+        - sites: ["site-sjc-sdktest"]   # One or more site names
+          siteLists: []                 # Optional: site list names (empty = direct site selection)
+
+      # No "natTranslationMode" key here — client_to_server services have no per-acceptance
+      # NAT translation.
+
+      # LAN segments and the consumer prefixes advertised into each segment
+      consumerLanSegments:
+        - lanSegment: "customer-1-segment"   # LAN segment name (resolved to segment ID)
+          consumerPrefixes:
+            - "10.101.2.0/24"               # Consumer's own prefixes advertised
+
+      # Site-to-Site VPN Configuration — identical shape to peering_service's. If a gateway
+      # already exists for this customer/region (e.g. from a prior peering_service acceptance),
+      # the API reuses it; remotePeers fields left null are auto-filled either way.
+      siteToSiteVpn:
+        ipsecGatewayPeers:
+          name: "s2s-FinanceInc"   # prefix for interface names: {name}-{peer.name}
+
+          routing:
+            bgp:
+              peerAsn: 65501
+              holdTimer: 180
+              keepaliveTimer: 60
+              md5Password: null  # null -> looked up from vault_data_exchange_bgp_md5_passwords by customerName
+              sendCommunity: true
+              addressFamilies:
+                ipv4:
+                  family:
+                    addressFamily: "ipv4"
+                    inboundPolicy:
+                      policy: "test_bgp_inbound_filter"
+                    outboundPolicy:
+                      policy: "test_bgp_outbound_filter"
+                ipv6:
+                  family:
+                    addressFamily: "ipv6"
+                    inboundPolicy: {}
+                    outboundPolicy: {}
+
+          remotePeers:
+            - name: "peer-1"
+              destinationAddress: "0.0.0.0"
+              mtu: 1400
+              tcpMss: 1360
+              remoteIkePeerIdentity: "0.0.0.0"
+              ikeInitiator: false
+              tunnel1:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              tunnel2:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              vpnProfile: "vpnprofile-global-test"
+
+            - name: "peer-2"
+              destinationAddress: "0.0.0.0"
+              mtu: 1400
+              tcpMss: 1360
+              remoteIkePeerIdentity: "0.0.0.0"
+              ikeInitiator: false
+              tunnel1:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              tunnel2:
+                insideIpv4Cidr: null
+                insideIpv6Cidr: null
+                psk: null
+                localIkePeerIdentity: null
+              vpnProfile: "vpnprofile-global-test-2"
+
+        region: "us-central-1 (Chicago)"
+        emails: ["finance@financeinc.com"]
+
+      # Optional: attach routing policies to specific gateway devices involved in the acceptance.
+      globalObjectOps: {}

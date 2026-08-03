@@ -14,24 +14,50 @@
 # keys are edge device names (resolved to device IDs); each value is a NAT pool prefix list for that
 # edge. A pool must be provided for every edge of the selected site(s), and each prefix must be
 # unique across devices (the API rejects reusing the same prefix on more than one device).
+#
+# Values below match a portal UI capture of this exact scenario (service
+# "de-partner-to-org-service-1" -> id 8540), so the actual API request/response can be used
+# to cross-check what this config resolves to:
+#   POST /v1/extranet/b2b/producer
+#   {"serviceName":"de-partner-to-org-service-1","serviceType":"client_to_server","policy":{
+#     "serviceLanSegment":523387,
+#     "prefixTags":[
+#       {"prefix":"10.48.52.152/31","tag":"de-partner-to-org-service-1-prefix-1"},
+#       {"prefix":"10.48.52.154/31","tag":"de-partner-to-org-service-1-prefix-2"}],
+#     "sites":[{"sites":[13893,13894],"siteLists":[]}],
+#     "natTranslationMode":{"centralized":{"prefixes":{
+#       "30000057188":{"prefixes":["162.131.7.64/31"]},           # edge-1-sdktest
+#       "30000057190":{"prefixes":["162.131.7.66/31"]},           # edge-2-sdktest
+#       "30000057189":{"prefixes":["162.131.7.68/31","162.131.7.70/31"]}}}}}}  # edge-3-sdktest
+#   -> {"id": 8540, "policy": {"policy": {"serviceType":"client_to_server", ...}}}
+#   GET /v1/extranet/b2b/services/summary?serviceType=client_to_server
+#   -> {"services": [{"id":8540,"serviceName":"de-partner-to-org-service-1","status":"ACTIVE",
+#        "serverPrefixes":["10.48.52.152/31","10.48.52.154/31"],"isPublisher":true,"lanSegment":523387}]}
 
 data_exchange_services:
   - serviceName: "de-partner-to-org-service-1"
     type: "client_to_server"
     policy:
-      serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      description: "de_partner_to_org_service_1_description"
+      serviceLanSegment: "lan-segment-3"  # Will be resolved to ID (523387 in the capture above)
+      description: "de-partner-to-org-service-1 desc"
       prefixTags:
         - prefix: "10.48.52.152/31"
+          tag: "de-partner-to-org-service-1-prefix-1"
+        - prefix: "10.48.52.154/31"
+          tag: "de-partner-to-org-service-1-prefix-2"
 
       sites:
-        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
+        - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs (13894, 13893)
           siteLists: []
 
+      # One NAT pool per edge device across the selected site(s) — San Jose-sdktest has one
+      # edge (edge-1); New York-sdktest has two (edge-2, edge-3).
       natTranslationMode:
         centralized:
           prefixes:
-            "edge-1-sdktest":  # Device name will be resolved to device ID
+            "edge-1-sdktest":  # Device name will be resolved to device ID (San Jose-sdktest)
               prefixes: ["162.131.7.64/31"]
-            "edge-2-sdktest":  # Device name will be resolved to device ID
-              prefixes: ["162.131.7.66/31", "162.131.7.68/31", "162.131.7.70/31"]
+            "edge-2-sdktest":  # Device name will be resolved to device ID (New York-sdktest)
+              prefixes: ["162.131.7.66/31"]
+            "edge-3-sdktest":  # Device name will be resolved to device ID (New York-sdktest)
+              prefixes: ["162.131.7.68/31", "162.131.7.70/31"]

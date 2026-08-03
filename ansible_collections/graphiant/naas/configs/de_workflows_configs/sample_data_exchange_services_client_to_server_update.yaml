@@ -6,6 +6,26 @@
 # existing service via the API and preserved as-is. natTranslationMode prefixes keys are
 # edge device names, resolved to device IDs the same way as in create_services.
 #
+# IMPORTANT — natTranslationMode is a full replace, not a merge: whatever you list here
+# becomes the complete NAT pool set (per device). Always include every edge's current
+# prefixes plus your change, exactly like sample_data_exchange_services_client_to_server.yaml's
+# three edges below (edge-1/edge-2/edge-3) — omitting a device here would attempt to clear
+# its pool entirely.
+#
+# Known API limitation (confirmed against the portal UI): once an IP is added to a device's
+# NAT pool, it cannot be removed via this operation — only adding new prefixes is supported.
+# The example below only adds "162.131.7.72/31" to edge-2-sdktest's pool; edge-1/edge-3 are
+# repeated unchanged, matching this exact scenario captured from the portal UI:
+#   PUT /v1/extranet/b2b/producer/8540
+#   {"id":8540,"policy":{"serviceLanSegment":523387,"prefixTags":[
+#     {"prefix":"10.48.52.154/31","tag":"de-partner-to-org-service-1-prefix-2"},
+#     {"prefix":"10.48.52.152/31","tag":"de-partner-to-org-service-1-prefix-1"}],
+#     "sites":[{"sites":[13893,13894]}],
+#     "natTranslationMode":{"centralized":{"prefixes":{
+#       "30000057188":{"prefixes":["162.131.7.64/31"]},
+#       "30000057190":{"prefixes":["162.131.7.66/31","162.131.7.72/31"]},
+#       "30000057189":{"prefixes":["162.131.7.70/31","162.131.7.68/31"]}}}}}}
+#
 # Rules:
 # - The service must already exist (use create_services to create new services).
 # - Supports --check (dry run) and --diff (preview changes) flags.
@@ -21,10 +41,15 @@ data_exchange_services:
     policy:
       prefixTags:
         - prefix: "10.48.52.154/31"
+          tag: "de-partner-to-org-service-1-prefix-2"
+        - prefix: "10.48.52.152/31"
+          tag: "de-partner-to-org-service-1-prefix-1"
       natTranslationMode:
         centralized:
           prefixes:
-            "edge-1-sdktest":
+            "edge-1-sdktest":  # unchanged
               prefixes: ["162.131.7.64/31"]
-            "edge-2-sdktest":
-              prefixes: ["162.131.7.66/31"]
+            "edge-2-sdktest":  # adding 162.131.7.72/31
+              prefixes: ["162.131.7.66/31", "162.131.7.72/31"]
+            "edge-3-sdktest":  # unchanged
+              prefixes: ["162.131.7.68/31", "162.131.7.70/31"]

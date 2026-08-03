@@ -417,18 +417,15 @@ class DataExchangeManager(BaseManager):
                 )
 
                 # Build PUT payload using current service state + desired prefixTags
-                # GET returns "sites" key; PUT expects "site" key (same inner structure)
                 current_sites = current_inner_policy.get("sites") or []
                 site_for_put = [
                     {"sites": s.get("sites") or [], "siteLists": s.get("siteLists") or []} for s in current_sites
                 ]
 
                 update_payload = {
-                    "id": service_id,
                     "policy": {
                         "serviceLanSegment": current_inner_policy.get("serviceLanSegment"),
-                        "type": current_inner_policy.get("type", "peering_service"),
-                        "site": site_for_put,
+                        "sites": site_for_put,
                         "description": current_inner_policy.get("description", ""),
                         "prefixTags": desired_prefix_tags,
                         "globalObjectOps": {},
@@ -492,6 +489,11 @@ class DataExchangeManager(BaseManager):
         Only prefixTags and/or natTranslationMode (NAT pools) can be changed; at least one
         must be provided. Unlike peering_service, sites are kept under the "sites" key
         (plural) and the PUT body has no "id"/"type" (see edit_data_exchange_service).
+
+        Known API limitation (confirmed against the portal UI, not something this code can
+        work around): once an IP is added to a device's NAT pool, it cannot be removed via
+        this PUT — sending a natTranslationMode with a prefix missing from the current pool
+        does not delete it server-side. Only adding new prefixes is supported.
         """
         desired_nat_mode = desired_policy.get("natTranslationMode")
         device_names_by_id: Dict[int, str] = {}
@@ -1069,7 +1071,10 @@ class DataExchangeManager(BaseManager):
                         "Customer '%s' already exists (ID: %s), skipping creation", customer_name, existing_customer.id
                     )
                     # Drift detection: only when --diff requested (avoids extra API call otherwise)
-                    desired_emails = (customer_config.get("invite") or {}).get("adminEmail") or []
+                    # "adminEmail" (singular) is the legacy key; "adminEmails" (plural) matches
+                    # the current API field name directly — both are accepted.
+                    invite_config = customer_config.get("invite") or {}
+                    desired_emails = invite_config.get("adminEmail") or invite_config.get("adminEmails") or []
                     if diff_mode and desired_emails:
                         try:
                             current_details = self.gsdk.get_data_exchange_customer_details(existing_customer.id)
@@ -1127,12 +1132,13 @@ class DataExchangeManager(BaseManager):
         """
         Update existing Data Exchange customers from YAML configuration.
 
-        Only ``invite.adminEmail`` (the email list) can be updated. The customer must
-        already exist. Supports check mode and diff output.
+        Only ``invite.adminEmails`` (the email list; ``invite.adminEmail``, singular, is
+        accepted as a legacy alias) can be updated. The customer must already exist.
+        Supports check mode and diff output.
 
         Args:
             config_yaml_file (str): Path to the YAML configuration file.
-                Each customer entry requires ``name`` and ``invite.adminEmail``.
+                Each customer entry requires ``name`` and ``invite.adminEmails``.
 
         Returns:
             dict: Result with 'changed' status and lists of updated/skipped items
@@ -1168,11 +1174,14 @@ class DataExchangeManager(BaseManager):
                     )
                 customer_id = existing_customer.id
 
-                # Desired emails from config
-                desired_emails = (customer_config.get("invite") or {}).get("adminEmail") or []
+                # Desired emails from config. "adminEmail" (singular) is the legacy key;
+                # "adminEmails" (plural) matches the current API field name directly — both
+                # are accepted.
+                invite_config = customer_config.get("invite") or {}
+                desired_emails = invite_config.get("adminEmail") or invite_config.get("adminEmails") or []
                 if not desired_emails:
                     raise ConfigurationError(
-                        f"Customer '{customer_name}': 'invite.adminEmail' is required for "
+                        f"Customer '{customer_name}': 'invite.adminEmail' (or 'invite.adminEmails') is required for "
                         "update_customers and must contain at least one email address."
                     )
 
@@ -1651,24 +1660,58 @@ class DataExchangeManager(BaseManager):
                     "servicePrefixes",
                 )
 
-                nat_entries = [n for n in match_config.get("nat", []) if isinstance(n, dict)]
-                self._validate_cidr_prefixes(
-                    [n.get("prefix") for n in nat_entries if n.get("prefix")], service_name, "nat"
-                )
-                self._validate_cidr_prefixes(
-                    [n.get("outsideNatPrefix") for n in nat_entries if n.get("outsideNatPrefix")],
-                    service_name,
-                    "nat.outsideNatPrefix",
-                )
+                match_service_config: Dict[str, Any] = {"id": service.id, "servicePrefixes": service_prefixes}
+                service_type = getattr(service, "type", None) or "peering_service"
+                if service_type == "client_to_server":
+                    # client_to_server matches carry the customer's own prefixes directly,
+                    # not a producer-side NAT translation (confirmed against the portal
+                    # UI's own request for this case: no "nat" field at all).
+                    consumer_prefixes = match_config.get("consumerPrefixes", [])
+                    if not consumer_prefixes:
+                        raise ConfigurationError(
+                            f"Configuration error: 'consumerPrefixes' must be specified for matching "
+                            f"client_to_server service '{service_name}' to customer '{customer_name}'."
+                        )
+                    self._validate_cidr_prefixes(consumer_prefixes, service_name, "consumerPrefixes")
+                    match_service_config["consumerPrefixes"] = consumer_prefixes
+                elif "natTranslationMode" in match_config:
+                    # New-shape alternative to "nat" for callers who'd rather write the API
+                    # shape directly, e.g. {"peerToPeer": {"prefixes": [{"prefix",
+                    # "outsideNatPrefix"}]}} — passed through as-is (see
+                    # gsdk.match_service_to_customer for the "nat" translation this replaces).
+                    nat_translation_mode = match_config["natTranslationMode"] or {}
+                    peer_to_peer_prefixes = [
+                        p
+                        for p in (nat_translation_mode.get("peerToPeer") or {}).get("prefixes", [])
+                        if isinstance(p, dict)
+                    ]
+                    self._validate_cidr_prefixes(
+                        [p.get("prefix") for p in peer_to_peer_prefixes if p.get("prefix")],
+                        service_name,
+                        "natTranslationMode.peerToPeer.prefixes",
+                    )
+                    self._validate_cidr_prefixes(
+                        [p.get("outsideNatPrefix") for p in peer_to_peer_prefixes if p.get("outsideNatPrefix")],
+                        service_name,
+                        "natTranslationMode.peerToPeer.prefixes.outsideNatPrefix",
+                    )
+                    match_service_config["natTranslationMode"] = nat_translation_mode
+                else:
+                    nat_entries = [n for n in match_config.get("nat", []) if isinstance(n, dict)]
+                    self._validate_cidr_prefixes(
+                        [n.get("prefix") for n in nat_entries if n.get("prefix")], service_name, "nat"
+                    )
+                    self._validate_cidr_prefixes(
+                        [n.get("outsideNatPrefix") for n in nat_entries if n.get("outsideNatPrefix")],
+                        service_name,
+                        "nat.outsideNatPrefix",
+                    )
+                    match_service_config["nat"] = match_config.get("nat", [])
 
                 # Build match configuration for API call
                 match_payload = {
                     "id": customer.id,
-                    "service": {
-                        "id": service.id,
-                        "servicePrefixes": service_prefixes,
-                        "nat": match_config.get("nat", []),
-                    },
+                    "service": match_service_config,
                 }
 
                 try:
@@ -1739,6 +1782,80 @@ class DataExchangeManager(BaseManager):
             LOG.error("Failed to match Data Exchange services to customers: %s", e)
             raise ConfigurationError(f"Data Exchange service to customer matching failed: {e}")
 
+    @staticmethod
+    def _normalize_acceptance_shape(acceptance_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Translate the legacy flat accept_invitation config shape into the current API-aligned
+        shape (everything nested under a single "policy" dict), so accept_invitation accepts
+        either shape without requiring a config migration.
+
+        Legacy shape (pre-26.7.0; see sample_data_exchange_acceptance_legacy.yaml): top-level
+        "siteInformation", "nat", "policy" (a list of {lanSegment, consumerPrefixes}),
+        "siteToSiteVpn", "globalObjectOps". Detected by "policy" being a list rather than the
+        current shape's dict.
+
+        Current shape (see sample_data_exchange_acceptance.yaml): "policy" is a dict containing
+        "sites", "consumerLanSegments", "natTranslationMode", "siteToSiteVpn", "globalObjectOps".
+        "routingPolicyTable" stays a top-level sibling of "policy" in both shapes.
+
+        Args:
+            acceptance_config (dict): One raw entry from data_exchange_acceptances, as loaded
+                from YAML (either shape).
+
+        Returns:
+            dict: Config in the current policy-nested shape. Returned unchanged if already in
+                that shape.
+        """
+        policy = acceptance_config.get("policy")
+        if isinstance(policy, dict):
+            return acceptance_config
+        if policy is not None and not isinstance(policy, list):
+            # Unexpected type — leave as-is so downstream validation raises a clear error.
+            return acceptance_config
+
+        legacy_consumer_lan_segments = policy or []
+        site_information = acceptance_config.get("siteInformation")
+        nat = acceptance_config.get("nat")
+        site_to_site_vpn = acceptance_config.get("siteToSiteVpn")
+        global_object_ops = acceptance_config.get("globalObjectOps")
+
+        if not (legacy_consumer_lan_segments or site_information or nat or site_to_site_vpn or global_object_ops):
+            # No legacy keys present either — likely just a missing "policy"; let downstream
+            # validation raise its own clear error rather than guessing here.
+            return acceptance_config
+
+        LOG.info(
+            "_normalize_acceptance_shape: Detected legacy acceptance config shape for '%s'/'%s'; "
+            "translating to the current policy-nested shape (see sample_data_exchange_acceptance.yaml; "
+            "sample_data_exchange_acceptance_legacy.yaml documents this legacy shape)",
+            acceptance_config.get("customerName"),
+            acceptance_config.get("serviceName"),
+        )
+
+        new_policy: Dict[str, Any] = {}
+        if site_information is not None:
+            new_policy["sites"] = site_information
+        if legacy_consumer_lan_segments:
+            new_policy["consumerLanSegments"] = legacy_consumer_lan_segments
+        if nat:
+            new_policy["natTranslationMode"] = {
+                "peerToPeer": {
+                    "prefixes": [{k: v for k, v in item.items() if k in ("prefix", "outsideNatPrefix")} for item in nat]
+                }
+            }
+        if site_to_site_vpn is not None:
+            new_policy["siteToSiteVpn"] = site_to_site_vpn
+        if global_object_ops is not None:
+            new_policy["globalObjectOps"] = global_object_ops
+
+        normalized = {
+            k: v
+            for k, v in acceptance_config.items()
+            if k not in ("siteInformation", "nat", "policy", "siteToSiteVpn", "globalObjectOps")
+        }
+        normalized["policy"] = new_policy
+        return normalized
+
     def accept_invitation(self, config_yaml_file: str, matches_file=None, vault_bgp_md5=None, vault_psk=None) -> None:
         """
         Accept Data Exchange service invitation (Workflow 4).
@@ -1762,6 +1879,10 @@ class DataExchangeManager(BaseManager):
             # Ensure it's always a list
             if not isinstance(acceptances, list):
                 raise ConfigurationError("data_exchange_acceptances must be a list of acceptance configurations")
+
+            # Accept either the current policy-nested shape or the legacy flat shape (translated
+            # transparently) — see sample_data_exchange_acceptance_legacy.yaml.
+            acceptances = [self._normalize_acceptance_shape(a) for a in acceptances]
 
             # Print current enterprise info
             LOG.info("DataExchangeManager: Current enterprise info: %s", self.gsdk.enterprise_info)
@@ -1847,9 +1968,9 @@ class DataExchangeManager(BaseManager):
             # Collect unique regions from acceptances
             regions_to_validate = set()
             for acceptance in acceptances:
-                if "siteToSiteVpn" in acceptance and "region" in acceptance["siteToSiteVpn"]:
-                    region_name = acceptance["siteToSiteVpn"]["region"]
-                    regions_to_validate.add(region_name)
+                site_to_site_vpn = (acceptance.get("policy") or {}).get("siteToSiteVpn") or {}
+                if "region" in site_to_site_vpn:
+                    regions_to_validate.add(site_to_site_vpn["region"])
 
             # Validate each region
             for region_name in regions_to_validate:
@@ -1934,8 +2055,8 @@ class DataExchangeManager(BaseManager):
             # Collect unique VPN profile names from acceptances
             vpn_profiles_to_validate = set()
             for acceptance in acceptances:
-                if "siteToSiteVpn" in acceptance:
-                    site_to_site_vpn = acceptance["siteToSiteVpn"]
+                site_to_site_vpn = (acceptance.get("policy") or {}).get("siteToSiteVpn") or {}
+                if site_to_site_vpn:
                     if "ipsecGatewayPeers" in site_to_site_vpn:
                         # New multi-peer structure: vpnProfile is per remote peer
                         for peer in site_to_site_vpn["ipsecGatewayPeers"].get("remotePeers", []):
@@ -1995,9 +2116,10 @@ class DataExchangeManager(BaseManager):
     def _validate_prefixes_for_acceptances(self, acceptances) -> None:
         """
         Validate that all prefix fields across acceptances are properly-aligned CIDR network
-        addresses (see _validate_cidr_prefixes): nat[].prefix/translatedPrefix/outsideNatPrefix,
-        policy[].consumerPrefixes, and siteToSiteVpn routing.static.destinationPrefix (both the
-        legacy ipsecGatewayDetails and multi-peer ipsecGatewayPeers structures).
+        addresses (see _validate_cidr_prefixes): policy.natTranslationMode.peerToPeer.prefixes[].
+        prefix/outsideNatPrefix, policy.consumerLanSegments[].consumerPrefixes, and
+        policy.siteToSiteVpn routing.static.destinationPrefix (both the legacy
+        ipsecGatewayDetails and multi-peer ipsecGatewayPeers structures).
 
         Args:
             acceptances (list): List of acceptance configurations
@@ -2010,27 +2132,33 @@ class DataExchangeManager(BaseManager):
                 if service_name and customer_name
                 else (customer_name or service_name or "acceptance")
             )
+            policy = acceptance.get("policy") or {}
 
-            nat_entries = [n for n in acceptance.get("nat", []) if isinstance(n, dict)]
-            self._validate_cidr_prefixes([n.get("prefix") for n in nat_entries if n.get("prefix")], label, "nat")
+            nat_entries = [
+                n
+                for n in ((policy.get("natTranslationMode") or {}).get("peerToPeer") or {}).get("prefixes", [])
+                if isinstance(n, dict)
+            ]
             self._validate_cidr_prefixes(
-                [n.get("translatedPrefix") for n in nat_entries if n.get("translatedPrefix")],
+                [n.get("prefix") for n in nat_entries if n.get("prefix")],
                 label,
-                "nat.translatedPrefix",
+                "policy.natTranslationMode.peerToPeer.prefixes",
             )
             self._validate_cidr_prefixes(
                 [n.get("outsideNatPrefix") for n in nat_entries if n.get("outsideNatPrefix")],
                 label,
-                "nat.outsideNatPrefix",
+                "policy.natTranslationMode.peerToPeer.prefixes.outsideNatPrefix",
             )
 
-            for policy_entry in acceptance.get("policy") or []:
-                if isinstance(policy_entry, dict):
+            for lan_segment_entry in policy.get("consumerLanSegments") or []:
+                if isinstance(lan_segment_entry, dict):
                     self._validate_cidr_prefixes(
-                        policy_entry.get("consumerPrefixes") or [], label, "policy.consumerPrefixes"
+                        lan_segment_entry.get("consumerPrefixes") or [],
+                        label,
+                        "policy.consumerLanSegments.consumerPrefixes",
                     )
 
-            site_to_site_vpn = acceptance.get("siteToSiteVpn") or {}
+            site_to_site_vpn = policy.get("siteToSiteVpn") or {}
             if "ipsecGatewayPeers" in site_to_site_vpn:
                 for peer in site_to_site_vpn["ipsecGatewayPeers"].get("remotePeers", []) or []:
                     destination_prefixes = ((peer.get("routing") or {}).get("static") or {}).get(
@@ -2146,8 +2274,16 @@ class DataExchangeManager(BaseManager):
                             for item in info:
                                 mid = getattr(item, "match_id", None) or getattr(item, "matchId", None)
                                 status = getattr(item, "status", None) or getattr(item, "Status", None)
-                                # Only treat as already-linked if status is ACTIVE (already accepted)
-                                if mid is not None and status == "B2B_PEERING_SERVICE_STATUS_ACTIVE":
+                                # Only treat as already-linked if status is ACTIVE (already accepted).
+                                # get_matching_customers_for_service now calls the generic extranet
+                                # producer API (graphiant-sdk >= 26.7.0), which appears to use
+                                # "EXTRANET_SERVICE_STATUS_ACTIVE" rather than the older
+                                # "B2B_PEERING_SERVICE_STATUS_ACTIVE" — check both until confirmed
+                                # live against a tenant.
+                                if mid is not None and status in (
+                                    "B2B_PEERING_SERVICE_STATUS_ACTIVE",
+                                    "EXTRANET_SERVICE_STATUS_ACTIVE",
+                                ):
                                     match_ids.add(mid)
                         already_linked_match_ids_by_service[service_id] = match_ids
                         LOG.info(
@@ -2175,11 +2311,18 @@ class DataExchangeManager(BaseManager):
                         total_skipped += 1
                         continue
 
-                    # Validate required fields in resolved configuration
-                    required_fields = ["id", "siteInformation", "policy", "siteToSiteVpn", "nat"]
-                    for field in required_fields:
+                    # Validate required fields in resolved configuration. "natTranslationMode" is
+                    # intentionally not required here — it's peering_service-only; client_to_server
+                    # acceptances omit it entirely (see accept_data_exchange_service).
+                    for field in ("id", "policy", "matchId"):
                         if field not in resolved_config or resolved_config[field] is None:
                             raise ConfigurationError(f"Missing required field '{field}' in resolved configuration")
+                    resolved_policy_fields = resolved_config["policy"]
+                    for field in ("sites", "consumerLanSegments", "siteToSiteVpn"):
+                        if field not in resolved_policy_fields or resolved_policy_fields[field] is None:
+                            raise ConfigurationError(
+                                f"Missing required field 'policy.{field}' in resolved configuration"
+                            )
 
                     # Use the resolved configuration directly as the API payload
                     acceptance_payload = resolved_config
@@ -2277,7 +2420,7 @@ class DataExchangeManager(BaseManager):
         Lookup key = customerName.
         """
         customer_name = acceptance_config.get("customerName", "")
-        site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {})
+        site_to_site_vpn = (acceptance_config.get("policy") or {}).get("siteToSiteVpn", {})
         ipsec_peers = site_to_site_vpn.get("ipsecGatewayPeers", {})
 
         # md5Password: YAML wins if non-null, vault fills null/absent
@@ -2315,7 +2458,7 @@ class DataExchangeManager(BaseManager):
         Accepts a plain string (from YAML) or a dict with either "md5_password" or
         "md5Password" as the key; leaves None untouched.
         """
-        site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {})
+        site_to_site_vpn = (acceptance_config.get("policy") or {}).get("siteToSiteVpn", {})
         ipsec_peers = site_to_site_vpn.get("ipsecGatewayPeers", {})
         routing = ipsec_peers.get("routing", {}) if isinstance(ipsec_peers, dict) else {}
         bgp = routing.get("bgp") if isinstance(routing, dict) else None
@@ -2345,7 +2488,7 @@ class DataExchangeManager(BaseManager):
             dict: Updated acceptance configuration with filled values
         """
         try:
-            site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {})
+            site_to_site_vpn = (acceptance_config.get("policy") or {}).get("siteToSiteVpn", {})
 
             if "ipsecGatewayPeers" in site_to_site_vpn:
                 peers = site_to_site_vpn["ipsecGatewayPeers"].get("remotePeers", [])
@@ -2461,8 +2604,10 @@ class DataExchangeManager(BaseManager):
                     f"Invalid match data for customer " f"'{customer_name}' and service '{service_name}'"
                 )
 
+            policy_config = acceptance_config.get("policy") or {}
+
             # Resolve site names to IDs using pre-fetched lookup or API call
-            site_names = acceptance_config.get("siteInformation", [{}])[0].get("sites", [])
+            site_names = (policy_config.get("sites") or [{}])[0].get("sites", [])
             site_ids = []
             for site_name in site_names:
                 if sites_lookup and site_name in sites_lookup:
@@ -2475,7 +2620,7 @@ class DataExchangeManager(BaseManager):
                     raise ConfigurationError(f"Site '{site_name}' not found")
 
             # Resolve site list names to IDs using pre-fetched lookup or API call
-            site_list_names = acceptance_config.get("siteInformation", [{}])[0].get("siteLists", [])
+            site_list_names = (policy_config.get("sites") or [{}])[0].get("siteLists", [])
             site_list_ids = []
             for site_list_name in site_list_names:
                 if site_lists_lookup and site_list_name in site_lists_lookup:
@@ -2488,7 +2633,7 @@ class DataExchangeManager(BaseManager):
                     raise ConfigurationError(f"Site list '{site_list_name}' not found")
 
             # Resolve LAN segment name to ID using pre-fetched lookup or API call
-            lan_segment_name = acceptance_config.get("policy", [{}])[0].get("lanSegment")
+            lan_segment_name = (policy_config.get("consumerLanSegments") or [{}])[0].get("lanSegment")
             lan_segment_id = None
             if lan_segment_name:
                 if lan_segments_lookup and lan_segment_name in lan_segments_lookup:
@@ -2499,7 +2644,8 @@ class DataExchangeManager(BaseManager):
                     raise ConfigurationError(f"LAN segment '{lan_segment_name}' not found")
 
             # Resolve region name to ID using pre-fetched lookup or API call
-            region_name = acceptance_config.get("siteToSiteVpn", {}).get("region")
+            source_site_to_site_vpn = policy_config.get("siteToSiteVpn") or {}
+            region_name = source_site_to_site_vpn.get("region")
             region_id = None
             if region_name:
                 if regions_lookup and region_name in regions_lookup:
@@ -2511,35 +2657,42 @@ class DataExchangeManager(BaseManager):
 
             # Build resolved acceptance configuration in API payload format
             # Update siteToSiteVpn to include resolved regionId and emails
-            site_to_site_vpn = acceptance_config.get("siteToSiteVpn", {}).copy()
+            site_to_site_vpn = source_site_to_site_vpn.copy()
             if region_id:
                 site_to_site_vpn["regionId"] = region_id
             # Ensure emails are included in siteToSiteVpn
-            if "emails" in acceptance_config.get("siteToSiteVpn", {}):
-                site_to_site_vpn["emails"] = acceptance_config.get("siteToSiteVpn", {}).get("emails", [])
+            if "emails" in source_site_to_site_vpn:
+                site_to_site_vpn["emails"] = source_site_to_site_vpn.get("emails", [])
+
+            resolved_policy: Dict[str, Any] = {
+                "sites": [{"sites": site_ids, "siteLists": site_list_ids}],
+                "consumerLanSegments": {
+                    str(lan_segment_id): {
+                        "consumerPrefixes": (policy_config.get("consumerLanSegments") or [{}])[0].get(
+                            "consumerPrefixes", []
+                        )
+                    }
+                },
+                "siteToSiteVpn": site_to_site_vpn,
+                "globalObjectOps": policy_config.get("globalObjectOps", {}),
+            }
+            nat_translation_mode = policy_config.get("natTranslationMode")
+            if nat_translation_mode:
+                resolved_policy["natTranslationMode"] = nat_translation_mode
 
             resolved_config = {
                 "id": service_id,  # Service ID for API payload
-                "siteInformation": [{"sites": site_ids, "siteLists": site_list_ids}],
-                "nat": acceptance_config.get("nat", []),
-                "policy": [
-                    {
-                        "lanSegment": lan_segment_id,
-                        "consumerPrefixes": acceptance_config.get("policy", [{}])[0].get("consumerPrefixes", []),
-                    }
-                ],
-                "siteToSiteVpn": site_to_site_vpn,
-                "globalObjectOps": acceptance_config.get("globalObjectOps", {}),
+                "policy": resolved_policy,
                 "routingPolicyTable": acceptance_config.get("routingPolicyTable", []),
                 "matchId": match_id,
             }
 
             # Resolve device names to device IDs in globalObjectOps (Graphiant filter attachment)
             context_name = f"{customer_name}/{service_name}"
-            policy_like = {"globalObjectOps": resolved_config["globalObjectOps"]}
-            self._resolve_global_object_ops_device_ids(policy_like, context_name)
-            self._validate_global_object_ops_routing_policies(policy_like, context_name)
-            resolved_config["globalObjectOps"] = policy_like["globalObjectOps"]
+            global_object_ops_like = {"globalObjectOps": resolved_policy["globalObjectOps"]}
+            self._resolve_global_object_ops_device_ids(global_object_ops_like, context_name)
+            self._validate_global_object_ops_routing_policies(global_object_ops_like, context_name)
+            resolved_policy["globalObjectOps"] = global_object_ops_like["globalObjectOps"]
 
             # Fill in missing tunnel values using Graphiant portal APIs
             resolved_config = self._fill_missing_tunnel_values(resolved_config, region_id, lan_segment_id)

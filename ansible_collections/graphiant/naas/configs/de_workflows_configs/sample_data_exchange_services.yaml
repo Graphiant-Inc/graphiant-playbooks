@@ -6,7 +6,23 @@
 # 2. Resolve LAN segment names to IDs
 # 3. Resolve site names to site IDs
 # 4. Resolve device names to device IDs in policy.globalObjectOps (for attaching Graphiant filters)
-# 5. POST to v1/extranets-b2b-peering/producer with the payload
+# 5. POST to v1/extranet/b2b/producer with the payload
+#
+# This file's keys already match the actual API request directly — top-level "type"
+# becomes "serviceType" (same value, just renamed), and "sites" here is exactly the
+# "policy.sites" the API expects (same {sites: [...], siteLists: [...]} shape). Portal
+# example (service "de-service-1" -> id 8539):
+#   POST /v1/extranet/b2b/producer
+#   {"serviceName":"de-service-1","serviceType":"peering_service","policy":{
+#     "serviceLanSegment":523387,"sites":[{"sites":[13893,13894],"siteLists":[]}],
+#     "prefixTags":[{"prefix":"10.1.1.0/24","tag":"s-1-prefix1"}],
+#     "globalObjectOps":{"30000057188":{"routingPolicyOps":{"Policy-Edge1-Primary":"Attach"}}}}}
+#   -> {"id": 8539, ...}
+#
+# Note: "policy.site" (singular) is also still accepted as a legacy alternative to
+# "policy.sites" (both resolve identically) for anyone with older configs already
+# written that way; and a "policy.type" key, if present, is ignored (the API forbids it
+# there) — neither is needed in new configs, so this sample uses "sites" directly.
 #
 # Optional policy.globalObjectOps: attach Graphiant routing policies per device.
 # Keys are device names (resolved to device IDs) or device IDs; values can include
@@ -18,8 +34,7 @@ data_exchange_services:
     type: "peering_service"
     policy:
       serviceLanSegment: "lan-segment-3"  # Will be resolved to ID
-      type: "peering_service"
-      site:
+      sites:
         - sites: ["San Jose-sdktest", "New York-sdktest"]  # Will be resolved to IDs
           siteLists: []
       description: "de_service_1_description"

@@ -1,0 +1,140 @@
+---
+# Sample Data Exchange Service Acceptance Configuration — LEGACY SHAPE
+# Used in Workflow 7: Data Exchange - Accept Invitation (Non-Graphiant Customer)
+#
+# ── This is the LEGACY (pre-26.7.0) flat structure ─────────────────────────────
+# This file exists purely to document and exercise backward compatibility. It is NOT the
+# recommended structure for new configs — use sample_data_exchange_acceptance.yaml instead,
+# which mirrors the actual API payload directly (everything nested under a single "policy"
+# key). accept_invitation auto-detects this legacy flat shape and translates it internally
+# ("policy" here is a plain list; in the current shape "policy" is a dict), so existing
+# configs written this way keep working unchanged — this is a backward-compatible alias,
+# the same as site/sites, adminEmail/adminEmails, and nat/natTranslationMode elsewhere in
+# this module, not a breaking change.
+#
+# Legacy -> current key mapping (for reference; you do not need to change anything to keep
+# using this shape):
+#   siteInformation: [...]                      -> policy.sites: [...]                (same inner shape)
+#   nat: [...]                                  -> policy.natTranslationMode.peerToPeer.prefixes: [...]
+#                                                    (only "prefix"/"outsideNatPrefix" carry over;
+#                                                    "tag"/"translatedPrefix" were never real API fields)
+#   policy: [{lanSegment, consumerPrefixes}]     -> policy.consumerLanSegments: [{lanSegment, consumerPrefixes}]
+#   siteToSiteVpn: {...}                         -> policy.siteToSiteVpn: {...}        (unchanged)
+#   globalObjectOps: {...}                       -> policy.globalObjectOps: {...}      (unchanged)
+#
+# This example targets the exact same customer/service/site/region as
+# sample_data_exchange_acceptance.yaml, just written in the old shape, so the two files can be
+# diffed side by side to see the mapping in practice.
+#
+# Key: data_exchange_acceptances  — always a list, even for a single acceptance.
+#
+# ── ipsecGatewayPeers vs ipsecGatewayDetails ───────────────────────────────────
+# ipsecGatewayPeers  (use for all new configs; requires graphiant_sdk >= 26.6.0)
+#   Supports N remote peers (one entry per customer VPN device). BGP routing is shared
+#   across all peers. Tunnel values (insideIpv4Cidr, psk) are auto-filled by the playbook.
+# ipsecGatewayDetails  (legacy — single peer, backward compat only)
+#
+# ── Secrets (PSK and BGP MD5 password) ────────────────────────────────────────
+# Same precedence rules as sample_data_exchange_acceptance.yaml — see that file's header for
+# the full secrets/vault setup instructions.
+
+data_exchange_acceptances:
+  - customerName: "FinanceInc"    # Resolved to customer ID via Data Exchange customers API
+    serviceName: "de-service-1"   # Resolved to service ID and match ID via matches file
+
+    # Site Information — where this service is terminated (by name, resolved to ID)
+    siteInformation:
+      - sites: ["site-sjc-sdktest"]   # One or more site names
+        siteLists: []                 # Optional: site list names (empty = direct site selection)
+
+    # NAT Configuration (optional; peering_service only — omit entirely for client_to_server)
+    # Maps producer service prefixes to optional translated prefixes.
+    nat:
+      - prefix: "10.1.1.0/24"         # Producer service prefix (from the Data Exchange service)
+        # outsideNatPrefix: null      # Optional: outside NAT prefix
+
+    # Policy — LAN segments and the consumer prefixes advertised into each segment
+    policy:
+      - lanSegment: "customer-1-segment"   # LAN segment name (resolved to segment ID)
+        consumerPrefixes:
+          - "10.101.0.0/24"               # Consumer's own prefixes advertised
+
+    # Site-to-Site VPN Configuration
+    siteToSiteVpn:
+      ipsecGatewayPeers:
+
+        name: "s2s-FinanceInc"   # prefix for interface names: {name}-{peer.name}
+
+        routing:
+          bgp:
+            peerAsn: 65501
+            holdTimer: 180
+            keepaliveTimer: 60
+            md5Password: null  # null -> looked up from vault_data_exchange_bgp_md5_passwords by customerName
+            sendCommunity: true
+            addressFamilies:
+              ipv4:
+                family:
+                  addressFamily: "ipv4"
+                  inboundPolicy:
+                    policy: "test_bgp_inbound_filter"
+                  outboundPolicy:
+                    policy: "test_bgp_outbound_filter"
+              ipv6:
+                family:
+                  addressFamily: "ipv6"
+                  inboundPolicy: {}
+                  outboundPolicy: {}
+
+        remotePeers:
+
+          - name: "peer-1"
+            destinationAddress: "0.0.0.0"   # customer WAN IP; 0.0.0.0 = wildcard
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "0.0.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test"
+
+          - name: "peer-2"
+            destinationAddress: "0.0.0.0"
+            mtu: 1400
+            tcpMss: 1360
+            remoteIkePeerIdentity: "0.0.0.0"
+            ikeInitiator: false
+            tunnel1:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              psk: null
+              localIkePeerIdentity: null
+            vpnProfile: "vpnprofile-global-test-2"
+
+      # Graphiant region where the gateway devices are located (resolved to regionId).
+      region: "us-central-1 (Chicago)"
+
+      # Email addresses for service notifications.
+      emails: ["finance@financeinc.com"]
+
+    # Optional: attach routing policies to specific gateway devices involved in the acceptance.
+    globalObjectOps:
+      "gw-2-sdktest":
+        routingPolicyOps:
+          "Policy-Clt1-Primary": "Attach"
+      "gw-4-sdktest":
+        routingPolicyOps:
+          "Policy-Clt1-Primary": "Attach"

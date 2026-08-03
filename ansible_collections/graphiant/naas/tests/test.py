@@ -1080,6 +1080,37 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         self.assertTrue(result["skipped"], f"Expected customers to be skipped, got: {result}")
         self.assertFalse(result["created"], f"Expected no new customers to be created, got: {result}")
 
+    def test_update_data_exchange_customers(self):
+        """
+        Update Data Exchange Customer's invite.adminEmails (adds a second email).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.update_customers(
+            "de_workflows_configs/sample_data_exchange_customers_update.yaml"
+        )
+        self.assertTrue(result["changed"], f"Expected update to change the customer, got: {result}")
+
+    def test_update_data_exchange_customers_idempotent(self):
+        """
+        Update Data Exchange Customer again with same config — should be skipped (no change).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.update_customers(
+            "de_workflows_configs/sample_data_exchange_customers_update.yaml"
+        )
+        self.assertFalse(result["changed"], f"Expected no change on idempotent update, got: {result}")
+        self.assertTrue(result["skipped"], f"Expected customer to be skipped, got: {result}")
+
+    def test_update_data_exchange_customers_restore(self):
+        """
+        Restore Data Exchange Customer's invite.adminEmails to its original single-email value.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.update_customers(
+            "de_workflows_configs/sample_data_exchange_customers.yaml"
+        )
+        self.assertTrue(result["changed"], f"Expected restore to change the customer, got: {result}")
+
     def test_get_data_exchange_customers_summary(self):
         """
         Get Data Exchange Customers Summary.
@@ -1105,6 +1136,32 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         )
         self.assertFalse(result["changed"], f"Expected no change on idempotent match, got: {result}")
         self.assertTrue(result["skipped"], f"Expected matches to be skipped, got: {result}")
+        self.assertFalse(result["matched"], f"Expected no new matches to be created, got: {result}")
+        self.assertFalse(result["failed"], f"Expected no match failures, got: {result}")
+
+    def test_match_data_exchange_service_to_customers_client_to_server(self):
+        """
+        Match a client_to_server Data Exchange service to a customer via consumerPrefixes
+        (no NAT translation at match time — that's producer-side, set at service creation).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.match_service_to_customers(
+            "de_workflows_configs/sample_data_exchange_matches_client_to_server.yaml"
+        )
+        LOG.info("Match client_to_server service to customer result: %s", result)
+        self.assertTrue(result["matched"], f"Expected a new match to be created, got: {result}")
+        self.assertFalse(result["failed"], f"Expected no match failures, got: {result}")
+
+    def test_match_data_exchange_service_to_customers_client_to_server_idempotent(self):
+        """
+        Match the client_to_server service to the customer again — already-matched, must be skipped.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.data_exchange.match_service_to_customers(
+            "de_workflows_configs/sample_data_exchange_matches_client_to_server.yaml"
+        )
+        self.assertFalse(result["changed"], f"Expected no change on idempotent match, got: {result}")
+        self.assertTrue(result["skipped"], f"Expected match to be skipped, got: {result}")
         self.assertFalse(result["matched"], f"Expected no new matches to be created, got: {result}")
         self.assertFalse(result["failed"], f"Expected no match failures, got: {result}")
 
@@ -1223,6 +1280,32 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         self.assertEqual(len(result["results"]), 1)
         self.assertEqual(result["results"][0]["status"], "check_mode")
 
+    def test_accept_data_exchange_invitation_legacy_shape_check_mode(self):
+        """
+        Accept Data Exchange Service Invitation using the legacy flat config shape (requires
+        consumer/proxy tenant creds). Targets the exact same customer/service as
+        sample_data_exchange_acceptance.yaml, just written in the old shape, to prove
+        accept_invitation auto-translates it to the same resolved payload — not a breaking
+        change. Check mode only: does not call the real API.
+        Expected: changed=True (would accept), total_accepted=1, status="check_mode", no failures.
+        """
+        graphiant_config = graphiant_config_from_read_config(check_mode=True)
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance_legacy.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept invitation (legacy shape, check mode) result: %s", result)
+
+        self.assertTrue(result["changed"], "check_mode: expected changed=True (would have accepted)")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 1)
+        self.assertEqual(result["total_skipped"], 0)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "check_mode")
+
     def test_accept_data_exchange_invitation(self):
         """
         Accept Data Exchange Service Invitation — live mode (requires consumer/proxy tenant creds).
@@ -1259,6 +1342,74 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
         )
         LOG.info("Accept invitation (idempotent) result: %s", result)
+
+        self.assertFalse(result["changed"], "Expected changed=False when already accepted")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 0)
+        self.assertEqual(result["total_skipped"], 1)
+        self.assertEqual(result["results"][0]["status"], "skipped")
+
+    def test_accept_data_exchange_invitation_client_to_server_check_mode(self):
+        """
+        Accept a client_to_server Data Exchange Service Invitation in check mode
+        (requires consumer/proxy tenant creds). Same payload shape as peering_service,
+        except policy.natTranslationMode is omitted (client_to_server NAT is producer-side).
+        Expected: changed=True (would accept), total_accepted=1, status="check_mode", no failures.
+        """
+        graphiant_config = graphiant_config_from_read_config(check_mode=True)
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance_client_to_server.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_client_to_server_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept client_to_server invitation (check mode) result: %s", result)
+
+        self.assertTrue(result["changed"], "check_mode: expected changed=True (would have accepted)")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 1)
+        self.assertEqual(result["total_skipped"], 0)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "check_mode")
+
+    def test_accept_data_exchange_invitation_client_to_server(self):
+        """
+        Accept a client_to_server Data Exchange Service Invitation — live mode
+        (requires consumer/proxy tenant creds).
+        Expected: changed=True, total_accepted=1, total_skipped=0, status="success".
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance_client_to_server.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_client_to_server_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept client_to_server invitation result: %s", result)
+
+        self.assertTrue(result["changed"], "Expected changed=True on first acceptance")
+        self.assertEqual(result["total_processed"], 1)
+        self.assertEqual(result["total_accepted"], 1)
+        self.assertEqual(result["total_skipped"], 0)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "success")
+
+    def test_accept_data_exchange_invitation_client_to_server_idempotent(self):
+        """
+        Accept the client_to_server invitation again — already accepted (requires
+        consumer/proxy tenant creds). Expected: changed=False, total_skipped=1 (idempotent).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        vault_bgp_md5, vault_psk = self._acceptance_vault(graphiant_config)
+        config_file = "de_workflows_configs/sample_data_exchange_acceptance_client_to_server.yaml"
+        matches_file = "de_workflows_configs/output/sample_data_exchange_matches_client_to_server_responses_latest.json"
+
+        result = graphiant_config.data_exchange.accept_invitation(
+            config_file, matches_file, vault_bgp_md5=vault_bgp_md5, vault_psk=vault_psk
+        )
+        LOG.info("Accept client_to_server invitation (idempotent) result: %s", result)
 
         self.assertFalse(result["changed"], "Expected changed=False when already accepted")
         self.assertEqual(result["total_processed"], 1)
@@ -2557,8 +2708,14 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_client_to_server_idempotent'))
     suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_services_client_to_server_restore'))
     suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_customers'))
+    suite.addTest(TestGraphiantPlaybooks('test_create_data_exchange_customers_idempotent'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_customers'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_customers_idempotent'))
+    suite.addTest(TestGraphiantPlaybooks('test_update_data_exchange_customers_restore'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_customers_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers'))
+    suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers_client_to_server'))
+    suite.addTest(TestGraphiantPlaybooks('test_match_data_exchange_service_to_customers_client_to_server_idempotent'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_customers_summary'))
     suite.addTest(TestGraphiantPlaybooks('test_get_data_exchange_services_summary'))
 
@@ -2575,9 +2732,14 @@ if __name__ == '__main__':
     # suite.addTest(TestGraphiantPlaybooks("test_configure_data_exchange_global_lan_segments"))
     # suite.addTest(TestGraphiantPlaybooks("test_configure_vpn_profiles"))
     # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_check_mode"))
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_legacy_shape_check_mode"))
     # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation"))
     # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_idempotent"))
     # suite.addTest(TestGraphiantPlaybooks('test_accept_data_exchange_invitation_scale_check_mode'))
+    #   client_to_server acceptance (requires the client_to_server service/match from above)
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_client_to_server_check_mode"))
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_client_to_server"))
+    # suite.addTest(TestGraphiantPlaybooks("test_accept_data_exchange_invitation_client_to_server_idempotent"))
     # -------------------------------------------------------------------------------------------- #
 
     suite.addTest(TestGraphiantPlaybooks('test_delete_data_exchange_customers_scale'))
