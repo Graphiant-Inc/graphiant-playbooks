@@ -32,7 +32,7 @@ description:
     Configure fails with a clear error if the target interface already has a DHCP subnet configured.
     Remove the DHCP subnet first using M(graphiant.naas.graphiant_edge_services) with C(state: absent)
     before enabling DHCP relay on that interface.
-version_added: "26.5.0"
+version_added: "26.7.0"
 notes:
   - >-
     Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged

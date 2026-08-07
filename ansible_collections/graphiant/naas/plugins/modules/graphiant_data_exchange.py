@@ -243,7 +243,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - "graphiant-sdk >= 26.6.0 (>= 26.7.0 required for type=client_to_server)"
+  - graphiant-sdk >= 26.7.0
   - tabulate
 
 seealso:

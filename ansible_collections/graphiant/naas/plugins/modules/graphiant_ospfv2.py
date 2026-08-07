@@ -38,7 +38,7 @@ notes:
   - >-
     Deconfigure payload uses C(route: null) per prefix; this module preserves nulls in the final
     payload pushed to the API.
-version_added: "26.5.0"
+version_added: "26.7.0"
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:

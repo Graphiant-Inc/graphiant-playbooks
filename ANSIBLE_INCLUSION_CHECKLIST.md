@@ -1,8 +1,8 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2026-07-08  
-**Collection Version:** 26.6.0  
+**Review Date:** 2026-08-06  
+**Collection Version:** 26.7.0  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
@@ -16,7 +16,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `26.6.0` (meets requirement: >= 1.0.0)
+  - Collection version: `26.7.0` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -49,7 +49,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `26.6.0` is specified in `galaxy.yml`
+  - Version `26.7.0` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -60,7 +60,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `26.6.0` (follows semantic versioning)
+  - Current version: `26.7.0` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py`
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -82,12 +82,13 @@
   - All modules have `DOCUMENTATION` sections with proper YAML format
   - All modules have `EXAMPLES` sections
   - All modules have `RETURN` sections
-  - All 20 modules verified (18 state-changing + 2 `_info`):
+  - All 23 modules verified (21 state-changing + 2 `_info`):
     - `graphiant_interfaces.py`, `graphiant_bgp.py`, `graphiant_global_config.py`, `graphiant_sites.py` ✅
     - `graphiant_data_exchange.py`, `graphiant_device_config.py`, `graphiant_vrrp.py`, `graphiant_lag_interfaces.py` ✅
     - `graphiant_site_to_site_vpn.py`, `graphiant_static_routes.py`, `graphiant_ntp.py`, `graphiant_device_system.py` ✅
     - `graphiant_backbone.py`, `graphiant_edge_services.py`, `graphiant_macsec.py`, `graphiant_prefix_port_list.py` ✅
-    - `graphiant_traffic_policy.py`, `graphiant_security_policy.py` ✅
+    - `graphiant_traffic_policy.py`, `graphiant_security_policy.py`, `graphiant_nat_policy.py` ✅
+    - `graphiant_dhcp_relay.py`, `graphiant_ospfv2.py` ✅
     - `graphiant_data_exchange_info.py`, `graphiant_macsec_info.py` ✅ (`_info` modules)
 
 ### 2.3.1 Semantic Markup
@@ -105,14 +106,14 @@
   - Return values use `RV()` markup (e.g., `RV(msg)`)
   - File/input names use `I()` markup (e.g., `I(config_file)`)
   - Code/commands use `C()` markup (e.g., `C(/v1/devices/{device_id}/config)`)
-  - All 20 modules verified ✅
+  - All 23 modules verified ✅
 
 ### 2.3.2 Check Mode Support Information
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** All modules must have check mode support information in the `attributes` field
 - **Verification:**
-  - All 20 modules declare an `attributes:` section with `check_mode:` (and, where applicable, `diff_mode:`) information:
-    - `support: full` (18): `graphiant_interfaces.py`, `graphiant_global_config.py`, `graphiant_sites.py`, `graphiant_vrrp.py`, `graphiant_lag_interfaces.py`, `graphiant_data_exchange.py`, `graphiant_site_to_site_vpn.py`, `graphiant_static_routes.py`, `graphiant_ntp.py`, `graphiant_device_system.py`, `graphiant_backbone.py`, `graphiant_edge_services.py`, `graphiant_macsec.py`, `graphiant_prefix_port_list.py`, `graphiant_traffic_policy.py`, `graphiant_security_policy.py`, `graphiant_data_exchange_info.py`, `graphiant_macsec_info.py` ✅ (idempotent state comparison against live device/global state; `--check --diff` returns accurate `changed` and diff plan; read-only `_info` modules perform no writes)
+  - All 23 modules declare an `attributes:` section with `check_mode:` (and, where applicable, `diff_mode:`) information:
+    - `support: full` (21): `graphiant_interfaces.py`, `graphiant_global_config.py`, `graphiant_sites.py`, `graphiant_vrrp.py`, `graphiant_lag_interfaces.py`, `graphiant_data_exchange.py`, `graphiant_site_to_site_vpn.py`, `graphiant_static_routes.py`, `graphiant_ospfv2.py`, `graphiant_ntp.py`, `graphiant_device_system.py`, `graphiant_backbone.py`, `graphiant_edge_services.py`, `graphiant_macsec.py`, `graphiant_dhcp_relay.py`, `graphiant_prefix_port_list.py`, `graphiant_traffic_policy.py`, `graphiant_security_policy.py`, `graphiant_nat_policy.py`, `graphiant_data_exchange_info.py`, `graphiant_macsec_info.py` ✅ (idempotent state comparison against live device/global state; `--check --diff` returns accurate `changed` and diff plan; read-only `_info` modules perform no writes)
     - `support: partial` (2): `graphiant_bgp.py`, `graphiant_device_config.py` ✅ (`graphiant_device_config` returns `changed=False` for read-only `show_validated_payload` and assumes changes for `configure`; `graphiant_bgp` assumes changes would be made)
 
 ### 2.3.3 Check Mode Best Practices Compliance
@@ -151,8 +152,8 @@
     - Query operations properly separated into `graphiant_data_exchange_info` module ✅
     - All state-changing modules only handle create/update/delete operations ✅
   - **Check mode support:** ✅ **PASSING**
-    - All 20 modules set `supports_check_mode=True` ✅
-    - `support: full` (18): `graphiant_interfaces`, `graphiant_global_config`, `graphiant_sites`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_data_exchange`, `graphiant_site_to_site_vpn`, `graphiant_static_routes`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_backbone`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy`, plus read-only `graphiant_data_exchange_info` and `graphiant_macsec_info` ✅
+    - All 23 modules set `supports_check_mode=True` ✅
+    - `support: full` (21): `graphiant_interfaces`, `graphiant_global_config`, `graphiant_sites`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_data_exchange`, `graphiant_site_to_site_vpn`, `graphiant_static_routes`, `graphiant_ospfv2`, `graphiant_ntp`, `graphiant_device_system`, `graphiant_backbone`, `graphiant_edge_services`, `graphiant_macsec`, `graphiant_dhcp_relay`, `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_nat_policy`, plus read-only `graphiant_data_exchange_info` and `graphiant_macsec_info` ✅
     - `support: partial` (2): ✅
       - `graphiant_device_config`: Returns `changed=False` for read-only `show_validated_payload`; returns `changed=True` for `configure` (assumes changes, documented)
       - `graphiant_bgp`: Returns `changed=True` (assumes changes would be made, documented)
@@ -221,10 +222,10 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must have at least one module
 - **Verification:**
-  - Module count: 20 modules
+  - Module count: 23 modules
   - State-changing modules:
     1. `graphiant_interfaces` - Manage interfaces and circuits
-    2. `graphiant_bgp` - Manage BGP peering and routing policies
+    2. `graphiant_bgp` - Manage BGP peering, routing policies, and route aggregations
     3. `graphiant_global_config` - Manage global configuration objects
     4. `graphiant_sites` - Manage sites and site attachments
     5. `graphiant_data_exchange` - Manage Data Exchange workflows
@@ -241,9 +242,12 @@
     16. `graphiant_prefix_port_list` - Manage Prefix and Port Lists on Edge devices
     17. `graphiant_traffic_policy` - Manage device-level traffic rulesets and LAN-segment attachments
     18. `graphiant_security_policy` - Manage device-level security rulesets and zone-pair attachments
+    19. `graphiant_nat_policy` - Manage device-level NAT policy rulesets and LAN-segment attachments
+    20. `graphiant_dhcp_relay` - Manage DHCP relay (IPv4/IPv6) on main interfaces and VLAN subinterfaces
+    21. `graphiant_ospfv2` - Manage OSPFv2 process configuration (areas, interfaces, redistribution)
   - Information-gathering modules:
-    19. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
-    20. `graphiant_macsec_info` - Query interface MACsec status ✅ (follows `<something>_info` naming)
+    22. `graphiant_data_exchange_info` - Query Data Exchange information ✅ (follows `<something>_info` naming)
+    23. `graphiant_macsec_info` - Query interface MACsec status ✅ (follows `<something>_info` naming)
 
 ### 3.3 Changelog
 - [x] **Status:** ✅ **PASSING**
@@ -261,7 +265,7 @@
 - **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
   - All modules use `version_added` in major.minor format (collection version) ✅
-  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.6.0"`; bumped by `scripts/bump_version.py` at release-cut)
+  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.7.0"`; bumped by `scripts/bump_version.py` at release-cut)
   - Modules verified (value as declared in each module):
     - `graphiant_interfaces.py`: `version_added: "25.12.0"` ✅
     - `graphiant_bgp.py`: `version_added: "25.12.0"` ✅
@@ -283,6 +287,9 @@
     - `graphiant_prefix_port_list.py`: `version_added: "26.5.0"` ✅
     - `graphiant_traffic_policy.py`: `version_added: "26.5.0"` ✅ (module present at `v26.5.0` tag)
     - `graphiant_security_policy.py`: `version_added: "26.6.0"` ✅ (added after `v26.5.0` tag)
+    - `graphiant_dhcp_relay.py`: `version_added: "26.7.0"` ✅ (added after `v26.6.0` tag)
+    - `graphiant_nat_policy.py`: `version_added: "26.7.0"` ✅ (added after `v26.6.0` tag)
+    - `graphiant_ospfv2.py`: `version_added: "26.7.0"` ✅ (added after `v26.6.0` tag)
 
 ### 3.5 galaxy.yml Tags Field
 - [x] **Status:** ✅ **PASSING**
@@ -315,7 +322,7 @@
 - **Verification:**
   - All module files include GPLv3 license header after shebang
   - Format: `# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)`
-  - All 20 modules verified ✅
+  - All 23 modules verified ✅
   - Collection license: GPLv3+ (consistent across all files) ✅
 
 ### 3.9 Public Plugins, Roles, and Playbooks
@@ -487,6 +494,9 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 | `graphiant_prefix_port_list` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
 | `graphiant_traffic_policy` | State-changing | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
 | `graphiant_security_policy` | State-changing | ✅ Full | >= 3.7 | 26.6.0 | ✅ GPLv3 |
+| `graphiant_dhcp_relay` | State-changing | ✅ Full | >= 3.7 | 26.7.0 | ✅ GPLv3 |
+| `graphiant_nat_policy` | State-changing | ✅ Full | >= 3.7 | 26.7.0 | ✅ GPLv3 |
+| `graphiant_ospfv2` | State-changing | ✅ Full | >= 3.7 | 26.7.0 | ✅ GPLv3 |
 | `graphiant_data_exchange_info` | Information-gathering | ✅ Full | >= 3.7 | 25.12.0 | ✅ GPLv3 |
 | `graphiant_macsec_info` | Information-gathering | ✅ Full | >= 3.7 | 26.5.0 | ✅ GPLv3 |
 
@@ -552,7 +562,7 @@ These are not blocking requirements but are recommended for better collection qu
 All critical action items have been completed:
 
 - [x] ✅ Code of Conduct - `CODE_OF_CONDUCT.md` exists
-- [x] ✅ version_added - All 20 modules use major.minor format (`"25.12.0"`, `"26.1.0"`, `"26.2.0"`, `"26.4.0"`, `"26.5.0"`, `"26.6.0"`)
+- [x] ✅ version_added - All 23 modules use major.minor format (`"25.12.0"`, `"26.1.0"`, `"26.2.0"`, `"26.4.0"`, `"26.5.0"`, `"26.6.0"`, `"26.7.0"`)
 - [x] ✅ Multi-version CI testing - Tests against ansible-core 2.17, 2.18, 2.19, 2.20
 - [x] ✅ Scheduled CI runs - Nightly runs at 2 AM UTC
 - [x] ✅ Python version support - Python 3.7+ supported and documented (compatible with ansible-core 2.17, 2.18, 2.19, and 2.20)
@@ -583,7 +593,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 26.6.0  
-**Review Date:** 2026-07-08  
+**Collection Version:** 26.7.0  
+**Review Date:** 2026-08-06  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7
