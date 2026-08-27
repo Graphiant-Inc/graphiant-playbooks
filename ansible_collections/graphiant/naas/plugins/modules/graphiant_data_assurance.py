@@ -138,7 +138,7 @@ attributes:
       C(details.diff_plan), each with C(policy), C(action), C(before), and C(after).
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.7.0
+  - graphiant-sdk >= 26.8.0
 author:
   - Graphiant Team (@graphiant)
 """

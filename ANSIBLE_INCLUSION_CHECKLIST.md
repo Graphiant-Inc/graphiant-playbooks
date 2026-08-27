@@ -1,8 +1,8 @@
 # Ansible Collection Inclusion Checklist
 ## Collection: graphiant.naas
 
-**Review Date:** 2026-08-06  
-**Collection Version:** 26.7.0  
+**Review Date:** 2026-08-26  
+**Collection Version:** 26.8.0  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7  
 
@@ -16,7 +16,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Collection must be published on Ansible Galaxy with version 1.0.0 or later
 - **Verification:**
-  - Collection version: `26.7.0` (meets requirement: >= 1.0.0)
+  - Collection version: `26.8.0` (meets requirement: >= 1.0.0)
   - Location: `galaxy.yml` line 4
   - Repository: `https://github.com/Graphiant-Inc/graphiant-playbooks`
   - Galaxy URL: Collection should be published on Ansible Galaxy
@@ -49,7 +49,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Releases must be tagged in the repository
 - **Verification:**
-  - Version `26.7.0` is specified in `galaxy.yml`
+  - Version `26.8.0` is specified in `galaxy.yml`
   - Git tags should be created for each release (verify with `git tag`)
 
 ---
@@ -60,7 +60,7 @@
 - [x] **Status:** ✅ **PASSING**
 - **Requirement:** Must adhere to semantic versioning (MAJOR.MINOR.PATCH)
 - **Verification:**
-  - Current version: `26.7.0` (follows semantic versioning)
+  - Current version: `26.8.0` (follows semantic versioning)
   - Location: `galaxy.yml` line 4, `_version.py`
   - Changelog follows semantic versioning format
   - Version management: Centralized in `_version.py`
@@ -265,7 +265,7 @@
 - **Requirement:** Documentation and return sections must use `version_added:` containing the collection version for which an option, module or plugin was added (except cases when they were added in the very first release)
 - **Verification:**
   - All modules use `version_added` in major.minor format (collection version) ✅
-  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.7.0"`; bumped by `scripts/bump_version.py` at release-cut)
+  - Centralized in `_version.py` as `MODULE_VERSION_ADDED` (currently `"26.8.0"`; bumped by `scripts/bump_version.py` at release-cut)
   - Modules verified (value as declared in each module):
     - `graphiant_interfaces.py`: `version_added: "25.12.0"` ✅
     - `graphiant_bgp.py`: `version_added: "25.12.0"` ✅
@@ -593,7 +593,7 @@ All requirements from the [Ansible Collection Inclusion Checklist](https://githu
 ---
 
 **Review completed by:** Auto (AI Assistant)  
-**Collection Version:** 26.7.0  
-**Review Date:** 2026-08-06  
+**Collection Version:** 26.8.0  
+**Review Date:** 2026-08-26  
 **Ansible Core Requirement:** >= 2.17.0  
 **Python Requirement:** >= 3.7

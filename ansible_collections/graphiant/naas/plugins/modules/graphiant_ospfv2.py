@@ -102,7 +102,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.7.0 (required for OSPFv2 interface MD5 authentication support)
+  - graphiant-sdk >= 26.8.0 (required for OSPFv2 interface MD5 authentication support)
 
 author:
   - Graphiant Team (@graphiant)
