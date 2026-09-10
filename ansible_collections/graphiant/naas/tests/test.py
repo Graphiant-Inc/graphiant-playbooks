@@ -3024,6 +3024,61 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Configure NAT policy YAML + module_params override (idempotency check): %s", result2)
         assert result2['changed'] is False, "Configure NAT policy module_params override idempotency failed"
 
+    _GATEWAY_SERVICES_CONFIG_FILE = "sample_gateway_services_config.yaml"
+
+    def test_create_gateway_services(self):
+        """
+        Create Gateway Services (cloudGateway + connectivity) from the sample config.
+
+        Create is create-or-update: the second run must be idempotent (changed=False) —
+        existing cloud gateways are skipped and matching connectivity gateways are skipped.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.gateway_services.create(self._GATEWAY_SERVICES_CONFIG_FILE)
+        LOG.info("Create gateway services result: %s", result)
+        result2 = graphiant_config.gateway_services.create(self._GATEWAY_SERVICES_CONFIG_FILE)
+        LOG.info("Create gateway services result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Create gateway services idempotency failed"
+
+    def test_force_update_gateway_services(self):
+        """
+        Re-push matching connectivity gateways with force_update=True.
+
+        Secrets (psk / md5Password) and auto-allocated CIDRs are excluded from the idempotency
+        comparison, so a rotated secret is not otherwise detected. force_update re-pushes every
+        matching connectivity gateway (changed=True); cloud gateways are still skipped.
+        Pre-req: run test_create_gateway_services first so the gateways exist.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        # Without force: an unchanged connectivity gateway is skipped (idempotent).
+        baseline = graphiant_config.gateway_services.create(self._GATEWAY_SERVICES_CONFIG_FILE)
+        LOG.info("Force-update baseline (no force) result: %s", baseline)
+        assert baseline['changed'] is False, "Baseline create should be idempotent before force_update"
+
+        # With force_update: matching connectivity gateways are re-pushed.
+        result = graphiant_config.gateway_services.create(
+            self._GATEWAY_SERVICES_CONFIG_FILE, force_update=True
+        )
+        LOG.info("Force-update gateway services result: %s", result)
+        assert result['changed'] is True, "force_update should re-push matching connectivity gateways"
+        assert result['updated'], "force_update should report re-pushed connectivity gateways in 'updated'"
+
+    def test_delete_gateway_services(self):
+        """
+        Delete the Gateway Services defined in the sample config.
+
+        Second run must be idempotent (changed=False) when the gateways are already absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        result = graphiant_config.gateway_services.delete(self._GATEWAY_SERVICES_CONFIG_FILE)
+        LOG.info("Delete gateway services result: %s", result)
+        result2 = graphiant_config.gateway_services.delete(self._GATEWAY_SERVICES_CONFIG_FILE)
+        LOG.info("Delete gateway services result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Delete gateway services idempotency failed"
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
@@ -3414,6 +3469,12 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_attach_nat_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_detach_nat_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_nat_policy_module_params'))
+
+    # Gateway Services Management Tests (cloudGateway + connectivity)
+    # Pre-req: region and lan-1-test LAN segment referenced by the sample config exist
+    suite.addTest(TestGraphiantPlaybooks('test_create_gateway_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_force_update_gateway_services'))
+    suite.addTest(TestGraphiantPlaybooks('test_delete_gateway_services'))
 
     # OSPFv2 Management Tests
     # Pre-req: LAN segments referenced by OSPF

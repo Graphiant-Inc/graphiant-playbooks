@@ -1,0 +1,131 @@
+---
+# Gateway Services Management Playbook
+#
+# Manages Graphiant Gateway Services (Cloud Gateway and Connectivity) via the portal API.
+#
+# Auth: either set GRAPHIANT_ACCESS_TOKEN (e.g. graphiant login; source ~/.graphiant/env.sh)
+# or set GRAPHIANT_USERNAME / GRAPHIANT_PASSWORD (and GRAPHIANT_HOST) for password login.
+# Token is tried first. You can also override any of these with -e graphiant_host=... etc.
+#
+# Usage:
+#   NOTE: Updating cloud gateway services is not supported. Only connectivity services can be updated.
+#   Create (create OR update — idempotent):
+#     Creates services that don't exist and updates those that do. To update, edit the config
+#     file and re-run this same command; unchanged services are skipped.
+#     ansible-playbook gateway_services_management.yml --tags create \
+#       -e "config_file=sample_gateway_services_config.yaml"
+#
+#   Delete:
+#     ansible-playbook gateway_services_management.yml --tags delete \
+#       -e "config_file=sample_gateway_services_config.yaml"
+#
+#   Dry run (preview changes without applying):
+#     ansible-playbook gateway_services_management.yml --tags create --check --diff \
+#       -e "config_file=sample_gateway_services_config.yaml"
+
+- name: Gateway Services Management
+  hosts: localhost
+  gather_facts: false
+  vars:
+    config_file: "sample_gateway_services_config.yaml"
+    # graphiant_host: "https://api.graphiant.com"
+    # graphiant_username: "{{ vault_graphiant_username }}"
+    # graphiant_password: "{{ vault_graphiant_password }}"
+
+    # Connectivity secrets from Ansible Vault, loaded from vault_secrets.yml when present:
+    #   vault_gateway_ipsec_psks       - tunnel PSKs, keyed gateway name -> peer-N -> tunnel1/2;
+    #                                    fills any tunnel psk left null in the config file.
+    #   vault_gateway_bgp_md5_passwords - BGP MD5 passwords, keyed by gateway name; fills
+    #                                    routing.bgp.md5Password left null in the config file.
+    vault_secrets_path: "{{ playbook_dir }}/../configs/vault_secrets.yml"
+    vault_gateway_ipsec_psks: {}
+    vault_gateway_bgp_md5_passwords: {}
+
+    # Use YAML anchors to avoid repetition. Falls back to environment variables
+    # when the vars above are not set.
+    graphiant_client_params: &graphiant_client_params
+      host: "{{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}"
+      username: "{{ graphiant_username | default(lookup('env', 'GRAPHIANT_USERNAME')) }}"
+      password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
+      access_token: "{{ graphiant_access_token | default(lookup('env', 'GRAPHIANT_ACCESS_TOKEN')) }}"
+
+  tasks:
+    # Optional: loaded only when the file exists. If the file is ansible-vault encrypted, the
+    # include needs a vault password; the rescue turns the otherwise-censored ("no_log") decrypt
+    # error into a clear, actionable message instead of a bare "Unknown error".
+    - name: Load vault secrets for gateway services (optional)
+      when: vault_secrets_path is file
+      tags: create
+      block:
+        - name: Load vault secrets
+          ansible.builtin.include_vars:
+            file: "{{ vault_secrets_path }}"
+          no_log: true
+      rescue:
+        # Distinguish a decrypt failure (wrong/missing vault password) from a parse failure
+        # (decrypts fine but the YAML is invalid). unvault uses the same vault password as the run;
+        # if it succeeds, the original include_vars failure was NOT about the password.
+        - name: Classify the vault load failure
+          block:
+            - name: Decrypt vault_secrets with the supplied vault password (no parse)
+              ansible.builtin.set_fact:
+                _vault_decrypts: "{{ lookup('ansible.builtin.unvault', vault_secrets_path) | length > 0 }}"
+              no_log: true
+          rescue:
+            - name: Report a vault password / decryption failure
+              ansible.builtin.fail:
+                msg: >-
+                  '{{ vault_secrets_path }}' is ansible-vault encrypted and could not be decrypted:
+                  no vault password was supplied, or the one provided was empty/incorrect. Re-run with
+                  --ask-vault-pass, or --vault-password-file <file> and make sure it returns the right key
+                  (the sample vault-password-file.sh echoes $ANSIBLE_VAULT_PASSPHRASE, so export that first).
+                  To run without vault (inline PSKs / API auto-fill), move the file aside.
+        - name: Report a non-password (YAML/parse) failure
+          ansible.builtin.fail:
+            msg: >-
+              '{{ vault_secrets_path }}' decrypted successfully but failed to load — most likely a YAML
+              syntax error in its contents (e.g. a mapping key missing its ':'). Run:
+              ansible-vault view {{ vault_secrets_path }} --vault-password-file <file>
+              and check the YAML.
+
+    - name: Create Gateway Services
+      graphiant.naas.graphiant_gateway_services:
+        <<: *graphiant_client_params
+        operation: create
+        gateway_services_config_file: "{{ config_file }}"
+        detailed_logs: "{{ detailed_logs | default(false) }}"
+        # Set -e force_update=true to re-push connectivity gateways after rotating a PSK/MD5
+        # (secrets are excluded from the idempotency comparison; see the module docs).
+        force_update: "{{ force_update | default(false) }}"
+        vault_gateway_ipsec_psks: "{{ vault_gateway_ipsec_psks | default({}) }}"
+        vault_gateway_bgp_md5_passwords: "{{ vault_gateway_bgp_md5_passwords | default({}) }}"
+      register: gateway_services_create_result
+      tags: create
+
+    - name: Show create result
+      ansible.builtin.debug:
+        msg: |
+          {{ gateway_services_create_result.msg }}
+          created={{ gateway_services_create_result.created | default([]) }}
+          updated={{ gateway_services_create_result.updated | default([]) }}
+          skipped={{ gateway_services_create_result.skipped_services | default([]) }}
+      when: gateway_services_create_result is defined and gateway_services_create_result.msg is defined
+      tags: create
+
+    - name: Delete Gateway Services
+      graphiant.naas.graphiant_gateway_services:
+        <<: *graphiant_client_params
+        operation: delete
+        gateway_services_config_file: "{{ config_file }}"
+        detailed_logs: "{{ detailed_logs | default(false) }}"
+      register: gateway_services_delete_result
+      tags: delete
+
+    - name: Show delete result
+      ansible.builtin.debug:
+        msg: |
+          {{ gateway_services_delete_result.msg }}
+          deleted={{ gateway_services_delete_result.deleted | default([]) }}
+          skipped={{ gateway_services_delete_result.skipped_services | default([]) }}
+      when: gateway_services_delete_result is defined and gateway_services_delete_result.msg is defined
+      tags: delete

@@ -3729,3 +3729,128 @@ class GraphiantPortalClient:
                 exception=e,
             )
             raise e
+
+    # -------------------------------------------------------------------------
+    # Gateway Services
+    # -------------------------------------------------------------------------
+
+    def create_gateway_services(self, config: dict) -> dict:
+        """
+        Create a new gateway services.
+
+        POST /v1/gateways
+
+        Args:
+        config (dict): ManaV2GatewayDetails fields — regionId, speed, description,
+            vrfId, and exactly one of aws/azure/gcp/oci/ipsecGatewayPeers.
+
+        Returns:
+            dict: Response containing the new gateway service ID and status.
+        """
+        request_body = {"details": config}
+        api_url = f"{self.api.api_client.configuration.host}/v1/gateways"
+        if getattr(self, "check_mode", False):
+            # Best-effort schema check of known fields only. Do NOT log the validated/to_dict()
+            # form: model_validate silently drops keys the installed SDK model doesn't know
+            # (e.g. ipsecGatewayPeers on SDK < 26.6.0), which the real POST sends verbatim. Log
+            # the raw request_body so the check-mode preview matches what would actually be sent.
+            try:
+                graphiant_sdk.V1GatewaysPostRequest.model_validate(request_body)
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"create_gateway_services: Payload failed SDK schema validation: {sdk_e}"
+                ) from sdk_e
+            LOG.info("[check_mode] create_gateway_services would create: %s", json.dumps(request_body, indent=2))
+            return {"id": 0}
+        try:
+            LOG.info("create_gateway_services: Creating Gateway Service")
+            response = self.api.v1_gateways_post(
+                authorization=self.bearer_token,
+                v1_gateways_post_request=request_body,
+            )
+            return response.to_dict() if hasattr(response, "to_dict") else {}
+        except ApiException as e:
+            self._log_api_error(
+                method_name="create_gateway_services",
+                api_url=api_url,
+                request_body=request_body,
+                exception=e,
+            )
+            raise e
+
+    def update_gateway_services(self, gateway_id: int, config: dict) -> dict:
+        """
+        Update an existing gateway service (connectivity only; cloud gateways cannot be updated).
+
+        PUT /v1/gateways
+
+        Args:
+            gateway_id (int): The gateway id to update.
+            config (dict): Full ManaV2GatewayDetails replacement payload — regionId, speed,
+                vrfId, and the ipsecGatewayPeers block.
+
+        Returns:
+            dict: Response containing the gateway id and status.
+        """
+        request_body = {"id": gateway_id, "details": config}
+        api_url = f"{self.api.api_client.configuration.host}/v1/gateways"
+        if getattr(self, "check_mode", False):
+            # Best-effort schema check of known fields only. Do NOT log the validated/to_dict()
+            # form: model_validate silently drops keys the installed SDK model doesn't know
+            # (e.g. ipsecGatewayPeers on SDK < 26.6.0), which the real PUT sends verbatim. Log
+            # the raw request_body so the check-mode preview matches what would actually be sent.
+            try:
+                graphiant_sdk.V1GatewaysPutRequest.model_validate(request_body)
+            except Exception as sdk_e:
+                raise ValidationError(
+                    f"update_gateway_services: Payload failed SDK schema validation: {sdk_e}"
+                ) from sdk_e
+            LOG.info(
+                "[check_mode] update_gateway_services would update id %s: %s",
+                gateway_id,
+                json.dumps(request_body, indent=2),
+            )
+            return {"id": gateway_id}
+        try:
+            LOG.info("update_gateway_services: Updating Gateway Service id %s", gateway_id)
+            response = self.api.v1_gateways_put(
+                authorization=self.bearer_token,
+                v1_gateways_put_request=request_body,
+            )
+            LOG.info("update_gateway_services: Successfully updated Gateway Service id %s", gateway_id)
+            return response.to_dict() if hasattr(response, "to_dict") else {}
+        except ApiException as e:
+            self._log_api_error(
+                method_name="update_gateway_services",
+                api_url=api_url,
+                path_params={"id": gateway_id},
+                request_body=request_body,
+                exception=e,
+            )
+            raise e
+
+    def delete_gateway_services(self, gateway_id: int) -> None:
+        """
+        Delete a gateway service by id.
+
+        DELETE /v1/gateways
+
+        Args:
+            gateway_id (int): The gateway id to delete.
+        """
+        api_url = f"{self.api.api_client.configuration.host}/v1/gateways"
+        if getattr(self, "check_mode", False):
+            LOG.info("[check_mode] delete_gateway_services would delete id %s", gateway_id)
+            return
+        try:
+            LOG.info("delete_gateway_services: Deleting Gateway Service id %s", gateway_id)
+            self.api.v1_gateways_delete(authorization=self.bearer_token, id=gateway_id)
+            LOG.info("delete_gateway_services: Successfully deleted Gateway Service id %s", gateway_id)
+        except ApiException as e:
+            self._log_api_error(
+                method_name="delete_gateway_services",
+                api_url=api_url,
+                path_params={"id": gateway_id},
+                exception=e,
+            )
+            raise e

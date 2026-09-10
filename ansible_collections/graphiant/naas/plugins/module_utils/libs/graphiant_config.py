@@ -29,6 +29,7 @@ from .prefix_and_port_list import PrefixAndPortListManager
 from .macsec_manager import MacsecManager
 from .nat_policy_manager import NatPolicyManager
 from .data_assurance_manager import DataAssuranceManager
+from .gateway_services import GatewayServicesManager
 from .logger import setup_logger
 from .exceptions import GraphiantPlaybookError
 
@@ -107,6 +108,7 @@ class GraphiantConfig:
             self.nat_policy = NatPolicyManager(self.config_utils)
             self.ospfv2 = OSPFv2Manager(self.config_utils)
             self.data_assurance = DataAssuranceManager(self.config_utils)
+            self.gateway_services = GatewayServicesManager(self.config_utils)
 
             LOG.info("GraphiantConfig class initialized successfully with all managers")
 
@@ -147,4 +149,5 @@ class GraphiantConfig:
             "nat_policy": hasattr(self, "nat_policy") and self.nat_policy is not None,
             "ospfv2": hasattr(self, "ospfv2") and self.ospfv2 is not None,
             "data_assurance": hasattr(self, "data_assurance") and self.data_assurance is not None,
+            "gateway_services": hasattr(self, "gateway_services") and self.gateway_services is not None,
         }

@@ -4232,6 +4232,109 @@ ansible-playbook playbooks/public_vif_management.yml --tags delete
 
 A service not found by `serviceName` is skipped (idempotent).
 
+## Gateway Services
+
+`graphiant_gateway_services` manages Graphiant Gateway Services via `POST/PUT/DELETE /v1/gateways`.
+A single YAML config file (`sample_gateway_services_config.yaml`) drives two service types under the
+top-level `gatewayServices` key:
+
+- **`cloudGateway`** — cloud peering for `aws`, `azure`, `gcp`, and `oci` (supply exactly one
+  provider block per entry).
+- **`connectivity`** — a site-to-site IPSec VPN gateway (`ipsecGatewayPeers`) with either `static`
+  or `bgp` routing.
+
+Region names, LAN segment names, and speeds in the config are resolved to the API `regionId`,
+`vrfId`, and the `S`-prefixed speed enum (e.g. `1Gbps` → `S1Gbps`) before the request is sent.
+
+### Step 1: Create (or update) gateway services
+
+`create` is an idempotent **create-or-update**: services that do not exist are created; an existing
+**connectivity** service is updated in place (PUT) when its config differs and skipped when it
+already matches. **Cloud gateways cannot be updated** — an existing match is skipped (change one via
+delete + create). The result reports `created`, `updated`, `skipped_services`, and `deleted`.
+
+```bash
+ansible-playbook playbooks/gateway_services_management.yml --tags create --check --diff \
+  -e "config_file=sample_gateway_services_config.yaml"
+ansible-playbook playbooks/gateway_services_management.yml --tags create \
+  -e "config_file=sample_gateway_services_config.yaml"
+```
+
+```yaml
+- name: Create or update gateway services
+  graphiant.naas.graphiant_gateway_services:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: create
+    gateway_services_config_file: "sample_gateway_services_config.yaml"
+    vault_gateway_ipsec_psks: "{{ vault_gateway_ipsec_psks | default({}) }}"
+    vault_gateway_bgp_md5_passwords: "{{ vault_gateway_bgp_md5_passwords | default({}) }}"
+    detailed_logs: true
+  register: gateway_services_create_result
+
+- name: Display gateway services result
+  ansible.builtin.debug:
+    msg: >-
+      {{ gateway_services_create_result.msg }}
+      created={{ gateway_services_create_result.created | default([]) }}
+      updated={{ gateway_services_create_result.updated | default([]) }}
+      skipped={{ gateway_services_create_result.skipped_services | default([]) }}
+```
+
+For a **connectivity** gateway, the tunnel inside subnets (`insideIpv4Cidr`/`insideIpv6Cidr`) are
+optional — leave them `null` to let the portal auto-allocate (the same behavior as Data Exchange),
+or pin them with an explicit `/30` (IPv4) or `/126` (IPv6) network address. A tunnel `psk` supports
+three sourcing modes, in precedence order:
+
+1. **Direct input** — an inline `psk` in the config is used as-is (wins over everything).
+2. **Vault** — leave `psk: null` and provide it via `vault_gateway_ipsec_psks`, keyed
+   `gateway name → peer-N → tunnel1/tunnel2` (`peer-N` is the 1-based index over `remotePeers`).
+3. **API auto-fill** — leave `psk: null` with no vault entry, and the portal generates one.
+
+For a **BGP** connectivity gateway (`routing.bgp`), `md5Password` is filled from
+`vault_gateway_bgp_md5_passwords` (keyed by gateway name) when left `null`; a non-null value in the
+config wins, and omitting it entirely runs BGP without MD5. Both vault variables are typically
+loaded from Ansible Vault via `include_vars` (see `configs/vault_secrets.yml.example`) and are
+marked `no_log`.
+
+With `--check`, no writes are made, but `changed` still reflects whether an apply would create,
+update, or delete at least one service; `--diff` previews the pending changes. Secret values
+(`psk`, BGP `md5Password`) are redacted as `********` in `--diff` output regardless of source.
+
+**Rotating a PSK or MD5 password.** Tunnel `psk`, inside CIDRs, and BGP `md5Password` are excluded
+from the idempotency comparison (they're auto-generated/auto-allocated per apply when left `null`),
+so simply editing a secret value is *not* detected — the gateway looks unchanged and is skipped.
+To apply a rotated secret, set `force_update: true`, which re-pushes every matching **connectivity**
+gateway (cloud gateways are never updated — recreate them via delete + create):
+
+```bash
+ansible-playbook playbooks/gateway_services_management.yml --tags create \
+  -e "config_file=sample_gateway_services_config.yaml force_update=true"
+```
+
+### Step 2: Delete gateway services
+
+`delete` removes the services defined in the config file, resolved by identity (provider/region/VRF
+for cloud, `ipsecGatewayPeers.name`/region/VRF for connectivity). A service with no matching
+existing gateway is skipped (idempotent).
+
+```bash
+ansible-playbook playbooks/gateway_services_management.yml --tags delete \
+  -e "config_file=sample_gateway_services_config.yaml"
+```
+
+```yaml
+- name: Delete gateway services
+  graphiant.naas.graphiant_gateway_services:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: delete
+    gateway_services_config_file: "sample_gateway_services_config.yaml"
+  register: gateway_services_delete_result
+```
+
 ## Raw Device Configuration (graphiant_device_config)
 
 `graphiant_device_config` is a **generic, low-level module** that pushes any JSON payload directly to the Graphiant device config API (`PUT /v1/devices/{id}/config`). Use it as an escape hatch when the structured modules (`graphiant_interfaces`, `graphiant_ntp`, etc.) do not yet cover a specific configuration field — anything the Portal UI can configure can be pushed with this module.

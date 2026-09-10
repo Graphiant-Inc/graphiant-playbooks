@@ -1,0 +1,165 @@
+# Gateway Service Configuration
+# ============================================================
+# Configure Gateway services:
+#   - cloudGateway  : Cloud gateway peering [AWS, Azure, GCP, Oracle]
+#   - connectivity  : Site-to-site IPSec VPN gateway
+#
+# Common fields (apply to every cloudGateway and connectivity entry):
+#   region:      [REQUIRED] Region name, e.g. us-west-1 (Seattle), us-west-2 (San Jose),
+#                us-central-1 (Chicago), us-central-2 (Dallas), us-east-1 (N. Virginia),
+#                us-east-2 (Atlanta), us-east-3 (New York), eu-central-1 (Frankfurt),
+#                ap-southeast-1 (Singapore), ap-east-1 (Tokyo), canada-central-1 (Toronto),
+#                ap-southeast-2 (Sydney)
+#   speed:       [OPTIONAL] Default is 1Gbps. One of: 50Mbps, 100Mbps, 200Mbps, 300Mbps,
+#                400Mbps, 500Mbps, 1Gbps, 2Gbps, 5Gbps, 10Gbps
+#                (sent to the API as the S-prefixed enum, e.g. 1Gbps -> S1Gbps, 50Mbps -> S50Mbps)
+#   description: [OPTIONAL] Free-text description
+#   lanSegment:  [REQUIRED] LAN segment (VRF) name to attach the gateway to
+#
+# cloudGateway — supply exactly ONE provider block per entry:
+#   NOTE: Update is not supported for cloud gateway services (create/delete only).
+#   NOTE: Optional per-provider fields are shown in braces below; an entry-level 'description'
+#         (see Common fields) applies to any provider.
+#   aws:   { accountId }                                     # accountId is a string
+#   azure: { serviceKey, msPeeringVlanId, routingPolicy }    # msPeeringVlanId is an integer
+#   gcp:   { pairingKey, description, routingPolicy }
+#   oci:   { fastConnectOcid, description, routingPolicy }   # fastConnectOcid is a string
+#
+# connectivity — ipsecGatewayPeers (single object, not a list):
+#   name:    [REQUIRED] Peer/gateway name
+#   routing: [REQUIRED] Use either 'static' or 'bgp':
+#              static: destinationPrefix - list of CIDRs, e.g. ["0.0.0.0/0"]
+#              bgp:    peerAsn [REQUIRED]; sendCommunity (default true), holdTimer (default 90),
+#                      keepaliveTimer (default 30), md5Password, and addressFamilies.[af]
+#                      with { addressFamily, inboundPolicy, outboundPolicy } [all OPTIONAL]
+#   remotePeers: [REQUIRED] list of remote peers, each with:
+#     destinationAddress:    [REQUIRED] Remote peer public IP
+#     ikeInitiator:          [REQUIRED] true = initiator, false = responder
+#     vpnProfile:            [OPTIONAL] Default is "Default VPN Profile"
+#     remoteIkePeerIdentity: [OPTIONAL] Default is destinationAddress
+#     tunnel1 / tunnel2:     [REQUIRED] each tunnel has:
+#       insideIpv4Cidr:      [OPTIONAL] /30 network address (host bits must be zero). Set to null
+#                            to let the portal auto-allocate the subnet (same as Data Exchange).
+#                            A non-null value here pins it.
+#       insideIpv6Cidr:      [OPTIONAL] /126 network address (host bits must be zero). Set to null
+#                            to let the portal auto-allocate the subnet. A non-null value here pins it.
+#       psk:                 [OPTIONAL] Pre-shared key. Set to null to load from Ansible Vault
+#                            (vault_gateway_ipsec_psks: gateway name -> peer-N -> tunnel1/2; see
+#                            configs/vault_secrets.yml.example) or let the API auto-fill it.
+#                            A non-null value here wins.
+#       localIkePeerIdentity:[OPTIONAL] Default is insideIpv4Cidr
+# ============================================================
+
+gatewayServices:
+  cloudGateway:
+    - region: us-west-1 (Seattle)
+      speed: 1Gbps
+      description: testing
+      lanSegment: lan-1-test
+      aws:
+        accountId: "123456789012"
+
+    - region: us-west-1 (Seattle)
+      speed: 1Gbps
+      description: testing
+      lanSegment: lan-1-test
+      azure:
+        serviceKey: abcdea-qwerta-qwerta-12345a-thuindaa
+        msPeeringVlanId: 1
+        routingPolicy: "inbound"
+
+    - region: us-west-1 (Seattle)
+      speed: 1Gbps
+      description: testing
+      lanSegment: lan-1-test
+      gcp:
+        pairingKey: asanjashdasnd
+        description: testing
+        routingPolicy: "inbound"
+
+    - region: us-west-1 (Seattle)
+      speed: 1Gbps
+      description: testing
+      lanSegment: lan-1-test
+      oci:
+        fastConnectOcid: "1234"
+        description: testing
+        routingPolicy: "testing"
+
+  connectivity:
+    - region: us-west-1 (Seattle)
+      speed: 1Gbps
+      lanSegment: lan-1-test
+      ipsecGatewayPeers:
+        name: test
+        routing:
+          # Use either 'static' or 'bgp' (see the 'test-bgp' gateway below for a BGP example)
+          static:
+            destinationPrefix:
+              - 0.0.0.0/0
+        remotePeers:
+          - destinationAddress: "0.0.0.0"
+            # remoteIkePeerIdentity: "" # Optional, Default is destinationAddress if not provided
+            ikeInitiator: false
+            vpnProfile: "Default VPN Profile"
+            tunnel1:
+              # localIkePeerIdentity: "" # Optional, Default is insideIpv4Cidr if not provided
+              insideIpv4Cidr: null   # Optional: null -> portal auto-allocates (same as Data Exchange)
+              insideIpv6Cidr: null   # Optional: null -> portal auto-allocates
+              # PSK example 1 — DIRECT INPUT: an inline value takes precedence over vault/auto-fill
+              psk: "c362fcf5-b8ed-4a41-ba5d-d753fa8d41d5"
+            tunnel2:
+              # localIkePeerIdentity: "" # Optional, Default is insideIpv4Cidr if not provided
+              insideIpv4Cidr: null   # Optional: null -> portal auto-allocates
+              insideIpv6Cidr: null   # Optional: null -> portal auto-allocates
+              # PSK example 2 — VAULT: null + an entry in vault_gateway_ipsec_psks (test/peer-1/tunnel2)
+              psk: null
+
+          - destinationAddress: "0.0.0.0"
+            ikeInitiator: false
+            vpnProfile: "Default VPN Profile"
+            tunnel1:
+              # Explicit CIDRs pin the subnet (alternative to null auto-allocation shown above)
+              insideIpv4Cidr: "169.254.0.8/30"
+              insideIpv6Cidr: "fe80::8/126"
+              # PSK example 3 — API AUTO-FILL: psk null with no vault entry -> portal generates one
+              # (applies to both tunnels of this peer)
+              psk: null
+            tunnel2:
+              insideIpv4Cidr: "169.254.0.12/30"
+              insideIpv6Cidr: "fe80::c/126"
+              psk: null   # API AUTO-FILL (see tunnel1)
+
+    # Second connectivity gateway — BGP routing (dynamic prefixes) instead of static
+    - region: us-west-1 (Seattle)
+      speed: 1Gbps
+      lanSegment: lan-1-test
+      ipsecGatewayPeers:
+        name: test-bgp
+        routing:
+          # Use either 'static' or 'bgp' — here BGP learns prefixes from the remote peer
+          bgp:
+            peerAsn: 65001           # REQUIRED: remote peer ASN
+            sendCommunity: true      # optional, default true
+            holdTimer: 180           # optional, default 90 seconds
+            keepaliveTimer: 60       # optional, default 30 seconds
+            md5Password: null        # optional; null -> vault_gateway_bgp_md5_passwords (gateway name 'test-bgp')
+            addressFamilies:
+              ipv4:
+                addressFamily: ipv4
+                # inboundPolicy: "my-inbound-filter"    # optional: global routing policy (BGP filter) name
+                # outboundPolicy: "my-outbound-filter"  # optional
+        remotePeers:
+          - destinationAddress: "203.0.113.10"   # remote peer public IP
+            ikeInitiator: false
+            vpnProfile: "Default VPN Profile"
+            tunnel1:
+              insideIpv4Cidr: null   # Optional: null -> portal auto-allocates
+              insideIpv6Cidr: null
+              # PSK — VAULT: null + entry in vault_gateway_ipsec_psks (test-bgp/peer-1/tunnel1)
+              psk: null
+            tunnel2:
+              insideIpv4Cidr: null
+              insideIpv6Cidr: null
+              # PSK — API AUTO-FILL: null and no vault entry
+              psk: null
