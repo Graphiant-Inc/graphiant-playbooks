@@ -115,7 +115,6 @@ data_exchange_acceptances:
               tag: "s-scale-102-prefix7"
             - prefix: "10.1.1.240/28"
               tag: "s-scale-102-prefix8"
-  
 
       consumerLanSegments:
         - lanSegment: "FinanceBank-{{ 100 + i }}-lan-segment"   # LAN segment name (will be resolved to ID)
@@ -190,7 +189,6 @@ data_exchange_acceptances:
               tag: "s-scale-103-prefix7"
             - prefix: "10.1.2.112/28"
               tag: "s-scale-103-prefix8"  
-  
 
       consumerLanSegments:
         - lanSegment: "FinanceBank-{{ 100 + i }}-lan-segment"   # LAN segment name (will be resolved to ID)
@@ -265,7 +263,6 @@ data_exchange_acceptances:
               tag: "s-scale-104-prefix7"
             - prefix: "10.1.2.240/28"
               tag: "s-scale-104-prefix8"
-  
 
       consumerLanSegments:
         - lanSegment: "FinanceBank-{{ 100 + i }}-lan-segment"   # LAN segment name (will be resolved to ID)
@@ -340,7 +337,6 @@ data_exchange_acceptances:
               tag: "s-scale-105-prefix7"
             - prefix: "10.1.3.112/28"
               tag: "s-scale-105-prefix8"
-  
 
       consumerLanSegments:
         - lanSegment: "FinanceBank-{{ 100 + i }}-lan-segment"   # LAN segment name (will be resolved to ID)
