@@ -54,6 +54,7 @@ ansible-doc graphiant.naas.graphiant_backbone
 ansible-doc graphiant.naas.graphiant_edge_services
 ansible-doc graphiant.naas.graphiant_nat_policy
 ansible-doc graphiant.naas.graphiant_public_vif
+ansible-doc graphiant.naas.graphiant_gateway_services
 ansible-doc graphiant.naas.graphiant_data_assurance
 ```
 
