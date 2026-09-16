@@ -380,23 +380,34 @@ class DataAssuranceManager(BaseManager):
     same ``DataAssurancePolicies`` YAML list and are sent to the same portal API endpoint.
     """
 
-    def configure(self, config_yaml_file: str) -> Dict[str, Any]:
+    def configure(
+        self,
+        config_yaml_file: Optional[str] = None,
+        data_assurance_policies: Optional[List[Any]] = None,
+        content_filter_policies: Optional[List[Any]] = None,
+    ) -> Dict[str, Any]:
         """
-        Create or update Data Assurance / block policies from a YAML file.
+        Create or update Data Assurance / block policies from a YAML file and/or
+        directly-provided module parameters.
 
         Idempotent: compares each intended config against live portal state and skips
         the PUT when already matched.
 
         Args:
-            config_yaml_file: Path to the YAML config file containing a
-                ``DataAssurancePolicies`` list.
+            config_yaml_file: Optional path to the YAML config file containing a
+                ``DataAssurancePolicies`` and/or ``ContentFilterPolicies`` list.
+            data_assurance_policies: Optional list of assurance/block policy dicts supplied
+                directly as module parameters. Overlaid on top of the config file, keyed by
+                policy ``name`` — supplied fields override the config-file values.
+            content_filter_policies: Optional list of content-filter (block-by-category)
+                policy dicts supplied directly as module parameters, merged the same way.
 
         Returns:
             dict: ``{changed, configured, skipped, diff_plan}``
         """
         result: Dict[str, Any] = {"changed": False, "configured": [], "skipped": [], "diff_plan": []}
 
-        config_data = self.render_config_file(config_yaml_file)
+        config_data = self._resolve_config_data(config_yaml_file, data_assurance_policies, content_filter_policies)
         if not config_data or (_YAML_KEY not in config_data and _CF_YAML_KEY not in config_data):
             LOG.info("%s No %s or %s key found in YAML file", _LOG_PREFIX, _YAML_KEY, _CF_YAML_KEY)
             return result
@@ -532,22 +543,32 @@ class DataAssuranceManager(BaseManager):
                     result["configured"].append(name)
                     result["changed"] = True
 
-    def deconfigure(self, config_yaml_file: str) -> Dict[str, Any]:
+    def deconfigure(
+        self,
+        config_yaml_file: Optional[str] = None,
+        data_assurance_policies: Optional[List[Any]] = None,
+        content_filter_policies: Optional[List[Any]] = None,
+    ) -> Dict[str, Any]:
         """
-        Delete Data Assurance / block policies listed in a YAML file.
+        Delete Data Assurance / block policies listed in a YAML file and/or supplied
+        directly as module parameters.
 
         Idempotent: policies not found are silently skipped.
 
         Args:
-            config_yaml_file: Path to the YAML config file containing a
-                ``DataAssurancePolicies`` list.
+            config_yaml_file: Optional path to the YAML config file containing a
+                ``DataAssurancePolicies`` and/or ``ContentFilterPolicies`` list.
+            data_assurance_policies: Optional list of assurance/block policy dicts supplied
+                directly as module parameters (merged with the config file by policy ``name``).
+            content_filter_policies: Optional list of content-filter policy dicts supplied
+                directly as module parameters (merged the same way).
 
         Returns:
             dict: ``{changed, deleted, skipped}``
         """
         result: Dict[str, Any] = {"changed": False, "deleted": [], "skipped": []}
 
-        config_data = self.render_config_file(config_yaml_file)
+        config_data = self._resolve_config_data(config_yaml_file, data_assurance_policies, content_filter_policies)
         if not config_data or (_YAML_KEY not in config_data and _CF_YAML_KEY not in config_data):
             LOG.info("%s No %s or %s key found in YAML file", _LOG_PREFIX, _YAML_KEY, _CF_YAML_KEY)
             return result
@@ -638,6 +659,82 @@ class DataAssuranceManager(BaseManager):
             self.gsdk.delete_content_filter(cf_id)
             result["deleted"].append(name)
             result["changed"] = True
+
+    def _resolve_config_data(
+        self,
+        config_yaml_file: Optional[str],
+        data_assurance_policies: Optional[List[Any]],
+        content_filter_policies: Optional[List[Any]],
+    ) -> Dict[str, Any]:
+        """
+        Build the effective config dict from the (optional) YAML config file and the
+        (optional) directly-provided module parameters.
+
+        The config file is rendered first (when given), then the module-parameter policy
+        lists are overlaid on top of it, keyed by policy ``name``: a supplied field
+        overrides the config-file value for that field, and a policy not present in the
+        file is appended. This lets a playbook keep a config file as the base and override
+        (or add) individual policies/fields directly through module parameters.
+        """
+        config_data: Dict[str, Any] = {}
+        if config_yaml_file:
+            config_data = dict(self.render_config_file(config_yaml_file) or {})
+
+        if data_assurance_policies:
+            config_data[_YAML_KEY] = self._merge_policies(config_data.get(_YAML_KEY) or [], data_assurance_policies)
+        if content_filter_policies:
+            config_data[_CF_YAML_KEY] = self._merge_policies(
+                config_data.get(_CF_YAML_KEY) or [], content_filter_policies
+            )
+        return config_data
+
+    @classmethod
+    def _merge_policies(cls, base_policies: List[Any], override_policies: List[Any]) -> List[Any]:
+        """
+        Overlay ``override_policies`` (from module parameters) onto ``base_policies``
+        (from the config file), keyed by policy ``name``.
+
+        For a policy present in both, the override's fields are merged in (override wins per
+        field); a policy only in the override list is appended. ``None`` values in the override
+        (Ansible fills unset sub-options with ``None``) are pruned first so they neither clobber
+        config-file values nor leak nulls into the API payload.
+        """
+        merged: List[Any] = []
+        index: Dict[str, Dict[str, Any]] = {}
+        for policy in base_policies:
+            entry = dict(policy) if isinstance(policy, dict) else policy
+            merged.append(entry)
+            if isinstance(entry, dict) and entry.get("name"):
+                index[entry["name"]] = entry
+
+        for policy in override_policies or []:
+            if not isinstance(policy, dict):
+                continue
+            clean = cls._prune_none(policy)
+            if not clean:
+                continue
+            name = clean.get("name")
+            if name and name in index:
+                index[name].update(clean)
+            else:
+                merged.append(clean)
+                if name:
+                    index[name] = clean
+        return merged
+
+    @classmethod
+    def _prune_none(cls, value: Any) -> Any:
+        """Recursively drop ``None`` values from dicts (and dicts nested in lists).
+
+        Module sub-options that the user did not set arrive as ``None``; removing them makes a
+        directly-supplied policy match the shape of a config-file policy, where absent fields
+        are simply omitted.
+        """
+        if isinstance(value, dict):
+            return {k: cls._prune_none(v) for k, v in value.items() if v is not None}
+        if isinstance(value, list):
+            return [cls._prune_none(v) for v in value]
+        return value
 
     def _validate_and_autofill_apps(
         self,

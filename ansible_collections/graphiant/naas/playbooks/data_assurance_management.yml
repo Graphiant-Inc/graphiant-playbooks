@@ -3,6 +3,11 @@
 #
 # Manages Graphiant Data Assurance policies via the portal API.
 #
+# Policies can be supplied two ways — pass at least one of them:
+#   - data_assurance_config_file: a YAML config file (config_file var / -e config_file=...)
+#   - DataAssurancePolicies / ContentFilterPolicies: policies inline as module parameters
+# When both are given, the inline parameters override the config-file values per policy 'name'.
+#
 # Auth: either set GRAPHIANT_ACCESS_TOKEN (e.g. graphiant login; source ~/.graphiant/env.sh)
 # or set GRAPHIANT_USERNAME / GRAPHIANT_PASSWORD (and GRAPHIANT_HOST) for password login.
 # Token is tried first. You can also override any of these with -e graphiant_host=... etc.
@@ -10,9 +15,20 @@
 # Usage:
 #   Configure (create OR update — idempotent):
 #     Creates policies that don't exist and updates those that do. To update, edit the config
-#     file and re-run this same command; unchanged policies are skipped.
-#     ansible-playbook data_assurance_management.yml --tags configure \
-#       -e "config_file=sample_data_assurance_policies.yaml"
+#     file (or inline vars) and re-run this same command; unchanged policies are skipped.
+#
+#     From a config file:
+#       ansible-playbook data_assurance_management.yml --tags configure \
+#         -e "config_file=sample_data_assurance_policies.yaml"
+#
+#     From inline policies (set DataAssurancePolicies / ContentFilterPolicies in vars below,
+#     or pass with -e as JSON/YAML):
+#       ansible-playbook data_assurance_management.yml --tags configure
+#
+#     Config file as the base, with an inline override (matched by policy name):
+#       ansible-playbook data_assurance_management.yml --tags configure \
+#         -e "config_file=sample_data_assurance_policies.yaml" \
+#         -e '{"DataAssurancePolicies":[{"name":"assurance-policy-1","flexAlgo":"hestia-all-cores"}]}'
 #
 #   Deconfigure:
 #     ansible-playbook data_assurance_management.yml --tags deconfigure \
@@ -26,7 +42,9 @@
   hosts: localhost
   gather_facts: false
   vars:
-    config_file: "sample_data_assurance_policies.yaml"
+    # Path to a YAML config file. Optional — omit it to configure entirely from the inline
+    # DataAssurancePolicies / ContentFilterPolicies vars below. Pass at least one source.
+    # config_file: "sample_data_assurance_policies.yaml"
     # graphiant_host: "https://api.graphiant.com"
     # graphiant_username: "{{ vault_graphiant_username }}"
     # graphiant_password: "{{ vault_graphiant_password }}"
@@ -39,12 +57,45 @@
       password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
       access_token: "{{ graphiant_access_token | default(lookup('env', 'GRAPHIANT_ACCESS_TOKEN')) }}"
 
+    # Policies defined inline (optional). Same shape as the config file's DataAssurancePolicies /
+    # ContentFilterPolicies lists — just give an app 'name' + 'profileName' and the module
+    # validates the name and auto-fills the rest (bucketId, isDomain/appId, servers). Uncomment
+    # to configure without a config file, or to override config-file policies by 'name'.
+    # DataAssurancePolicies:
+    #   # Assurance policy — optimize path selection using a flex-algo.
+    #   - name: assurance-policy-1
+    #     useAllSites: true
+    #     flexAlgo: test-all-cores
+    #     apps:
+    #       - name: tcp
+    #         profileName: General_Assured
+    #         useAllServers: true
+    #   # Protection policy (By URL) — no flexAlgo; the app 'name' is a domain.
+    #   - name: block-policy-1
+    #     useAllSites: true
+    #     apps:
+    #       - name: www.17ebook.com
+    #         profileName: Unsecured_DIA_Risky
+    #         useAllServers: true
+    # ContentFilterPolicies:
+    #   # Protection policy (By category) — block domain categories by name, with an optional
+    #   # allowedUrlList that lets specific URLs through despite the block.
+    #   - name: block-gambling-and-malicious
+    #     useAllSites: true
+    #     categories:
+    #       - Gambling
+    #       - Malicious
+    #     allowedUrlList:
+    #       - "*.trusted-partner.com"
+
   tasks:
     - name: Configure Data Assurance policies
       graphiant.naas.graphiant_data_assurance:
         <<: *graphiant_client_params
         operation: configure
-        data_assurance_config_file: "{{ config_file }}"
+        data_assurance_config_file: "{{ config_file | default(omit) }}"
+        DataAssurancePolicies: "{{ DataAssurancePolicies | default(omit) }}"
+        ContentFilterPolicies: "{{ ContentFilterPolicies | default(omit) }}"
         detailed_logs: "{{ detailed_logs | default(false) }}"
       register: da_configure_result
       tags: configure
@@ -62,7 +113,9 @@
       graphiant.naas.graphiant_data_assurance:
         <<: *graphiant_client_params
         operation: deconfigure
-        data_assurance_config_file: "{{ config_file }}"
+        data_assurance_config_file: "{{ config_file | default(omit) }}"
+        DataAssurancePolicies: "{{ DataAssurancePolicies | default(omit) }}"
+        ContentFilterPolicies: "{{ ContentFilterPolicies | default(omit) }}"
         detailed_logs: "{{ detailed_logs | default(false) }}"
       register: da_deconfigure_result
       tags: deconfigure

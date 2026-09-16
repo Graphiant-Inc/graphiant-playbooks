@@ -88,6 +88,31 @@ def test_main_configure(mock_ansible_module, mock_get_connection) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_data_assurance.get_graphiant_connection")
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_data_assurance.AnsibleModule")
+def test_main_configure_passes_inline_params(mock_ansible_module, mock_get_connection) -> None:
+    mod = MagicMock()
+    mod.check_mode = False
+    mod.params = _base_params()
+    mod.params["data_assurance_config_file"] = None
+    mod.params["DataAssurancePolicies"] = [{"name": "p1", "flexAlgo": "x"}]
+    mod.params["ContentFilterPolicies"] = [{"name": "cf1", "categories": ["Gambling"]}]
+    mock_ansible_module.return_value = mod
+
+    data_assurance = MagicMock()
+    data_assurance.configure.return_value = {"changed": True, "configured": ["p1", "cf1"], "skipped": []}
+    gc = MagicMock()
+    gc.data_assurance = data_assurance
+    mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_data_assurance.main()
+    data_assurance.configure.assert_called_once()
+    kwargs = data_assurance.configure.call_args.kwargs
+    assert kwargs["data_assurance_policies"] == [{"name": "p1", "flexAlgo": "x"}]
+    assert kwargs["content_filter_policies"] == [{"name": "cf1", "categories": ["Gambling"]}]
+    assert data_assurance.configure.call_args[0][0] is None
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_data_assurance.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_data_assurance.AnsibleModule")
 def test_main_deconfigure(mock_ansible_module, mock_get_connection) -> None:
     mod = MagicMock()
     mod.check_mode = False

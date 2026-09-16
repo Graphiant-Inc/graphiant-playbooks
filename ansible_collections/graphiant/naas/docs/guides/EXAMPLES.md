@@ -3348,10 +3348,12 @@ Deconfigure deletes only the prefixes listed in the YAML (per segment).
 
 ### Module: graphiant.naas.graphiant_data_assurance
 
-`graphiant_data_assurance` manages Data Assurance policies via the portal API from a single YAML config file (`configs/sample_data_assurance_policies.yaml`). Two top-level lists, both optional and managed together:
+`graphiant_data_assurance` manages Data Assurance policies via the portal API. Policies can be supplied through a YAML config file (`configs/sample_data_assurance_policies.yaml`), directly through module parameters, or both. Two top-level lists, both optional and managed together:
 
 - **`DataAssurancePolicies`** — assurance policies (include `flexAlgo`) and block-by-URL/app policies (omit `flexAlgo`), sent to `/v1/data/assurance/assurances/global`.
 - **`ContentFilterPolicies`** — block-by-category policies, sent to `/v1/global/content-filters`; each blocks one or more domain `categories` with an optional `allowedUrlList`.
+
+**Config sources:** provide the policies via the config file (`data_assurance_config_file`) and/or directly as the `DataAssurancePolicies` / `ContentFilterPolicies` module parameters — at least one source is required. The parameters mirror (and use the same names as) the config file's `DataAssurancePolicies` / `ContentFilterPolicies` entries. When both are given, the parameters are overlaid on the config file per policy `name`: a field set in the parameters overrides the config-file value, and a policy not present in the file is added. The same validation and idempotency apply regardless of source.
 
 **configure** creates policies that don't exist and updates those that do; **deconfigure** deletes listed policies (the portal requires a policy to be unassigned from all sites before deletion, so the module first updates it to a detached config, then deletes it).
 
@@ -3376,9 +3378,9 @@ ansible-playbook playbooks/data_assurance_management.yml --tags deconfigure --ch
 ansible-playbook playbooks/data_assurance_management.yml --tags deconfigure
 ```
 
-Override the default config file with `-e config_file=<file>`.
+Pass the config file with `-e config_file=<file>`, or set the `DataAssurancePolicies` / `ContentFilterPolicies` vars to configure inline (at least one source is required).
 
-### Configure Data Assurance policies
+### Configure Data Assurance policies (config file)
 
 ```yaml
 - name: Configure Data Assurance policies
@@ -3397,6 +3399,49 @@ Override the default config file with `-e config_file=<file>`.
   ansible.builtin.debug:
     msg: "{{ da_configure_result.msg }}"
 ```
+
+### Configure Data Assurance policies (inline module parameters)
+
+No config file — the policies are passed directly as module parameters:
+
+```yaml
+- name: Configure Data Assurance policies inline
+  graphiant.naas.graphiant_data_assurance:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: configure
+    DataAssurancePolicies:
+      # Assurance policy — optimize path selection using a flex-algo.
+      - name: assurance-policy-1
+        useAllSites: true
+        flexAlgo: test-all-cores
+        apps:
+          - name: tcp
+            profileName: General_Assured
+            useAllServers: true
+      # Protection policy (By URL) — no flexAlgo; the app name is a domain.
+      - name: block-policy-1
+        useAllSites: true
+        apps:
+          - name: www.17ebook.com
+            profileName: Unsecured_DIA_Risky
+            useAllServers: true
+    ContentFilterPolicies:
+      # Protection policy (By category) — block domain categories by name.
+      - name: block-gambling-and-malicious
+        useAllSites: true
+        categories:
+          - Gambling
+          - Malicious
+        allowedUrlList:
+          - "*.trusted-partner.com"
+    detailed_logs: true
+  register: da_configure_result
+  no_log: true
+```
+
+> A config file and inline parameters can also be combined — the parameters override matching policies by `name` and add any policy not in the file (see the intro above).
 
 ### Deconfigure Data Assurance policies
 

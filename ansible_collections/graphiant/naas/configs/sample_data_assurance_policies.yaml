@@ -22,10 +22,10 @@ DataAssurancePolicies:
   - name: assurance-policy-1
     useAllSites: true
     lanNames:
-      - lan-1-txj168ybvsmg
-      - lan-2-txj168ybvsmg
-      - lan-3-txj168ybvsmg
-      - lan-7-txj168ybvsmg
+      - lan-1-sdktest
+      - lan-2-sdktest
+      - lan-3-sdktest
+      - lan-7-sdktest
     flexAlgo: test-all-cores
     apps:
       - name: tcp
@@ -51,9 +51,9 @@ DataAssurancePolicies:
   - name: block-policy-1
     useAllSites: true
     lanNames:
-      - lan-1-txj168ybvsmg
-      - lan-2-txj168ybvsmg
-      - lan-3-txj168ybvsmg
+      - lan-1-sdktest
+      - lan-2-sdktest
+      - lan-3-sdktest
     apps:
       - name: www.17ebook.com
         profileName: Unsecured_DIA_Risky
@@ -65,9 +65,9 @@ ContentFilterPolicies:
   - name: block-gambling-and-malicious
     useAllSites: true
     lanNames:
-      - lan-1-txj168ybvsmg
-      - lan-2-txj168ybvsmg
-      - lan-3-txj168ybvsmg
+      - lan-1-sdktest
+      - lan-2-sdktest
+      - lan-3-sdktest
     categories:
       - Gambling
       - Malicious

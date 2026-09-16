@@ -132,3 +132,76 @@ def test_norm_config_server_real_subnet_preserved() -> None:
     a = {"name": "p", "apps": [{"name": "x", "bucketId": 1, "servers": [{"ip": "10.1.1.0/24", "port": 1}]}]}
     b = {"name": "p", "apps": [{"name": "x", "bucketId": 1, "servers": [{"ip": "10.1.1.0", "port": 1}]}]}
     assert _norm_config(a) != _norm_config(b)
+
+
+# ---------------------------------------------------------------------------
+# _prune_none — drop unset (None) module sub-options at every nesting level
+# ---------------------------------------------------------------------------
+
+def test_prune_none_drops_none_recursively() -> None:
+    policy = {
+        "name": "p1",
+        "flexAlgo": None,
+        "useAllSites": True,
+        "apps": [{"name": "a", "bucketId": None, "isDomain": False, "servers": [{"ip": "1.1.1.1", "port": None}]}],
+    }
+    assert DataAssuranceManager._prune_none(policy) == {
+        "name": "p1",
+        "useAllSites": True,
+        "apps": [{"name": "a", "isDomain": False, "servers": [{"ip": "1.1.1.1"}]}],
+    }
+
+
+# ---------------------------------------------------------------------------
+# _merge_policies — module parameters overlay the config file, keyed by name
+# ---------------------------------------------------------------------------
+
+def test_merge_policies_overrides_field_by_name() -> None:
+    base = [{"name": "p1", "flexAlgo": "old", "useAllSites": True}]
+    override = [{"name": "p1", "flexAlgo": "new", "siteListName": None}]
+    merged = DataAssuranceManager._merge_policies(base, override)
+    # Only the supplied field changes; the None (unset) sub-option is ignored; other fields stay.
+    assert merged == [{"name": "p1", "flexAlgo": "new", "useAllSites": True}]
+
+
+def test_merge_policies_appends_new_policy() -> None:
+    base = [{"name": "p1", "flexAlgo": "a"}]
+    override = [{"name": "p2", "flexAlgo": "b"}]
+    merged = DataAssuranceManager._merge_policies(base, override)
+    assert merged == [{"name": "p1", "flexAlgo": "a"}, {"name": "p2", "flexAlgo": "b"}]
+
+
+def test_merge_policies_does_not_mutate_base_entry() -> None:
+    base = [{"name": "p1", "flexAlgo": "old"}]
+    DataAssuranceManager._merge_policies(base, [{"name": "p1", "flexAlgo": "new"}])
+    assert base == [{"name": "p1", "flexAlgo": "old"}]
+
+
+# ---------------------------------------------------------------------------
+# _resolve_config_data — config file base + module-parameter overlay
+# ---------------------------------------------------------------------------
+
+def test_resolve_config_data_params_only_no_file() -> None:
+    m = _mgr()
+    da = [{"name": "p1", "flexAlgo": "x", "siteListName": None}]
+    cf = [{"name": "cf1", "categories": ["Gambling"]}]
+    data = m._resolve_config_data(None, da, cf)
+    m.gsdk.assert_not_called()
+    assert data == {
+        "DataAssurancePolicies": [{"name": "p1", "flexAlgo": "x"}],
+        "ContentFilterPolicies": [{"name": "cf1", "categories": ["Gambling"]}],
+    }
+
+
+def test_resolve_config_data_params_override_file() -> None:
+    m = _mgr()
+    m.render_config_file = MagicMock(  # type: ignore[method-assign]
+        return_value={"DataAssurancePolicies": [{"name": "p1", "flexAlgo": "file", "useAllSites": True}]}
+    )
+    data = m._resolve_config_data("cfg.yaml", [{"name": "p1", "flexAlgo": "param"}], None)
+    assert data["DataAssurancePolicies"] == [{"name": "p1", "flexAlgo": "param", "useAllSites": True}]
+
+
+def test_resolve_config_data_empty_when_nothing_provided() -> None:
+    m = _mgr()
+    assert m._resolve_config_data(None, None, None) == {}
