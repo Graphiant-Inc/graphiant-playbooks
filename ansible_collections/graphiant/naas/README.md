@@ -95,7 +95,7 @@ This collection provides Ansible modules to automate:
 | `graphiant_public_vif` | Manage gateway Public VIF / local data exchange services (create/update/delete); exposes a producer LAN segment (VRF) on Graphiant-managed gateway appliances to consumer LAN segments; no separate apply step |
 | `graphiant_public_vif_info` | Query Public VIF info (services summary, per-service details) |
 | `graphiant_gateway_services` | Manage Graphiant Gateway Services (`create`/`delete`): `cloudGateway` cloud peering (AWS/Azure/GCP/OCI) and `connectivity` site-to-site IPSec VPN gateway (static or BGP); idempotent create-or-update for connectivity, create/delete only for cloud |
-| `graphiant_data_assurance` | Manage Data Assurance policies (assurance, block-by-URL/app, and block-by-category); single config file, `configure`/`deconfigure`; validates `flexAlgo`/`siteListName`/`lanNames`/app names against live portal state |
+| `graphiant_data_assurance` | Manage Data Assurance policies (assurance, block-by-URL/app, and block-by-category); config file and/or inline module parameters (`DataAssurancePolicies`/`ContentFilterPolicies`, parameters override the file per policy name), `configure`/`deconfigure`; validates `flexAlgo`/`siteListName`/`lanNames`/app names against live portal state |
 
 ## Installation
 

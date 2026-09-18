@@ -2041,6 +2041,74 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Deconfigure Data Assurance result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Deconfigure Data Assurance idempotency failed"
 
+    def test_configure_data_assurance_inline(self):
+        """
+        Configure Data Assurance policies supplied directly as inline module parameters
+        (data_assurance_policies / content_filter_policies) instead of a config file.
+
+        Reuses the sample policy definitions (loaded from the sample YAML) so the same portal
+        prerequisites apply, and verifies the inline path is idempotent on a second run.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        config = graphiant_config.data_assurance.render_config_file("sample_data_assurance_policies.yaml")
+        da_policies = config.get("DataAssurancePolicies")
+        cf_policies = config.get("ContentFilterPolicies")
+
+        result = graphiant_config.data_assurance.configure(
+            data_assurance_policies=da_policies,
+            content_filter_policies=cf_policies,
+        )
+        LOG.info("Configure Data Assurance (inline) result: %s", result)
+        result2 = graphiant_config.data_assurance.configure(
+            data_assurance_policies=da_policies,
+            content_filter_policies=cf_policies,
+        )
+        LOG.info("Configure Data Assurance (inline) result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Configure Data Assurance (inline) idempotency failed"
+
+    def test_configure_data_assurance_file_with_inline_override(self):
+        """
+        Configure from the sample config file with an inline module-parameter override.
+
+        The override supplies assurance-policy-1's flexAlgo again (same value) via
+        data_assurance_policies; the parameters are merged onto the config file by policy
+        name. Because the desired state already matches (the inline configure ran first),
+        the combined config-file + override run must be idempotent (changed=False).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        override = [{"name": "assurance-policy-1", "flexAlgo": "test-all-cores"}]
+        result = graphiant_config.data_assurance.configure(
+            "sample_data_assurance_policies.yaml",
+            data_assurance_policies=override,
+        )
+        LOG.info("Configure Data Assurance (file + inline override) result: %s", result)
+        assert result['changed'] is False, "Data Assurance config-file + inline override idempotency failed"
+
+    def test_deconfigure_data_assurance_inline(self):
+        """
+        Deconfigure (delete) the Data Assurance and content-filter policies supplied inline as
+        module parameters. Second run should be idempotent (changed=False) once absent.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+
+        config = graphiant_config.data_assurance.render_config_file("sample_data_assurance_policies.yaml")
+        da_policies = config.get("DataAssurancePolicies")
+        cf_policies = config.get("ContentFilterPolicies")
+
+        result = graphiant_config.data_assurance.deconfigure(
+            data_assurance_policies=da_policies,
+            content_filter_policies=cf_policies,
+        )
+        LOG.info("Deconfigure Data Assurance (inline) result: %s", result)
+        result2 = graphiant_config.data_assurance.deconfigure(
+            data_assurance_policies=da_policies,
+            content_filter_policies=cf_policies,
+        )
+        LOG.info("Deconfigure Data Assurance (inline) result (idempotency check): %s", result2)
+        assert result2['changed'] is False, "Deconfigure Data Assurance (inline) idempotency failed"
+
     def test_configure_global_ntp(self):
         """
         Configure Global NTP objects.
@@ -3487,12 +3555,16 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
 
     '''
-    # Traffic in needed in order to configure.
+    # Traffic is needed in order to configure.
     # Data Assurance & Content-Filter (protection) Policy Tests
     # Pre-req: site list referenced by assurance-policy-1 (siteListName) and flex-algos used
     # in the sample must exist in the target enterprise.
     suite.addTest(TestGraphiantPlaybooks('test_configure_data_assurance'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_data_assurance'))
+    # Inline module-parameter path (policies passed directly instead of / on top of a config file)
+    suite.addTest(TestGraphiantPlaybooks('test_configure_data_assurance_inline'))
+    suite.addTest(TestGraphiantPlaybooks('test_configure_data_assurance_file_with_inline_override'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_data_assurance_inline'))
     '''
 
     # To deconfigure all interfaces

@@ -17,6 +17,11 @@ description:
   - Create, update, or delete Graphiant Data Assurance policies via the portal API.
   - Reads a structured YAML config file and applies the desired state to the Graphiant portal.
   - >-
+    Policies may also be supplied directly through the C(DataAssurancePolicies) and
+    C(ContentFilterPolicies) module parameters, used instead of or together with the config
+    file. When both are given, module parameters are overlaid on the config file per policy
+    C(name) and override the config-file values.
+  - >-
     Both assurance policies (with C(flexAlgo)) and block-by-URL/app policies (without
     C(flexAlgo)) are entries in the C(DataAssurancePolicies) list and are sent to the
     C(/v1/data/assurance/assurances/global) endpoint.
@@ -94,8 +99,143 @@ options:
         content-filters endpoint.
       - Each entry must have at minimum a C(name) field.
       - Configuration files support Jinja2 templating syntax.
+      - >-
+        Optional. Omit it to configure entirely from the C(DataAssurancePolicies) and/or
+        C(ContentFilterPolicies) module parameters. At least one of C(data_assurance_config_file),
+        C(DataAssurancePolicies), or C(ContentFilterPolicies) is required.
     type: str
-    required: true
+    required: false
+  DataAssurancePolicies:
+    description:
+      - >-
+        Assurance and block-by-URL/app policies supplied directly as module parameters, as an
+        alternative (or supplement) to the C(DataAssurancePolicies) list in the config file.
+      - >-
+        When both are provided, these entries are overlaid on the config file keyed by policy
+        C(name): a field set here overrides the config-file value for that field, and a policy
+        not present in the file is added.
+    type: list
+    elements: dict
+    required: false
+    suboptions:
+      name:
+        description: Policy name (unique key used to match/override config-file policies).
+        type: str
+        required: true
+      useAllSites:
+        description: Apply the policy to all enterprise sites. Mutually exclusive with C(siteListName).
+        type: bool
+        required: false
+      siteListName:
+        description: Name of a site list to scope the policy to (resolved to its portal site list ID).
+        type: str
+        required: false
+      siteListId:
+        description: Explicit site list ID (used when C(siteListName) is not given).
+        type: int
+        required: false
+      lanNames:
+        description: LAN segment names the policy applies to. Omit to apply to all segments.
+        type: list
+        elements: str
+        required: false
+      flexAlgo:
+        description: Flex-algo name defining the SLA metric. Omit for block/protection policies.
+        type: str
+        required: false
+      apps:
+        description: Applications to assure or block.
+        type: list
+        elements: dict
+        required: false
+        suboptions:
+          name:
+            description: Application name (validated against the profile's bucket telemetry).
+            type: str
+            required: true
+          profileName:
+            description: Human-readable assurance profile name (resolved to an integer C(bucketId)).
+            type: str
+            required: false
+          bucketId:
+            description: Raw integer bucket ID (use instead of C(profileName) for values not mapped).
+            type: int
+            required: false
+          builtinAppId:
+            description: Graphiant built-in application ID (auto-filled from telemetry when omitted).
+            type: int
+            required: false
+          customAppId:
+            description: Enterprise custom application ID (auto-filled from telemetry when omitted).
+            type: int
+            required: false
+          isDomain:
+            description: Whether the app name is a domain (auto-filled from telemetry when omitted).
+            type: bool
+            required: false
+          useAllServers:
+            description: Scope to all observed back-end servers.
+            type: bool
+            required: false
+          servers:
+            description: Specific back-end servers to scope to (auto-filled from telemetry when omitted).
+            type: list
+            elements: dict
+            required: false
+            suboptions:
+              ip:
+                description: Server IP address.
+                type: str
+                required: false
+              port:
+                description: Server port.
+                type: int
+                required: false
+              protocol:
+                description: Server transport protocol (e.g. C(tcp), C(udp)).
+                type: str
+                required: false
+  ContentFilterPolicies:
+    description:
+      - >-
+        Block-by-category (content-filter) policies supplied directly as module parameters, as an
+        alternative (or supplement) to the C(ContentFilterPolicies) list in the config file.
+      - Merged with the config file the same way as C(DataAssurancePolicies) (keyed by C(name)).
+    type: list
+    elements: dict
+    required: false
+    suboptions:
+      name:
+        description: Policy name (unique key used to match/override config-file policies).
+        type: str
+        required: true
+      useAllSites:
+        description: Apply the policy to all enterprise sites. Mutually exclusive with C(siteListName).
+        type: bool
+        required: false
+      siteListName:
+        description: Name of a site list to scope the policy to (resolved to its portal site list ID).
+        type: str
+        required: false
+      siteListId:
+        description: Explicit site list ID (used when C(siteListName) is not given).
+        type: int
+        required: false
+      lanNames:
+        description: LAN segment names the policy applies to. Omit to apply to all segments.
+        type: list
+        elements: str
+        required: false
+      categories:
+        description: Domain category names to block (resolved to domain category IDs).
+        type: list
+        elements: str
+        required: false
+      allowedUrlList:
+        description: Wildcard URLs allowed through despite the category block (applied as per-category exceptions).
+        type: list
+        elements: str
+        required: false
   operation:
     description:
       - Specific operation to perform.
@@ -144,6 +284,9 @@ author:
 """
 
 EXAMPLES = r"""
+# Provide policies through the config file, the inline parameters, or both — at least one of
+# data_assurance_config_file / DataAssurancePolicies / ContentFilterPolicies is required.
+
 # Configure Data Assurance policies from a YAML file.
 - name: Configure Data Assurance policies
   graphiant.naas.graphiant_data_assurance:
@@ -154,6 +297,54 @@ EXAMPLES = r"""
     password: "{{ graphiant_password }}"
     detailed_logs: true
   register: da_result
+  no_log: true
+
+# Configure Data Assurance policies directly from module parameters (no config file).
+- name: Configure Data Assurance policies inline
+  graphiant.naas.graphiant_data_assurance:
+    operation: configure
+    DataAssurancePolicies:
+      - name: assurance-policy-1
+        useAllSites: true
+        flexAlgo: test-all-cores
+        apps:
+          - name: tcp
+            profileName: General_Assured
+            useAllServers: true
+    ContentFilterPolicies:
+      - name: block-gambling
+        useAllSites: true
+        categories:
+          - Gambling
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+  no_log: true
+
+# Use a config file as the base and override one policy's field via module parameters.
+- name: Configure from file with an inline override
+  graphiant.naas.graphiant_data_assurance:
+    operation: configure
+    data_assurance_config_file: "sample_data_assurance_policies.yaml"
+    DataAssurancePolicies:
+      - name: assurance-policy-1
+        flexAlgo: hestia-all-cores
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+  no_log: true
+
+# Flexible task — accept whichever source the caller supplies (file, inline, or both).
+# Unset vars are dropped via default(omit) so only the provided source(s) are passed.
+- name: Configure Data Assurance policies from any source
+  graphiant.naas.graphiant_data_assurance:
+    operation: configure
+    data_assurance_config_file: "{{ config_file | default(omit) }}"
+    DataAssurancePolicies: "{{ data_assurance_policies | default(omit) }}"
+    ContentFilterPolicies: "{{ content_filter_policies | default(omit) }}"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
   no_log: true
 
 # Deconfigure (delete) Data Assurance policies.
@@ -289,10 +480,65 @@ def execute_with_logging(module, func, *args, **kwargs):
     return {"changed": True, "result_msg": success_msg, "details": result}
 
 
+def _server_argument_spec():
+    """Sub-option spec for an app's back-end server ({ip, port, protocol})."""
+    return dict(
+        ip=dict(type="str", required=False),
+        port=dict(type="int", required=False),
+        protocol=dict(type="str", required=False),
+    )
+
+
+def _app_argument_spec():
+    """Sub-option spec for one app entry under a DataAssurancePolicies policy."""
+    return dict(
+        name=dict(type="str", required=True),
+        profileName=dict(type="str", required=False),
+        bucketId=dict(type="int", required=False),
+        builtinAppId=dict(type="int", required=False),
+        customAppId=dict(type="int", required=False),
+        isDomain=dict(type="bool", required=False),
+        useAllServers=dict(type="bool", required=False),
+        servers=dict(type="list", elements="dict", required=False, options=_server_argument_spec()),
+    )
+
+
+def _data_assurance_policy_argument_spec():
+    """Sub-option spec for one DataAssurancePolicies entry (assurance or block-by-URL policy)."""
+    return dict(
+        name=dict(type="str", required=True),
+        useAllSites=dict(type="bool", required=False),
+        siteListName=dict(type="str", required=False),
+        siteListId=dict(type="int", required=False),
+        lanNames=dict(type="list", elements="str", required=False),
+        flexAlgo=dict(type="str", required=False),
+        apps=dict(type="list", elements="dict", required=False, options=_app_argument_spec()),
+    )
+
+
+def _content_filter_policy_argument_spec():
+    """Sub-option spec for one ContentFilterPolicies entry (block-by-category policy)."""
+    return dict(
+        name=dict(type="str", required=True),
+        useAllSites=dict(type="bool", required=False),
+        siteListName=dict(type="str", required=False),
+        siteListId=dict(type="int", required=False),
+        lanNames=dict(type="list", elements="str", required=False),
+        categories=dict(type="list", elements="str", required=False),
+        allowedUrlList=dict(type="list", elements="str", required=False),
+    )
+
+
 def main():
     argument_spec = dict(
         **graphiant_portal_auth_argument_spec(),
-        data_assurance_config_file=dict(type="str", required=True),
+        data_assurance_config_file=dict(type="str", required=False),
+        DataAssurancePolicies=dict(
+            type="list", elements="dict", required=False, options=_data_assurance_policy_argument_spec()
+        ),
+        ContentFilterPolicies=dict(
+            type="list", elements="dict", required=False, options=_content_filter_policy_argument_spec()
+        ),
         operation=dict(
             type="str",
             required=False,
@@ -302,12 +548,20 @@ def main():
         detailed_logs=dict(type="bool", required=False, default=False),
     )
 
-    module = AnsibleModule(argument_spec=argument_spec, supports_check_mode=True)
+    module = AnsibleModule(
+        argument_spec=argument_spec,
+        supports_check_mode=True,
+        required_one_of=[
+            ["data_assurance_config_file", "DataAssurancePolicies", "ContentFilterPolicies"],
+        ],
+    )
 
     params = module.params
     operation = params.get("operation")
     state = params.get("state", "present")
-    cfg_file = params["data_assurance_config_file"]
+    cfg_file = params.get("data_assurance_config_file")
+    data_assurance_policies = params.get("DataAssurancePolicies")
+    content_filter_policies = params.get("ContentFilterPolicies")
 
     if not operation:
         operation = "configure" if state == "present" else "deconfigure"
@@ -334,6 +588,8 @@ def main():
                 module,
                 graphiant_config.data_assurance.configure,
                 cfg_file,
+                data_assurance_policies=data_assurance_policies,
+                content_filter_policies=content_filter_policies,
                 success_msg="Successfully configured Data Assurance policies",
                 no_change_msg="Data Assurance policies already match desired state; no changes needed",
             )
@@ -342,6 +598,8 @@ def main():
                 module,
                 graphiant_config.data_assurance.deconfigure,
                 cfg_file,
+                data_assurance_policies=data_assurance_policies,
+                content_filter_policies=content_filter_policies,
                 success_msg="Successfully deconfigured Data Assurance policies",
                 no_change_msg="Data Assurance policies already absent; no changes needed",
             )
