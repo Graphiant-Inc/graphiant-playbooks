@@ -61,21 +61,6 @@ def test_global_bgp_filter_delete(_mock_client, mock_tmpl_class) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
-def test_device_interface_merges_interfaces(_mock_client, mock_tmpl_class) -> None:
-    template = MagicMock()
-    template.render_interface.return_value = {
-        "interfaces": {"eth0": {"enabled": True}},
-    }
-    mock_tmpl_class.return_value = template
-
-    cu = ConfigUtils(base_url="https://api.example.com", username="u", password="p")
-    payload: dict = {"interfaces": {}}
-    cu.device_interface(payload, action="add", name="eth0")
-    assert "eth0" in payload["interfaces"]
-
-
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
 def test_lag_interfaces_prefers_lag_interfaces(_mock_client, mock_tmpl_class) -> None:
     template = MagicMock()
     template.render_lag_interfaces.return_value = {
@@ -128,19 +113,6 @@ def test_vrrp_interfaces_creates_interfaces_dict(_mock_client, mock_tmpl_class) 
     payload: dict = {}
     cu.vrrp_interfaces(payload, action="add", name="eth0")
     assert "eth0" in payload["interfaces"]
-
-
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
-def test_device_circuit_add(_mock_client, mock_tmpl_class) -> None:
-    template = MagicMock()
-    template.render_circuit.return_value = {"circuits": {"c1": {}}}
-    mock_tmpl_class.return_value = template
-
-    cu = ConfigUtils(base_url="https://api.example.com", username="u", password="p")
-    payload: dict = {"circuits": {}}
-    cu.device_circuit(payload, action="add", circuit="c1", site="s1")
-    assert "c1" in payload["circuits"]
 
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")

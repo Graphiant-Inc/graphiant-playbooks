@@ -33,11 +33,27 @@ notes:
   - "  - Circuits only: Update circuit configurations including static routes without touching interfaces."
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves device names to IDs and validates configurations."
-  - "Deconfigure operations are idempotent and safe to run multiple times."
   - >-
-    Configure operations always push the desired config (they may report changed even if the device
-    is already configured).
+    Prerequisite: LAN segments referenced by C(lan:) on an interface or subinterface must already
+    exist in the enterprise. Create them first (e.g. C(lan_segments_management.yml --tag configure)).
+    Configure operations validate referenced LAN segment names against live portal state and fail
+    fast (listing the available segments) when one is missing.
+  - >-
+    Both configure and deconfigure operations are field-level idempotent and safe to run repeatedly:
+    each device's desired config is compared against live state and devices already in the desired
+    state are skipped (reported under C(skipped_devices)), so C(changed) is accurate.
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
+  - >-
+    Per-entry C(state: absent) — LAN only. Within V(configure_interfaces) or
+    V(configure_lan_interfaces) you can remove an individual LAN interface or LAN subinterface
+    without a full deconfigure run. On a LAN subinterface: only C(vlan) is required alongside
+    C(state: absent); the subinterface is deleted while the parent and all other entries are
+    configured normally. On a LAN main interface: only C(name) is required; a non-default LAN
+    attachment is reset to the enterprise default LAN (its subinterfaces are left untouched —
+    remove them individually with per-sub C(state: absent)).
+    WAN interfaces, WAN subinterfaces, and circuits are never affected by C(state: absent) —
+    they are skipped, including within V(configure_wan_circuits_interfaces).
+    All are idempotent — if the LAN interface/subinterface is already absent the device is skipped.
   - >-
     LAN segment move: When an interface or subinterface is moved to a different LAN segment, the
     API requires a two-step push (segment-only then full config). The module does this
@@ -132,6 +148,11 @@ attributes:
     details: >
       When run with C(--check), the module logs the exact payloads that would be pushed with a
       C([check_mode]) prefix so you can see what configuration would be applied.
+  diff_mode:
+    description: >
+      Supports diff mode. When run with C(--diff), a per-device before/after of the interface and
+      circuit payload that would be pushed is returned.
+    support: full
 
 requirements:
   - python >= 3.7
@@ -226,6 +247,48 @@ EXAMPLES = r"""
     host: "{{ graphiant_host }}"
     username: "{{ graphiant_username }}"
     password: "{{ graphiant_password }}"
+
+# Remove a single subinterface (VLAN 19) while keeping everything else configured.
+# In the config file, mark the subinterface with state: absent:
+#
+#   interfaces:
+#     - edge-1:
+#       - name: GigabitEthernet7/0/0
+#         lan: lan-1-test
+#         ipv4: 10.1.11.1/24
+#         subinterfaces:
+#           - vlan: 18
+#             lan: lan-7-test
+#             ipv4: 10.1.17.1/24   # kept — configured normally
+#           - vlan: 19
+#             state: absent         # removed — sends {"interface": null} for VLAN 19
+#
+- name: Remove a specific subinterface (idempotent — skipped if already absent)
+  graphiant.naas.graphiant_interfaces:
+    operation: configure_interfaces
+    interface_config_file: "sample_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+
+# Remove a single main interface while configuring everything else normally.
+# In the config file, mark the interface with state: absent — only name is required:
+#
+#   interfaces:
+#     - edge-1:
+#       - name: GigabitEthernet5/0/0
+#         state: absent              # resets to default LAN and clears circuit/subinterfaces
+#       - name: GigabitEthernet7/0/0
+#         lan: lan-1-test            # configured normally
+#         ipv4: 10.1.11.1/24
+#
+- name: Remove a specific interface (idempotent — skipped if already at default state)
+  graphiant.naas.graphiant_interfaces:
+    operation: configure_interfaces
+    interface_config_file: "sample_interface_config.yaml"
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
 """
 
 RETURN = r"""
@@ -281,6 +344,9 @@ from ansible_collections.graphiant.naas.plugins.module_utils.graphiant_utils imp
     handle_graphiant_exception,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.logging_decorator import capture_library_logs  # noqa: E402
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
+    apply_module_diff,
+)
 
 
 @capture_library_logs
@@ -295,17 +361,31 @@ def execute_with_logging(module, func, *args, **kwargs):
         **kwargs: Keyword arguments to pass to the function
 
     Returns:
-        dict: Result with 'changed' and 'result_msg' keys
+        dict: Result with 'changed', 'result_msg', 'details', 'configured_devices',
+        and 'skipped_devices' keys.
     """
-    # Extract success_msg from kwargs before passing to func
+    # Extract messaging kwargs before passing to func
     success_msg = kwargs.pop("success_msg", "Operation completed successfully")
+    no_change_msg = kwargs.pop("no_change_msg", "No changes needed; device(s) already in desired state")
 
     try:
         result = func(*args, **kwargs)
 
         # If the function returns a dict with 'changed' key, use it
         if isinstance(result, dict) and "changed" in result:
-            return {"changed": result["changed"], "result_msg": success_msg, "details": result}
+            changed = bool(result.get("changed"))
+            configured = result.get("configured_devices") or []
+            skipped = result.get("skipped_devices") or []
+            msg = success_msg if changed else no_change_msg
+            if not changed and skipped:
+                msg += f" (skipped {len(skipped)} device(s))"
+            return {
+                "changed": changed,
+                "result_msg": msg,
+                "details": result,
+                "configured_devices": configured,
+                "skipped_devices": skipped,
+            }
 
         # Fallback for functions that don't return change status
         return {"changed": True, "result_msg": success_msg}
@@ -491,14 +571,20 @@ def main():
             result_msg = result["result_msg"]
 
         # Return success
-        module.exit_json(
+        details = result.get("details") or {}
+        exit_payload = dict(
             changed=changed,
             msg=result_msg,
             operation=operation,
             interface_config_file=interface_config_file,
             circuit_config_file=circuit_config_file,
             circuits_only=circuits_only,
+            configured_devices=result.get("configured_devices", []),
+            skipped_devices=result.get("skipped_devices", []),
+            details=details,
         )
+        apply_module_diff(module, exit_payload, details)
+        module.exit_json(**exit_payload)
 
     except Exception as e:
         error_msg = handle_graphiant_exception(e, operation)

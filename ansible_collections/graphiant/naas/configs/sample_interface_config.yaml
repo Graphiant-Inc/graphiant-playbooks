@@ -5,6 +5,24 @@
 #   - adminStatus / enabled (legacy)
 #   - v4TcpMss / v4_tcp_mss (legacy)
 #   - v6TcpMss / v6_tcp_mss (legacy)
+#
+# Per-entry removal (state: absent) — LAN only:
+#   Add "state: absent" to a LAN interface or LAN subinterface entry to remove it while
+#   configuring everything else normally. The operation is idempotent.
+#   WAN interfaces, WAN subinterfaces, and circuits are NOT affected by state: absent.
+#
+#   LAN subinterface: only "vlan" is required — no lan/IP fields are needed.
+#     subinterfaces:
+#       - vlan: 18
+#         lan: lan-7-test
+#         ipv4: 10.1.17.1/24   # kept
+#       - vlan: 19
+#         state: absent         # LAN sub removed from device
+#
+#   LAN main interface: only "name" is required — resets a non-default LAN to the default.
+#   Subinterfaces are left untouched; remove them individually with per-sub state: absent.
+#     - name: GigabitEthernet4/0/0
+#       state: absent           # reset LAN to default; WAN mains are ignored
 
 interfaces:
   - edge-1-sdktest:
@@ -106,6 +124,11 @@ interfaces:
       lan: lan-segment-3
       description: lan-segment-3 interface
 
+    # LAN interface removal (state: absent) — resets a non-default LAN to the default
+    # (no-op/skipped if already at the default LAN)
+    - name: GigabitEthernet6/0/0
+      state: absent
+
     # LAN Interface and Sub-Interface (VLAN) with Static IPv4/IPv6 assignment
     - name: GigabitEthernet8/0/0
       ipv4: 10.3.17.1/24
@@ -122,3 +145,5 @@ interfaces:
           ipv6: 2001:10:3:177::3/64
           description: Segment-7 subinterface
           alias: Gig8.28
+        - vlan: 29
+          state: absent

@@ -731,6 +731,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             interface_config_file="sample_interface_config.yaml"
         )
         LOG.info("Configure WAN circuits and interfaces result (rerun check): %s", result)
+        assert result['changed'] is False, "Configure WAN circuits and interfaces idempotency failed"
 
     def test_configure_circuits(self):
         """
@@ -745,6 +746,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             circuit_config_file="sample_circuit_config.yaml",
             interface_config_file="sample_interface_config.yaml")
         LOG.info("Configure Circuits result (rerun check): %s", result)
+        assert result['changed'] is False, "Configure Circuit idempotency failed"
 
     def test_deconfigure_circuits(self):
         """
@@ -787,6 +789,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Configure LAN interfaces result: %s", result)
         result = graphiant_config.interfaces.configure_lan_interfaces("sample_interface_config.yaml")
         LOG.info("Configure LAN interfaces result (rerun check): %s", result)
+        assert result['changed'] is False, "Configure LAN interfaces idempotency failed"
 
     def test_deconfigure_lan_interfaces(self):
         """
@@ -812,6 +815,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
             interface_config_file="sample_interface_config.yaml",
             circuit_config_file="sample_circuit_config.yaml")
         LOG.info("Configure Interfaces result (rerun check): %s", result)
+        assert result['changed'] is False, "Configure interfaces idempotency failed"
 
     def test_deconfigure_interfaces(self):
         """
