@@ -122,7 +122,7 @@ attributes:
       C(diff) dictionary (C(before) / C(after)). Structured entries are also in C(details).
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.8.0
+  - graphiant-sdk >= 26.9.0
 seealso:
   - module: graphiant.naas.graphiant_site_to_site_vpn
     description: Per-edge site-to-site IPSec VPN (device-level, distinct from gateway connectivity).

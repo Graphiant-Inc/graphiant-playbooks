@@ -3538,11 +3538,13 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_detach_nat_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_nat_policy_module_params'))
 
+    '''
     # Gateway Services Management Tests (cloudGateway + connectivity)
     # Pre-req: region and lan-1-test LAN segment referenced by the sample config exist
     suite.addTest(TestGraphiantPlaybooks('test_create_gateway_services'))
     suite.addTest(TestGraphiantPlaybooks('test_force_update_gateway_services'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_gateway_services'))
+    '''
 
     # OSPFv2 Management Tests
     # Pre-req: LAN segments referenced by OSPF

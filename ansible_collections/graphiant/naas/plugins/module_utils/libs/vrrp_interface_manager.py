@@ -122,7 +122,7 @@ class VRRPInterfaceManager(BaseManager):
                     "_get_existing_vrrp_state: %s%s - IPv4 VRRP state: enabled=%s",
                     interface_name,
                     f".{vlan}" if vlan else "",
-                    vrrp_state["ipv4"]["enabled"],
+                    enabled_value,
                 )
 
         # Check IPv6 VRRP - API returns 'vrrp_group' not 'vrrp'
@@ -145,7 +145,7 @@ class VRRPInterfaceManager(BaseManager):
                     "_get_existing_vrrp_state: %s%s - IPv6 VRRP state: enabled=%s",
                     interface_name,
                     f".{vlan}" if vlan else "",
-                    vrrp_state["ipv6"]["enabled"],
+                    enabled_value,
                 )
 
         return vrrp_state

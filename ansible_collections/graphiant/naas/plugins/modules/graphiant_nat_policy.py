@@ -173,7 +173,7 @@ attributes:
       Ruleset diffs list only changed rules under C(rules) (plus C(_meta) when ruleset metadata changes).
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 25.12.1
+  - graphiant-sdk >= 26.9.0
 author:
   - Graphiant Team (@graphiant)
 """
