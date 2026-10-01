@@ -212,7 +212,7 @@ jobs:
           ansible-core-version: ${{ matrix.ansible }}
           testing-type: sanity
           collection-root: ansible_collections/graphiant/naas
-          target: --exclude templates/ --exclude configs/de_workflows_configs/
+          target: --exclude templates/ --exclude configs/de_workflows_configs/ --exclude configs/sample_device_lifecycle_scale.yaml
 
   inclusion-checklist:
     name: Ansible Inclusion Checklist Compliance

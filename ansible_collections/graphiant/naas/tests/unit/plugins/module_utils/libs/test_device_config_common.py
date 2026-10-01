@@ -16,6 +16,7 @@ from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_
     fetch_device_by_name,
     format_config_payload_for_log,
     load_device_list_yaml_config,
+    missing_devices_message,
     normalized_device_type,
     redact_sensitive_for_log,
 )
@@ -74,6 +75,12 @@ def test_fetch_device_by_name_not_found() -> None:
 def test_device_not_found_message() -> None:
     msg = device_not_found_message("edge-missing", "Acme")
     assert "edge-missing" in msg and "Acme" in msg
+
+
+def test_missing_devices_message() -> None:
+    msg = missing_devices_message(["ghost-1", "ghost-2"], "Acme")
+    assert "2 device(s)" in msg
+    assert "ghost-1" in msg and "ghost-2" in msg and "Acme" in msg
 
 
 def test_ansible_diff_from_plan() -> None:

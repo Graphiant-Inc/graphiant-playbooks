@@ -90,6 +90,23 @@ def device_not_found_message(device_name: str, enterprise_name: str) -> str:
     )
 
 
+def missing_devices_message(missing: List[str], enterprise_name: str) -> str:
+    """
+    Combined not-found message for several unresolved devices from one target list (see
+    ``device_lifecycle_manager.change_state``/``schedule_upgrade``/``rollback``) — collected
+    across the whole batch rather than failing on just the first one encountered, so a config
+    file with several bad names surfaces all of them in one run instead of one fix-and-retry
+    cycle per name. Managers whose device resolution loop already has every device's live state
+    in memory up front (e.g. from one shared list-returning GET) can adopt this cheaply; one that
+    resolves each device via its own API call (``fetch_device_by_name``) would need to fetch
+    every device before failing to do the same, which is a bigger behavior change — not done here.
+    """
+    return (
+        f"{len(missing)} device(s) not found in the current enterprise '{enterprise_name}': "
+        f"{', '.join(missing)}. Please check device name(s)."
+    )
+
+
 def fetch_device_by_name(gsdk: Any, device_name: str, enterprise_name: str) -> Tuple[int, Dict[str, Any]]:
     """
     Resolve portal hostname to device id and normalized GET ``device`` dict.

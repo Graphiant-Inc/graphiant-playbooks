@@ -2511,7 +2511,7 @@ class DataExchangeManager(BaseManager):
         if isinstance(bgp, dict) and bgp.get("md5Password") is None:
             vault_md5 = (vault_bgp_md5 or {}).get(customer_name)
             if vault_md5:
-                bgp["md5Password"] = {"md5_password": vault_md5}
+                bgp["md5Password"] = {"md5Password": vault_md5}
                 LOG.debug("_inject_vault_secrets: Injected md5Password for customer '%s' from vault", customer_name)
 
         # psk: YAML wins if non-null, vault fills null (API auto-fills remaining nulls via _fill_missing_tunnel_values)
@@ -2535,7 +2535,7 @@ class DataExchangeManager(BaseManager):
 
     def _normalize_bgp_md5_password(self, acceptance_config):
         """
-        Normalize md5Password to the API dict shape {"md5_password": value}.
+        Normalize md5Password to the API dict shape {"md5Password": value}.
 
         Accepts a plain string (from YAML) or a dict with either "md5_password" or
         "md5Password" as the key; leaves None untouched.
@@ -2550,12 +2550,12 @@ class DataExchangeManager(BaseManager):
         if md5_val is None:
             return
         if isinstance(md5_val, str):
-            bgp["md5Password"] = {"md5_password": md5_val}
-        elif isinstance(md5_val, dict) and "md5_password" not in md5_val:
-            # Normalize camelCase key → snake_case
-            plain = md5_val.get("md5Password")
+            bgp["md5Password"] = {"md5Password": md5_val}
+        elif isinstance(md5_val, dict) and "md5Password" not in md5_val:
+            # Normalize snake_case key → camelCase (SDK model alias)
+            plain = md5_val.get("md5_password")
             if plain is not None:
-                bgp["md5Password"] = {"md5_password": plain}
+                bgp["md5Password"] = {"md5Password": plain}
 
     def _fill_missing_tunnel_values(self, acceptance_config, region_id, lan_segment_id):
         """

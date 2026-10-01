@@ -1,0 +1,48 @@
+# Sample device_lifecycle — portal Maintain > Device Lifecycle page
+# ===================================================================
+# Used by graphiant_device_lifecycle (change_state / schedule_upgrade / rollback) and
+# graphiant_device_lifecycle_info (get_status) — each operation reads only the field(s) it
+# needs from the same device_lifecycle list below. `operation` itself is a module parameter
+# (-e operation=... or a playbook tag — see device_lifecycle_management.yml), not a file key.
+#
+# Per device:
+#   lifecycle_state:     [change_state] activated | staging | maintenance | deactivated |
+#                         decommissioned. Idempotent against live status; decommissioned
+#                         requires the device to already be deactivated.
+#   release:              [schedule_upgrade] Stable | Recommended | Latest | Custom — matches
+#                         the portal's own "Change Release" dropdown exactly (Custom only
+#                         resolves to anything for an enterprise that has a custom image
+#                         enabled). Ignored for rollback, which always targets the device's own
+#                         upgradeSummary.lastRunningVersion — there is no way to pin either
+#                         operation to an arbitrary exact build string, matching the portal UI.
+#                         A rollback device with no lastRunningVersion (nothing to roll back to)
+#                         is skipped rather than failed — its only skip, with no override.
+#                         Both schedule_upgrade and rollback also skip (not failed) any device
+#                         whose existing schedule hasn't reached Success/Failed yet, to avoid
+#                         racing a still-in-flight prior schedule for the same device.
+#   verify_for_insync:    [OPTIONAL, default true] Check that the device's Portal Sync shows
+#                         In Sync after a change (change_state, and schedule_upgrade/rollback once
+#                         their schedule reaches Success). Per-device override of the module
+#                         parameter.
+#   wait_for_completion:  [OPTIONAL, default true, schedule_upgrade/rollback only] Wait for the
+#                         scheduled upgrade/rollback to finish (succeed or fail) before returning,
+#                         so you know the outcome in this same run. Set to false to fire-and-forget
+#                         and check progress later via get_status. Per-device override of the
+#                         module parameter.
+#
+# graphiant_device_lifecycle_info only uses the device names (list keys) below.
+
+device_lifecycle:
+  - edge-1-sdktest:
+      lifecycle_state: activated  # change_state
+      release: "Latest"  # schedule_upgrade
+
+  - edge-2-sdktest:
+      lifecycle_state: activated  # change_state
+      verify_for_insync: false  # don't check Portal Sync for this device after the change
+      release: "Recommended"  # schedule_upgrade
+      wait_for_completion: false  # don't wait for the upgrade to finish; check later via get_status
+
+  - edge-3-sdktest:
+      lifecycle_state: activated  # change_state
+      release: "Recommended"  # schedule_upgrade

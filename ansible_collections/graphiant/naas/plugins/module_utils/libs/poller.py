@@ -49,10 +49,12 @@ def poller(timeout=60, wait=0.1, retries=None):
                 remain = timeout - (time.time() - start_time)
                 LOG.info("%s.%s(): attempt %s, time remaining %.2fs", fun.__module__, fun.__name__, attempt + 1, remain)
                 try:
-                    return fun(*fun_args, **fun_kwargs)
+                    result = fun(*fun_args, **fun_kwargs)
+                    LOG.info("%s.%s() succeeded on attempt %s", fun.__module__, fun.__name__, attempt + 1)
+                    return result
                 except Exception as e:
                     exc = sys.exc_info()
-                    LOG.info("Exception caught while calling method %s(): %r", fun.__name__, e)
+                    LOG.info("%s() attempt %s did not succeed, retrying: %s", fun.__name__, attempt + 1, e)
                 LOG.info("Sleeping for %s seconds before poller re-attempt...", wait)
                 time.sleep(wait)
                 attempt += 1
@@ -71,10 +73,12 @@ def poller(timeout=60, wait=0.1, retries=None):
                 LOG.info("Poller attempt: %s/%s", attempt + 1, retries)
                 LOG.info("Calling method %s()...", fun.__name__)
                 try:
-                    return fun(*fun_args, **fun_kwargs)
+                    result = fun(*fun_args, **fun_kwargs)
+                    LOG.info("%s() succeeded on attempt %s/%s", fun.__name__, attempt + 1, retries)
+                    return result
                 except Exception as e:
                     exc = sys.exc_info()
-                    LOG.info("Exception caught while calling method %s(): %s", fun.__name__, e)
+                    LOG.info("%s() attempt %s/%s did not succeed, retrying: %s", fun.__name__, attempt + 1, retries, e)
                 LOG.info("Sleeping for %s seconds before retry...", wait)
                 time.sleep(wait)
             if exc:

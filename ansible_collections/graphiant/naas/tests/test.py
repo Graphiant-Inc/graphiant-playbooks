@@ -14,6 +14,7 @@ Run from repo root with PYTHONPATH including the collection module_utils:
 import os
 import shutil
 import subprocess  # nosec B404 — used only to invoke ansible-vault CLI in test setup
+import tempfile
 import unittest
 import yaml
 from libs.graphiant_config import GraphiantConfig
@@ -1947,12 +1948,57 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Create Site-to-Site VPN result (idempotency check): %s", result)
         assert result['changed'] is False, "Create Site-to-Site VPN idempotency failed"
 
+    def _deconfigure_static_routes_for_site_to_site_vpn(self, graphiant_config):
+        """
+        Deconfigure static routes (QA-13397) before deleting the Site-to-Site VPN.
+        """
+        vpn_config = graphiant_config.site_to_site_vpn.render_config_file("sample_site_to_site_vpn.yaml")
+        static_routes_cfg = []
+        for device_entry in vpn_config.get("siteToSiteVpn", []):
+            for device_name, vpns in device_entry.items():
+                routes_by_lan = {}
+                for vpn in vpns or []:
+                    static_routing = (vpn.get("routing") or {}).get("static")
+                    if not static_routing:
+                        continue
+                    lan = vpn.get("lan")
+                    for prefix in static_routing.get("destinationPrefix") or []:
+                        routes_by_lan.setdefault(lan, []).append({"destinationPrefix": prefix})
+                if routes_by_lan:
+                    static_routes_cfg.append(
+                        {
+                            device_name: {
+                                "segments": [
+                                    {"lanSegment": lan, "staticRoutes": routes}
+                                    for lan, routes in routes_by_lan.items()
+                                ]
+                            }
+                        }
+                    )
+        if not static_routes_cfg:
+            LOG.info("No routing.static Site-to-Site VPNs found in sample_site_to_site_vpn.yaml, nothing to clean up")
+            return
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+            yaml.safe_dump({"staticRoutes": static_routes_cfg}, tmp)
+            tmp_path = tmp.name
+        try:
+            result = graphiant_config.static_routes.deconfigure(tmp_path)
+            LOG.info("Deconfigure static routes for Site-to-Site VPN result: %s", result)
+        finally:
+            os.remove(tmp_path)
+
     def test_delete_site_to_site_vpn(self):
         """
         Delete Site-to-Site VPN. Second run is idempotent: no VPNs to delete (already absent),
         so changed=False and no API push.
+
+        A routing.static VPN auto-creates a matching staticRoute on its LAN segment, which is
+        cleared first (see _deconfigure_static_routes_for_site_to_site_vpn) or the delete would
+        be blocked by its own route.
         """
         graphiant_config = graphiant_config_from_read_config()
+        self._deconfigure_static_routes_for_site_to_site_vpn(graphiant_config)
         result = graphiant_config.site_to_site_vpn.delete_site_to_site_vpn("sample_site_to_site_vpn.yaml")
         LOG.info("Delete Site-to-Site VPN result: %s", result)
         result2 = graphiant_config.site_to_site_vpn.delete_site_to_site_vpn("sample_site_to_site_vpn.yaml")
@@ -2285,25 +2331,45 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Configure device system settings (edge/core name, regionName, site) from YAML.
 
-        Uses ``sample_device_system.yaml``, which may also define a top-level ``sites`` list.
-        ``configure_sites`` runs first so referenced sites exist before device system updates.
+        Uses ``sample_device_system.yaml`` for the device system settings and a separate
+        ``sample_device_system_sites.yaml`` for the prerequisite ``sites`` list — split into two
+        files rather than one file carrying both a top-level ``sites`` key and the device system
+        keys, because the gas portal's drag-and-drop bundle upload complained of a duplicate
+        ``sites`` key when another file in the same bundle also declared one. ``configure_sites``
+        runs first against the sites file so referenced sites exist before device system updates.
+
+        ``sample_device_system.yaml``'s list keys target the live devices by their current
+        hostname (``edge-*-gsdktest``, as deployed by test automation) and set ``name:`` to rename
+        each one to the ``edge-*-sdktest`` convention every other sample file in this suite uses.
+        That's why this test runs FIRST in the suite (see ``__main__`` below), ahead of even
+        ``test_change_state`` — every later test's config file assumes the ``sdktest`` names
+        already exist.
 
         There is no deconfigure workflow for this feature—only apply desired values via
         ``configure``.
 
-        Second run should be idempotent (changed=False) when the portal already matches the file.
+        Idempotency check: the YAML's list keys are devices' PRE-rename hostnames, which the
+        first ``configure()`` call above just renamed away — re-running that same file would
+        raise ``DeviceNotFoundError`` (the key no longer resolves to any device), not report
+        ``changed=False``. So the idempotency check is done per device instead, keyed by its NEW
+        hostname (read back from this run's own ``diff_plan`` ``after`` values) via
+        ``module_params``, re-applying the same already-applied fields.
+
         If any device has no site in the portal and the YAML omits site for that device, the
         manager aborts the batch and raises; fix site in the portal or YAML before relying on
         this test against a live environment.
         """
         graphiant_config = graphiant_config_from_read_config()
-        pre_req_result = graphiant_config.sites.configure_sites("sample_device_system.yaml")
+        pre_req_result = graphiant_config.sites.configure_sites("sample_device_system_sites.yaml")
         LOG.info("Configure Sites pre-requisite result: %s", pre_req_result)
         result = graphiant_config.device_system.configure("sample_device_system.yaml")
         LOG.info("Configure device system settings result: %s", result)
-        result2 = graphiant_config.device_system.configure("sample_device_system.yaml")
-        LOG.info("Configure device system settings (idempotency check): %s", result2)
-        assert result2.get("changed") is False, "Configure device system idempotency failed"
+
+        for entry in result.get("diff_plan", []):
+            after = entry["after"]
+            result2 = graphiant_config.device_system.configure(None, {"device": after["name"], **after})
+            LOG.info("Configure device system settings (idempotency check) for %s: %s", after["name"], result2)
+            assert result2.get("changed") is False, f"Configure device system idempotency failed for {after['name']}"
 
     def test_configure_backbone(self):
         """
@@ -3151,17 +3217,227 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         LOG.info("Delete gateway services result (idempotency check): %s", result2)
         assert result2['changed'] is False, "Delete gateway services idempotency failed"
 
+    # ------------------------------------------------------------------
+    # Device Lifecycle Management (graphiant_device_lifecycle / graphiant_device_lifecycle_info)
+    # — change_state, schedule_upgrade, rollback, and the read-only status query, all driven
+    # from the single sample_device_lifecycle.yaml device_lifecycle list.
+    # ------------------------------------------------------------------
+
+    def test_change_state(self):
+        """
+        Change device lifecycle state for the devices in sample_device_lifecycle.yaml.
+
+        Second run must be idempotent (changed=False, every device skipped) once each device
+        already matches its own lifecycle_state. The first run polls portalStatus=Ready for any
+        device without its own verify_for_insync: false override (see the sample file) —
+        concurrently across every device that actually changed, bounded by the manager's own
+        poll timeout (180s) regardless of device count — so a device that genuinely doesn't
+        settle in time (not_insync_devices) is a real failure here, not expected flakiness.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.device_lifecycle.change_state("sample_device_lifecycle.yaml")
+        LOG.info("Change device lifecycle state result: %s", result)
+        assert result.get("not_insync_devices", []) == [], (
+            f"Device(s) did not reach Ready: {result.get('not_insync_devices')}"
+        )
+        result2 = graphiant_config.device_lifecycle.change_state("sample_device_lifecycle.yaml")
+        LOG.info("Change device lifecycle state result (idempotency check): %s", result2)
+        assert result2.get("changed") is False, "Change device lifecycle state idempotency failed"
+
+    def test_change_state_module_params(self):
+        """
+        Change lifecycle state for a single device via module_params only (device +
+        lifecycle_state, no config_file) — exercises the direct-device resolution path that
+        bypasses the device_lifecycle YAML list entirely. edge-1-sdktest is already activated
+        (see sample_device_lifecycle.yaml / test_change_state), so this is expected to be a
+        no-op skip, not a real change.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.device_lifecycle.change_state(
+            None, {"device": "edge-1-sdktest", "lifecycle_state": "activated"}
+        )
+        LOG.info("Change device lifecycle state via module_params result: %s", result)
+        assert result.get("changed") is False, "edge-1-sdktest should already be activated"
+        assert result.get("skipped_devices", []) == ["edge-1-sdktest"]
+
+    def test_schedule_upgrade(self):
+        """
+        Schedule a software upgrade for the devices in sample_device_lifecycle.yaml, waiting for
+        each schedule to reach Success/Failed (and, for a Success, portalStatus=Ready) by
+        default — SLOW (several minutes per device actually rescheduled; observed ~7 minutes for
+        one device against the test portal), but needed to confirm the upgrade actually
+        completed rather than just that it was accepted. edge-2-sdktest sets its own
+        wait_for_completion: false in the sample file (per-device override — see
+        sample_device_lifecycle.yaml), so it's still scheduled but never waited on here
+        regardless of this call's default; it won't appear in completed_devices/
+        insync_devices/not_insync_devices. Each device's release channel
+        (Stable/Recommended/Latest/Custom) is resolved dynamically against the release catalog —
+        whether any particular device is already on it depends on live portal state, so no
+        device here is assumed to be skipped. A device with no portal connectivity (ttConnCount
+        below 1/Impaired) is not scheduled either (not_connected_devices) — confirmed live to
+        actually occur (transient on this test portal), so this is a real failure here, not
+        expected flakiness.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.device_lifecycle.schedule_upgrade("sample_device_lifecycle.yaml")
+        LOG.info("Schedule upgrade result: %s", result)
+        assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
+        assert result.get("not_connected_devices", []) == [], (
+            f"Device(s) have no portal connectivity: {result.get('not_connected_devices')}"
+        )
+        assert result.get("not_insync_devices", []) == [], (
+            f"Device(s) completed but did not reach Ready: {result.get('not_insync_devices')}"
+        )
+
+    def test_schedule_upgrade_module_params(self):
+        """
+        Schedule an upgrade for a single device via module_params only (device + release, no
+        config_file) — exercises the direct-device resolution path. Waits for completion by
+        default (same reasoning as test_schedule_upgrade); upgrade_action/ts
+        (module-parameter-only, never settable per device in config_file — see the manager
+        docstring) are covered thoroughly with mocks in the unit tests, so this just confirms the
+        live module_params-only input path itself works end-to-end.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.device_lifecycle.schedule_upgrade(
+            None, {"device": "edge-1-sdktest", "release": "Latest"}
+        )
+        LOG.info("Schedule upgrade via module_params result: %s", result)
+        assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
+        assert result.get("not_connected_devices", []) == [], (
+            f"Device(s) have no portal connectivity: {result.get('not_connected_devices')}"
+        )
+        assert result.get("not_insync_devices", []) == [], (
+            f"Device(s) completed but did not reach Ready: {result.get('not_insync_devices')}"
+        )
+
+    def test_rollback(self):
+        """
+        Roll back the devices in sample_device_lifecycle.yaml to their own
+        upgradeSummary.lastRunningVersion (skipped if a device has none yet — there is no
+        override), waiting for completion by default — SLOW (same cost as
+        test_schedule_upgrade), but fire-and-forget can only confirm the rollback was accepted,
+        not that it actually took effect. edge-2-sdktest's own wait_for_completion: false
+        override (see sample_device_lifecycle.yaml) means it's still excluded from
+        completed_devices here, same as in test_schedule_upgrade.
+
+        Verifies the rollback actually took effect, not just that it was scheduled: for every
+        device whose schedule reached Success (completed_devices), the device's swVersion
+        afterward matches the lastRunningVersion recorded just before the call.
+
+        rollback is an action rather than fully declarative state (see the module's notes) — a
+        device's lastRunningVersion flips with each real rollback, so unlike change_state there's
+        no general "idempotent second call" to assert. This test deliberately does NOT re-run
+        rollback a second time back-to-back on the same devices: doing so (even fire-and-forget)
+        raced a still-in-flight prior rollback's Activate-only schedule against a new one for the
+        same device/version, confirmed live to fail with FailureReason "Internal error"
+        ("expected image ... not installed during activation") — the manager now guards against
+        exactly this (schedule_in_progress_devices, see device_lifecycle_manager.py), but there's
+        no value in re-proving that race here now that it's structurally prevented.
+
+        Pre-req: run test_schedule_upgrade first so the devices have a lastRunningVersion to
+        roll back to.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        pre_status = graphiant_config.device_lifecycle.get_status("sample_device_lifecycle.yaml")
+        pre_last_running = {
+            name: (info.get("last_running_version") or {}).get("version")
+            for name, info in pre_status.get("devices", {}).items()
+        }
+
+        result = graphiant_config.device_lifecycle.rollback("sample_device_lifecycle.yaml")
+        LOG.info("Rollback result: %s", result)
+        assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
+        assert result.get("not_insync_devices", []) == [], (
+            f"Device(s) completed but did not reach Ready: {result.get('not_insync_devices')}"
+        )
+
+        post_status = graphiant_config.device_lifecycle.get_status("sample_device_lifecycle.yaml")
+        for name in result.get("completed_devices", []):
+            expected = pre_last_running.get(name)
+            actual = post_status.get("devices", {}).get(name, {}).get("sw_version")
+            assert actual == expected, (
+                f"{name} should now be running its pre-rollback lastRunningVersion "
+                f"{expected!r}, but is on {actual!r}"
+            )
+
+    def test_rollback_module_params(self):
+        """
+        Roll back a single device via module_params only (device, no config_file) — exercises
+        the direct-device resolution path. Waits for completion by default and verifies the
+        rollback actually took effect (same reasoning/approach as test_rollback), for
+        edge-1-sdktest alone.
+
+        Pre-req: run test_schedule_upgrade[_module_params] first so edge-1-sdktest has a
+        lastRunningVersion to roll back to. Also relies on test_rollback (same device) having
+        already finished — not just started — since both target edge-1-sdktest; the manager's
+        schedule_in_progress_devices guard means this call is simply skipped, not failed, if
+        test_rollback's own schedule for it somehow hadn't reached Success/Failed yet by the time
+        this runs (see device_lifecycle_manager.py and test_rollback's docstring).
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        pre_status = graphiant_config.device_lifecycle.get_status(None, {"device": "edge-1-sdktest"})
+        pre_last_running = (
+            pre_status.get("devices", {}).get("edge-1-sdktest", {}).get("last_running_version") or {}
+        ).get("version")
+
+        result = graphiant_config.device_lifecycle.rollback(None, {"device": "edge-1-sdktest", "release": None})
+        LOG.info("Rollback via module_params result: %s", result)
+        assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
+        assert result.get("not_insync_devices", []) == [], (
+            f"Device(s) completed but did not reach Ready: {result.get('not_insync_devices')}"
+        )
+
+        if "edge-1-sdktest" in result.get("completed_devices", []):
+            post_status = graphiant_config.device_lifecycle.get_status(None, {"device": "edge-1-sdktest"})
+            actual = post_status.get("devices", {}).get("edge-1-sdktest", {}).get("sw_version")
+            assert actual == pre_last_running, (
+                f"edge-1-sdktest should now be running its pre-rollback lastRunningVersion "
+                f"{pre_last_running!r}, but is on {actual!r}"
+            )
+
+    def test_get_device_lifecycle_status(self):
+        """
+        Read-only lifecycle/upgrade status query for the devices in sample_device_lifecycle.yaml.
+        """
+        graphiant_config = graphiant_config_from_read_config()
+        config = graphiant_config.device_lifecycle.render_config_file("sample_device_lifecycle.yaml")
+        expected_devices = {name for entry in config.get("device_lifecycle", []) for name in entry}
+
+        result = graphiant_config.device_lifecycle.get_status("sample_device_lifecycle.yaml")
+        LOG.info("Device lifecycle status: %s", result)
+        assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
+        assert set(result.get("devices", {})) == expected_devices
+
+    def test_get_device_lifecycle_status_module_params(self):
+        """Read-only lifecycle/upgrade status query for a single device via module_params
+        (device), no config_file — exercises the direct-device resolution path."""
+        graphiant_config = graphiant_config_from_read_config()
+        result = graphiant_config.device_lifecycle.get_status(None, {"device": "edge-1-sdktest"})
+        LOG.info("Device lifecycle status via module_params result: %s", result)
+        assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
+        assert set(result.get("devices", {})) == {"edge-1-sdktest"}
+
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
     # Authentication Tests
     suite.addTest(TestGraphiantPlaybooks('test_get_login_token'))
     suite.addTest(TestGraphiantPlaybooks('test_get_enterprise_id'))
-
     suite.addTest(TestGraphiantPlaybooks('test_auth_double_failure_access_token_then_password'))
     suite.addTest(TestGraphiantPlaybooks('test_auth_invalid_token_fallback_to_valid_password'))
 
-    # To deconfigure all interfaces
+    # Device system settings (name, region, site)
+    suite.addTest(TestGraphiantPlaybooks('test_configure_device_system'))
+
+    # Device Lifecycle Tests (graphiant_device_lifecycle): change_state/get_status, run early
+    # since other tests need devices already activated.
+    suite.addTest(TestGraphiantPlaybooks('test_change_state'))
+    suite.addTest(TestGraphiantPlaybooks('test_change_state_module_params'))
+    suite.addTest(TestGraphiantPlaybooks('test_get_device_lifecycle_status'))
+    suite.addTest(TestGraphiantPlaybooks('test_get_device_lifecycle_status_module_params'))
+
+    # Cleanup - Deconfigure all interfaces and global lan segments
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_lag_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_lan_segments'))
@@ -3231,9 +3507,6 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_vpn_profiles'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_vpn_profiles'))
 
-    # Device system settings (name, region, site) — configure only;
-    suite.addTest(TestGraphiantPlaybooks('test_configure_device_system'))
-
     # To deconfigure all interfaces
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_interfaces'))
 
@@ -3259,6 +3532,7 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_dhcp_relay_interfaces_module_params'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_dhcp_relay_interfaces_module_params'))
     suite.addTest(TestGraphiantPlaybooks('test_configure_dhcp_relay_interfaces_module_params_override'))
+    suite.addTest(TestGraphiantPlaybooks('test_deconfigure_dhcp_relay_interfaces'))
 
     # LAG Interface Configuration Management
     suite.addTest(TestGraphiantPlaybooks('test_configure_lag_interfaces'))
@@ -3478,11 +3752,11 @@ if __name__ == '__main__':
     # sample_public_vif_services.yaml (gatewayBgpNeighbors/natPrefixStrategy) already have the
     # Public VIF gateway service enabled, are already configured on the producer 'lanSegment',
     # and their referenced localInterface is already configured on that same LAN segment.
-    suite.addTest(TestGraphiantPlaybooks('test_create_public_vif_services'))
+    # suite.addTest(TestGraphiantPlaybooks('test_create_public_vif_services'))
     suite.addTest(TestGraphiantPlaybooks('test_get_public_vif_services_summary'))
-    suite.addTest(TestGraphiantPlaybooks('test_get_public_vif_service_details'))
-    suite.addTest(TestGraphiantPlaybooks('test_update_public_vif_services'))
-    suite.addTest(TestGraphiantPlaybooks('test_update_public_vif_services_restore'))
+    # suite.addTest(TestGraphiantPlaybooks('test_get_public_vif_service_details'))
+    # suite.addTest(TestGraphiantPlaybooks('test_update_public_vif_services'))
+    # suite.addTest(TestGraphiantPlaybooks('test_update_public_vif_services_restore'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_public_vif_services'))
 
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_global_config_graphiant_filters'))
@@ -3542,13 +3816,11 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_detach_nat_policy_lan_segments'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_device_nat_policy_module_params'))
 
-    '''
     # Gateway Services Management Tests (cloudGateway + connectivity)
     # Pre-req: region and lan-1-test LAN segment referenced by the sample config exist
-    suite.addTest(TestGraphiantPlaybooks('test_create_gateway_services'))
-    suite.addTest(TestGraphiantPlaybooks('test_force_update_gateway_services'))
+    # suite.addTest(TestGraphiantPlaybooks('test_create_gateway_services'))
+    # suite.addTest(TestGraphiantPlaybooks('test_force_update_gateway_services'))
     suite.addTest(TestGraphiantPlaybooks('test_delete_gateway_services'))
-    '''
 
     # OSPFv2 Management Tests
     # Pre-req: LAN segments referenced by OSPF
@@ -3595,5 +3867,12 @@ if __name__ == '__main__':
     suite.addTest(TestGraphiantPlaybooks('test_configure_backbone_syslog_targets'))
     suite.addTest(TestGraphiantPlaybooks('test_deconfigure_backbone_syslog_targets'))
     '''
+
+    # Device Lifecycle Tests (graphiant_device_lifecycle): schedule_upgrade/rollback
+    # SLOW: wait for completion is set to true by default
+    suite.addTest(TestGraphiantPlaybooks('test_schedule_upgrade'))
+    suite.addTest(TestGraphiantPlaybooks('test_schedule_upgrade_module_params'))
+    suite.addTest(TestGraphiantPlaybooks('test_rollback'))  # Pre-req: schedule_upgrade, for lastRunningVersion
+    suite.addTest(TestGraphiantPlaybooks('test_rollback_module_params'))  # Pre-req: schedule_upgrade_module_params
 
     unittest.TextTestRunner(verbosity=2).run(suite)

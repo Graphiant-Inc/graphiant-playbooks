@@ -14,6 +14,7 @@ from .data_exchange_manager import DataExchangeManager
 from .local_extranet_manager import LocalExtranetManager
 from .public_vif_manager import PublicVifManager
 from .device_config_manager import DeviceConfigManager
+from .device_lifecycle_manager import DeviceLifecycleManager
 from .vrrp_interface_manager import VRRPInterfaceManager
 from .dhcp_relay_interface_manager import DhcpRelayInterfaceManager
 from .lag_interface_manager import LagInterfaceManager
@@ -102,6 +103,7 @@ class GraphiantConfig:
             self.traffic_policy = TrafficPolicyManager(self.config_utils)
             self.security_policy = SecurityPolicyManager(self.config_utils)
             self.device_system = DeviceSystemManager(self.config_utils)
+            self.device_lifecycle = DeviceLifecycleManager(self.config_utils)
             self.edge_services = EdgeServicesManager(self.config_utils)
             self.prefix_port_list = PrefixAndPortListManager(self.config_utils)
             self.macsec = MacsecManager(self.config_utils)
@@ -143,6 +145,7 @@ class GraphiantConfig:
             "traffic_policy": hasattr(self, "traffic_policy") and self.traffic_policy is not None,
             "security_policy": hasattr(self, "security_policy") and self.security_policy is not None,
             "device_system": hasattr(self, "device_system") and self.device_system is not None,
+            "device_lifecycle": hasattr(self, "device_lifecycle") and self.device_lifecycle is not None,
             "edge_services": hasattr(self, "edge_services") and self.edge_services is not None,
             "prefix_port_list": hasattr(self, "prefix_port_list") and self.prefix_port_list is not None,
             "macsec": hasattr(self, "macsec") and self.macsec is not None,

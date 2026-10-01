@@ -1,0 +1,304 @@
+---
+# Device Lifecycle Management Playbook
+# =====================================
+#
+# This playbook changes device lifecycle state and schedules/rolls back software upgrades via
+# graphiant_device_lifecycle, and reads device/upgrade status via graphiant_device_lifecycle_info,
+# matching the portal's Maintain > Device Lifecycle page.
+#
+# Usage (controlled via tags):
+#   # Change lifecycle state from YAML (default sample file; override with -e config_file=...).
+#   # Add -e verify_for_insync=false to skip the post-change Ready poll (see module notes).
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags change_state \
+#     -e "graphiant_host=https://your-portal.graphiant.com" \
+#     -e "graphiant_username=your-username" \
+#     -e "graphiant_password=your-password"
+#
+#   # Change lifecycle state for a single device (no config file)
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags change_state_single \
+#     -e "portal_device_hostname=edge-1-sdktest" \
+#     -e "lifecycle_state=deactivated" \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+#   # Dry-run / diff
+#   ansible-playbook playbooks/device_lifecycle_management.yml --tags change_state --check --diff
+#
+#   # Schedule a software upgrade for a single device (add -e wait_for_completion=false to
+#   # fire-and-forget instead of polling for completion)
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags schedule_upgrade \
+#     -e "portal_device_hostname=edge-1-sdktest" \
+#     -e "upgrade_release=Latest" \
+#     -e "upgrade_action=InstallActivate" \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+#   # Schedule a software upgrade for several devices, from a config file (see
+#   # sample_device_lifecycle.yaml); add -e upgrade_action=... to override the InstallActivate
+#   # default (it applies to the whole batch, so it's a module param, not a file key)
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags schedule_upgrade_config_file \
+#     -e "config_file=sample_device_lifecycle.yaml" \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+#   # Roll back a single device to its previous running version (upgradeSummary.lastRunningVersion
+#   # — there is no override; a device with no lastRunningVersion is skipped, not failed).
+#   # schedule_upgrade/rollback also skip (schedule_in_progress_devices) any device whose existing
+#   # schedule hasn't reached Success/Failed yet, to avoid racing a still-in-flight prior one.
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags rollback \
+#     -e "portal_device_hostname=edge-1-sdktest" \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+#   # Roll back several devices, entirely from a config file
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags rollback_config_file \
+#     -e "config_file=sample_device_lifecycle.yaml" \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+#   # Get lifecycle/upgrade status for all devices (add -e device_role=cpe to filter)
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags get_summary \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+#   # Get lifecycle/upgrade status for just the devices listed in a config file
+#   ansible-playbook playbooks/device_lifecycle_management.yml \
+#     --tags get_summary_config_file \
+#     -e "config_file=sample_device_lifecycle.yaml" \
+#     -e "graphiant_host=https://your-portal.graphiant.com"
+#
+# Available tags:
+#   - change_state: Change lifecycle state from config_file (device_lifecycle list)
+#   - change_state_single: Change lifecycle state for one device via module parameters
+#   - schedule_upgrade: Schedule a software upgrade for one device via module parameters
+#   - schedule_upgrade_config_file: Schedule a software upgrade for devices from config_file
+#   - rollback: Roll back one device to its previous running version
+#   - rollback_config_file: Roll back devices listed in config_file
+#   - get_summary: Read-only lifecycle/upgrade status query (all devices, or -e device_role=...)
+#   - get_summary_config_file: Read-only lifecycle/upgrade status query for devices in config_file
+#   - info: Display defaults and paths only
+#
+
+- name: Device Lifecycle Management
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # Default YAML (override with -e config_file=...)
+    config_file: "sample_device_lifecycle.yaml"
+
+    # Example values for the single-device tags (override with -e)
+    portal_device_hostname: "edge-1-sdktest"
+    lifecycle_state: "staging"
+    upgrade_release: "Latest"
+    upgrade_action: "InstallActivate"
+    # Empty means "no filter" (list every device). Pass -e device_role=cpe (or gateway, etc.)
+    # for a real client-side filter.
+    device_role: ""
+
+    graphiant_client_params: &graphiant_client_params
+      host: "{{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}"
+      username: "{{ graphiant_username | default(lookup('env', 'GRAPHIANT_USERNAME')) }}"
+      password: "{{ graphiant_password | default(lookup('env', 'GRAPHIANT_PASSWORD')) }}"
+      access_token: "{{ graphiant_access_token | default(lookup('env', 'GRAPHIANT_ACCESS_TOKEN')) }}"
+
+  tasks:
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          Device Lifecycle Management
+          ============================
+          Config file (YAML): {{ config_file }}
+          Portal: {{ graphiant_host | default(lookup('env', 'GRAPHIANT_HOST')) }}
+          Tags: change_state (from file), change_state_single, schedule_upgrade,
+            schedule_upgrade_config_file, rollback, rollback_config_file, get_summary,
+            get_summary_config_file, info
+      tags: ['always', 'info']
+
+    - name: Change lifecycle state from YAML
+      graphiant.naas.graphiant_device_lifecycle:
+        <<: *graphiant_client_params
+        operation: change_state
+        config_file: "{{ config_file }}"
+        verify_for_insync: "{{ verify_for_insync | default(omit) }}"
+        detailed_logs: true
+      register: change_state_result
+      tags: ['change_state']
+
+    - name: Display change_state result (from YAML)
+      ansible.builtin.debug:
+        msg: |
+          {{ change_state_result.msg | trim }}
+          configured_devices={{ change_state_result.configured_devices | default([]) }}
+          skipped_devices={{ change_state_result.skipped_devices | default([]) }}
+          insync_devices={{ change_state_result.insync_devices | default([]) }}
+          not_insync_devices={{ change_state_result.not_insync_devices | default([]) }}
+      when: change_state_result is defined and change_state_result.msg is defined
+      tags: ['change_state']
+
+    - name: Change lifecycle state for a single device
+      graphiant.naas.graphiant_device_lifecycle:
+        <<: *graphiant_client_params
+        operation: change_state
+        device: "{{ portal_device_hostname }}"
+        lifecycle_state: "{{ lifecycle_state }}"
+        verify_for_insync: "{{ verify_for_insync | default(omit) }}"
+        detailed_logs: true
+      register: change_state_single_result
+      tags: ['change_state_single']
+
+    - name: Display change_state result (single device)
+      ansible.builtin.debug:
+        msg: |
+          {{ change_state_single_result.msg | trim }}
+          configured_devices={{ change_state_single_result.configured_devices | default([]) }}
+          skipped_devices={{ change_state_single_result.skipped_devices | default([]) }}
+          insync_devices={{ change_state_single_result.insync_devices | default([]) }}
+          not_insync_devices={{ change_state_single_result.not_insync_devices | default([]) }}
+      when: change_state_single_result is defined and change_state_single_result.msg is defined
+      tags: ['change_state_single']
+
+    - name: Schedule a software upgrade for a single device
+      graphiant.naas.graphiant_device_lifecycle:
+        <<: *graphiant_client_params
+        operation: schedule_upgrade
+        device: "{{ portal_device_hostname }}"
+        release: "{{ upgrade_release }}"
+        upgrade_action: "{{ upgrade_action }}"
+        wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        verify_for_insync: "{{ verify_for_insync | default(omit) }}"
+        detailed_logs: true
+      register: schedule_upgrade_result
+      tags: ['schedule_upgrade']
+
+    - name: Display schedule_upgrade result
+      ansible.builtin.debug:
+        msg: |
+          {{ schedule_upgrade_result.msg | trim }}
+          configured_devices={{ schedule_upgrade_result.configured_devices | default([]) }}
+          skipped_devices={{ schedule_upgrade_result.skipped_devices | default([]) }}
+          not_connected_devices={{ schedule_upgrade_result.not_connected_devices | default([]) }}
+          schedule_in_progress_devices={{ schedule_upgrade_result.schedule_in_progress_devices | default([]) }}
+          completed_devices={{ schedule_upgrade_result.completed_devices | default([]) }}
+          failed_devices={{ schedule_upgrade_result.failed_devices | default([]) }}
+          in_progress_devices={{ schedule_upgrade_result.in_progress_devices | default([]) }}
+          insync_devices={{ schedule_upgrade_result.insync_devices | default([]) }}
+          not_insync_devices={{ schedule_upgrade_result.not_insync_devices | default([]) }}
+      when: schedule_upgrade_result is defined and schedule_upgrade_result.msg is defined
+      tags: ['schedule_upgrade']
+
+    - name: Schedule a software upgrade for devices from a config file
+      graphiant.naas.graphiant_device_lifecycle:
+        <<: *graphiant_client_params
+        operation: schedule_upgrade
+        config_file: "{{ config_file }}"
+        upgrade_action: "{{ upgrade_action | default(omit) }}"
+        wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        verify_for_insync: "{{ verify_for_insync | default(omit) }}"
+        detailed_logs: true
+      register: schedule_upgrade_config_file_result
+      tags: ['schedule_upgrade_config_file']
+
+    - name: Display schedule_upgrade result (from config file)
+      ansible.builtin.debug:
+        msg: |
+          {{ schedule_upgrade_config_file_result.msg | trim }}
+          configured_devices={{ schedule_upgrade_config_file_result.configured_devices | default([]) }}
+          skipped_devices={{ schedule_upgrade_config_file_result.skipped_devices | default([]) }}
+          not_connected_devices={{ schedule_upgrade_config_file_result.not_connected_devices | default([]) }}
+          schedule_in_progress_devices={{
+            schedule_upgrade_config_file_result.schedule_in_progress_devices | default([]) }}
+          completed_devices={{ schedule_upgrade_config_file_result.completed_devices | default([]) }}
+          failed_devices={{ schedule_upgrade_config_file_result.failed_devices | default([]) }}
+          in_progress_devices={{ schedule_upgrade_config_file_result.in_progress_devices | default([]) }}
+          insync_devices={{ schedule_upgrade_config_file_result.insync_devices | default([]) }}
+          not_insync_devices={{ schedule_upgrade_config_file_result.not_insync_devices | default([]) }}
+      when: schedule_upgrade_config_file_result is defined and schedule_upgrade_config_file_result.msg is defined
+      tags: ['schedule_upgrade_config_file']
+
+    - name: Roll back a single device to its previous running version
+      graphiant.naas.graphiant_device_lifecycle:
+        <<: *graphiant_client_params
+        operation: rollback
+        device: "{{ portal_device_hostname }}"
+        wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        verify_for_insync: "{{ verify_for_insync | default(omit) }}"
+        detailed_logs: true
+      register: rollback_result
+      tags: ['rollback']
+
+    - name: Display rollback result
+      ansible.builtin.debug:
+        msg: |
+          {{ rollback_result.msg | trim }}
+          configured_devices={{ rollback_result.configured_devices | default([]) }}
+          skipped_devices={{ rollback_result.skipped_devices | default([]) }}
+          schedule_in_progress_devices={{ rollback_result.schedule_in_progress_devices | default([]) }}
+          completed_devices={{ rollback_result.completed_devices | default([]) }}
+          failed_devices={{ rollback_result.failed_devices | default([]) }}
+          in_progress_devices={{ rollback_result.in_progress_devices | default([]) }}
+          insync_devices={{ rollback_result.insync_devices | default([]) }}
+          not_insync_devices={{ rollback_result.not_insync_devices | default([]) }}
+      when: rollback_result is defined and rollback_result.msg is defined
+      tags: ['rollback']
+
+    - name: Roll back devices listed in a config file
+      graphiant.naas.graphiant_device_lifecycle:
+        <<: *graphiant_client_params
+        operation: rollback
+        config_file: "{{ config_file }}"
+        wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        verify_for_insync: "{{ verify_for_insync | default(omit) }}"
+        detailed_logs: true
+      register: rollback_config_file_result
+      tags: ['rollback_config_file']
+
+    - name: Display rollback result (from config file)
+      ansible.builtin.debug:
+        msg: |
+          {{ rollback_config_file_result.msg | trim }}
+          configured_devices={{ rollback_config_file_result.configured_devices | default([]) }}
+          skipped_devices={{ rollback_config_file_result.skipped_devices | default([]) }}
+          schedule_in_progress_devices={{
+            rollback_config_file_result.schedule_in_progress_devices | default([]) }}
+          completed_devices={{ rollback_config_file_result.completed_devices | default([]) }}
+          failed_devices={{ rollback_config_file_result.failed_devices | default([]) }}
+          in_progress_devices={{ rollback_config_file_result.in_progress_devices | default([]) }}
+          insync_devices={{ rollback_config_file_result.insync_devices | default([]) }}
+          not_insync_devices={{ rollback_config_file_result.not_insync_devices | default([]) }}
+      when: rollback_config_file_result is defined and rollback_config_file_result.msg is defined
+      tags: ['rollback_config_file']
+
+    - name: Get lifecycle/upgrade status
+      graphiant.naas.graphiant_device_lifecycle_info:
+        <<: *graphiant_client_params
+        role: "{{ device_role }}"
+        detailed_logs: true
+      register: get_summary_result
+      tags: ['get_summary']
+
+    - name: Display status summary result
+      ansible.builtin.debug:
+        msg: |
+          {{ get_summary_result.msg | default('') | trim }}
+          devices={{ get_summary_result.devices | default({}) }}
+          failed_devices={{ get_summary_result.failed_devices | default([]) }}
+      when: get_summary_result is defined and get_summary_result.msg is defined
+      tags: ['get_summary']
+
+    - name: Get lifecycle/upgrade status for devices listed in a config file
+      graphiant.naas.graphiant_device_lifecycle_info:
+        <<: *graphiant_client_params
+        config_file: "{{ config_file }}"
+        detailed_logs: true
+      register: get_summary_config_file_result
+      tags: ['get_summary_config_file']
+
+    - name: Display status summary result (from config file)
+      ansible.builtin.debug:
+        msg: |
+          {{ get_summary_config_file_result.msg | default('') | trim }}
+          devices={{ get_summary_config_file_result.devices | default({}) }}
+          failed_devices={{ get_summary_config_file_result.failed_devices | default([]) }}
+      when: get_summary_config_file_result is defined and get_summary_config_file_result.msg is defined
+      tags: ['get_summary_config_file']

@@ -1679,55 +1679,55 @@ def test_fill_missing_tunnel_values_explicit_null_site_to_site_vpn_does_not_cras
 
 
 def test_inject_vault_md5_fills_null() -> None:
-    """Vault md5Password is injected as dict {"md5_password": value} when YAML has null."""
+    """Vault md5Password is injected as dict {"md5Password": value} when YAML has null."""
     mgr = _make_manager()
     acceptance = _acceptance_with_bgp("FinanceInc", md5_password=None)
     mgr._inject_vault_secrets(  # pylint: disable=protected-access
         acceptance, vault_bgp_md5={"FinanceInc": "secret-md5"}, vault_psk={}
     )
     bgp = acceptance["policy"]["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
-    assert bgp["md5Password"] == {"md5_password": "secret-md5"}
+    assert bgp["md5Password"] == {"md5Password": "secret-md5"}
 
 
 def test_inject_vault_md5_yaml_wins_if_non_null() -> None:
     """YAML md5Password takes precedence over vault when non-null."""
     mgr = _make_manager()
-    acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5_password": "yaml-value"})
+    acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5Password": "yaml-value"})
     mgr._inject_vault_secrets(  # pylint: disable=protected-access
         acceptance, vault_bgp_md5={"FinanceInc": "vault-value"}, vault_psk={}
     )
     bgp = acceptance["policy"]["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
-    assert bgp["md5Password"] == {"md5_password": "yaml-value"}
+    assert bgp["md5Password"] == {"md5Password": "yaml-value"}
 
 
 # ---- _normalize_bgp_md5_password tests ----
 
 
 def test_normalize_md5_plain_string_wrapped() -> None:
-    """Plain string md5Password from YAML is normalized to {"md5_password": value}."""
+    """Plain string md5Password from YAML is normalized to {"md5Password": value}."""
     mgr = _make_manager()
     acceptance = _acceptance_with_bgp("FinanceInc", md5_password="plain-secret")
     mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
     bgp = acceptance["policy"]["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
-    assert bgp["md5Password"] == {"md5_password": "plain-secret"}
+    assert bgp["md5Password"] == {"md5Password": "plain-secret"}
 
 
-def test_normalize_md5_camel_key_converted() -> None:
-    """Dict with camelCase key is normalized to snake_case key."""
+def test_normalize_md5_camel_key_unchanged() -> None:
+    """Dict already in camelCase form (the correct SDK alias) is left as-is."""
     mgr = _make_manager()
     acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5Password": "camel-secret"})
     mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
     bgp = acceptance["policy"]["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
-    assert bgp["md5Password"] == {"md5_password": "camel-secret"}
+    assert bgp["md5Password"] == {"md5Password": "camel-secret"}
 
 
-def test_normalize_md5_snake_key_unchanged() -> None:
-    """Dict already in snake_case form is left as-is."""
+def test_normalize_md5_snake_key_converted() -> None:
+    """Dict with legacy snake_case key is normalized to the correct camelCase key."""
     mgr = _make_manager()
     acceptance = _acceptance_with_bgp("FinanceInc", md5_password={"md5_password": "snake-secret"})
     mgr._normalize_bgp_md5_password(acceptance)  # pylint: disable=protected-access
     bgp = acceptance["policy"]["siteToSiteVpn"]["ipsecGatewayPeers"]["routing"]["bgp"]
-    assert bgp["md5Password"] == {"md5_password": "snake-secret"}
+    assert bgp["md5Password"] == {"md5Password": "snake-secret"}
 
 
 def test_normalize_md5_null_unchanged() -> None:

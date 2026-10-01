@@ -368,11 +368,12 @@ class GraphiantPortalClient:
             or a single edge's information if a device_id is provided.
         """
         response = self.api.v1_edges_summary_get(authorization=self.bearer_token)
+        edges_summary = response.edges_summary or []
         if device_id:
-            for edge_info in response.edges_summary:
+            for edge_info in edges_summary:
                 if edge_info.device_id == device_id:
                     return edge_info
-        return response.edges_summary
+        return edges_summary
 
     def get_device_id(self, device_name):
         """
@@ -442,7 +443,7 @@ class GraphiantPortalClient:
             )
             return None
 
-    @poller(timeout=120, wait=10)
+    @poller(timeout=180, wait=15)
     def verify_device_portal_status(self, device_id: int):
         """
         Verifies device portal sync Ready status (InSync) and
@@ -450,30 +451,20 @@ class GraphiantPortalClient:
         """
         edge_summary = self.get_edges_summary(device_id=device_id)
         if edge_summary.portal_status == "Ready":
-            if edge_summary.tt_conn_count and edge_summary.tt_conn_count == 2:
+            if edge_summary.tt_conn_count and edge_summary.tt_conn_count >= 2:
                 return
             else:
-                LOG.info(
-                    "verify_device_portal_status: %s tunnel terminitor conn count: %s "
-                    "Expected: tt_conn_count=2. Retrying..",
-                    device_id,
-                    edge_summary.tt_conn_count,
-                )
+                # No separate LOG.info here — @poller's own retry log already surfaces this
+                # exception's message, so a duplicate line here would just repeat it.
                 raise APIError(
-                    f"verify_device_portal_status: "
-                    f"{device_id} tunnel terminitor conn count: "
-                    f"{edge_summary.tt_conn_count} Expected: tt_conn_count=2. Retry"
+                    f"verify_device_portal_status: {device_id} tunnel terminitor conn count: "
+                    f"{edge_summary.tt_conn_count} Expected: tt_conn_count>=2"
                 )
 
         else:
-            LOG.info(
-                "verify_device_portal_status: %s Portal Status: %s Expected: Ready. Retrying..",
-                device_id,
-                edge_summary.portal_status,
-            )
             raise APIError(
                 f"verify_device_portal_status: {device_id} Portal Status: "
-                f"{edge_summary.portal_status} Expected: Ready. Retrying.."
+                f"{edge_summary.portal_status} Expected: Ready"
             )
 
     def put_device_config(self, device_id: int, core=None, edge=None):
@@ -677,10 +668,10 @@ class GraphiantPortalClient:
         Args:
             device_ids (list): A list of device IDs whose status needs to be updated.
             status (str): The desired status to be set for the devices:
-                        - 'allowed', 'active', 'activate' → 'Allowed'
-                        - 'denied', 'deactivate' → 'Denied'
-                        - 'removed', 'decommission' → 'Removed'
-                        - 'pending', 'staging', 'stage' → 'Pending'
+                        - 'allowed', 'active', 'activate', 'activated' → 'Allowed'
+                        - 'denied', 'deactivate', 'deactivated' → 'Denied'
+                        - 'removed', 'decommission', 'decommissioned' → 'Removed'
+                        - 'pending', 'staging', 'stage', 'staged' → 'Pending'
                         - 'maintenance' → 'Maintenance'
 
         Returns:
@@ -688,20 +679,168 @@ class GraphiantPortalClient:
         """
         data = {"deviceIds": device_ids, "status": ""}
         data["status"] = status
-        if status.lower() in ["allowed", "active", "activate"]:
+        if status.lower() in ["allowed", "active", "activate", "activated"]:
             data["status"] = "Allowed"
-        if status.lower() in ["denied", "deactivate"]:
+        if status.lower() in ["denied", "deactivate", "deactivated"]:
             data["status"] = "Denied"
-        if status.lower() in ["removed", "decommission"]:
+        if status.lower() in ["removed", "decommission", "decommissioned"]:
             data["status"] = "Removed"
-        if status.lower() in ["pending", "staging", "stage"]:
+        if status.lower() in ["pending", "staging", "stage", "staged"]:
             data["status"] = "Pending"
         if status.lower() == "maintenance":
             data["status"] = "Maintenance"
+        if getattr(self, "check_mode", False):
+            LOG.info("[check_mode] put_devices_bringup would set: %s", data)
+            return True
         try:
             LOG.debug("put_devices_bringup : %s", data)
             self.api.v1_devices_bringup_put(authorization=self.bearer_token, v1_devices_bringup_put_request=data)
             time.sleep(15)
+            return True
+        except ApiException:
+            return False
+
+    def get_edges_summary_with_upgrade(self, role=None, device_id=None):
+        """
+        Get edges summary including upgrade status (``upgradeSummary``) from GCS.
+
+        Args:
+            role (str, optional): When given, only edges with this exact ``role`` are returned
+                (filtered client-side; the SDK/API has no ``filter[role]`` query param for this
+                field). If not provided, edges for all roles are returned.
+            device_id (int, optional): When given, returns just that one edge (or ``None`` if not
+                found) instead of a list — filtered client-side the same way ``device_id`` is
+                filtered in ``get_edges_summary``; the API has no per-device query param for this
+                endpoint either, so every call still fetches the full enterprise edge list.
+
+        Returns:
+            list: Edge summary objects, each with an ``upgrade_summary`` attribute populated —
+            unless ``device_id`` is given, in which case a single edge summary object (or
+            ``None``) is returned instead.
+        """
+        response = self.api.v1_edges_summary_get(authorization=self.bearer_token, upgrade_summary=True)
+        edges_summary = response.edges_summary or []
+        if role:
+            edges_summary = [edge_info for edge_info in edges_summary if edge_info.role == role]
+        if device_id is not None:
+            return next((edge_info for edge_info in edges_summary if edge_info.device_id == device_id), None)
+        return edges_summary
+
+    # schedule.state values observed on the live portal for an InstallActivate/Activate
+    # schedule, in rough order: Idle -> ScheduledDownload -> Downloading -> Installing ->
+    # ScheduledActivation -> InMaintenance -> Activating -> {Success, Failed}. Only the last two
+    # are terminal; everything else (including any future/unlisted intermediate state) means
+    # "still in progress" — deliberately not enumerated so an unrecognized new state name from
+    # the API doesn't get misread as terminal. Public (no leading underscore): also consulted by
+    # DeviceLifecycleManager before submitting a new schedule, to avoid racing a prior one that
+    # hasn't finished yet (see its own-schedule-already-in-progress guard).
+    UPGRADE_SCHEDULE_TERMINAL_STATES = frozenset({"Success", "Failed"})
+
+    def poll_upgrade_schedule_completion_batch(self, device_ids, timeout=600, wait=20):
+        """
+        Poll ``GET /v1/edges-summary`` (``upgradeSummary=true``) for every device in
+        ``device_ids`` until each one's ``upgradeSummary.schedule.state`` reaches a terminal
+        value (``Success``/``Failed``) or ``timeout`` seconds elapse — download+install can take
+        minutes, so this is a longer, more patient poll than ``verify_device_portal_status``.
+
+        One shared ``GET`` per round covers every device at once (the endpoint already returns
+        the full enterprise edge list regardless of how many devices you actually care about),
+        instead of each device polling independently and redundantly re-fetching the same full
+        list on its own schedule — device count no longer multiplies the number of API calls,
+        just the per-round response size. A device that reaches a terminal state is removed from
+        the next round's check (no point re-polling it), and the whole loop exits as soon as
+        every device is done, without waiting out the rest of the timeout.
+
+        Unlike ``verify_device_portal_status`` (``@poller``-decorated, which only ever waits for
+        one terminal condition and keeps retrying on any failure until it does), this needs a
+        three-way outcome per device — reached Success, reached Failed, or timed out mid-progress
+        — so it's a plain loop rather than reusing that decorator: a poller built to "retry until
+        no exception" has no clean way to stop early the moment a definitively terminal Failed is
+        seen, short of waiting out the rest of the timeout regardless.
+
+        Returns:
+            dict: ``{device_id: (state, failure_reason)}`` for every device in ``device_ids``.
+            ``state`` is ``"Success"``, ``"Failed"``, or ``None`` if the timeout was reached
+            without a terminal state (still in progress). ``failure_reason`` is only ever set
+            when ``state == "Failed"``.
+        """
+        start = time.time()
+        pending = set(device_ids)
+        outcomes = {}
+        attempt = 0
+        while pending:
+            attempt += 1
+            edges = self.get_edges_summary_with_upgrade()
+            by_device_id = {edge.device_id: edge for edge in edges}
+            states = {}
+            for device_id in list(pending):
+                edge = by_device_id.get(device_id)
+                schedule = getattr(getattr(edge, "upgrade_summary", None), "schedule", None) if edge else None
+                state = getattr(schedule, "state", None)
+                states[device_id] = state
+                if state in self.UPGRADE_SCHEDULE_TERMINAL_STATES:
+                    outcomes[device_id] = (
+                        state,
+                        getattr(schedule, "failure_reason", None) if state == "Failed" else None,
+                    )
+                    pending.discard(device_id)
+
+            remaining = timeout - (time.time() - start)
+            LOG.info(
+                "poll_upgrade_schedule_completion_batch(): round %s, time remaining %.2fs, pending=%s, states=%s",
+                attempt,
+                max(remaining, 0.0),
+                len(pending),
+                states,
+            )
+            if not pending or remaining <= 0:
+                break
+            time.sleep(min(wait, remaining))
+
+        for device_id in pending:
+            outcomes[device_id] = (None, None)
+        return outcomes
+
+    def get_software_releases_summary(self):
+        """
+        Get the catalog of named software releases (Stable/Recommended/Latest/etc.) from GCS.
+
+        Returns:
+            list: Summary objects, each with ``key.version``, ``release``, ``name``, ``release_ts``.
+                Used to resolve a device's build version (``swVersion``) to its release channel,
+                since a device's own ``upgradeSummary.runningVersion.release`` can be missing for
+                older/superseded builds no longer tracked in this catalog.
+        """
+        response = self.api.v1_software_releases_summary_get(authorization=self.bearer_token)
+        return response.summaries or []
+
+    def put_devices_upgrade_schedule(self, device_versions, action, ts=None):
+        """
+        Schedule a software upgrade (or rollback) for one or more devices.
+
+        Args:
+            device_versions (list): List of dicts, one per device:
+                ``{"deviceId": <int>, "version": {"release": "Stable"|"Recommended"|"Latest", ...}}``.
+            action (str): 'InstallActivate' (download & install), 'Install' (download only),
+                or 'Activate' (install a previously downloaded version, or roll back).
+            ts (dict, optional): ``{"seconds": <int>, "nanos": <int>}``. Defaults to now.
+
+        Returns:
+            bool: True if the schedule request was accepted, False if ApiException occurs.
+        """
+        data = {
+            "action": action,
+            "deviceVersions": device_versions,
+            "ts": ts or {"seconds": int(time.time()), "nanos": 0},
+        }
+        if getattr(self, "check_mode", False):
+            LOG.info("[check_mode] put_devices_upgrade_schedule would set: %s", data)
+            return True
+        try:
+            LOG.debug("put_devices_upgrade_schedule : %s", data)
+            self.api.v1_devices_upgrade_schedule_put(
+                authorization=self.bearer_token, v1_devices_upgrade_schedule_put_request=data
+            )
             return True
         except ApiException:
             return False

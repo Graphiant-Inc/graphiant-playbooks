@@ -1,0 +1,40 @@
+# Sample device_lifecycle (scale) — Jinja2-templated device_lifecycle list for a 30-device
+# fleet, edge-6-joule-sj-dr .. edge-35-joule-sj-dr, split into three release groups. See
+# sample_device_lifecycle.yaml for the full per-field reference (lifecycle_state / release /
+# verify_for_insync / wait_for_completion).
+#
+#   group1 (edge-6..edge-20,  15 devices, 50%): release Latest,      verify_for_insync/wait_for_completion: true
+#   group2 (edge-21..edge-29,  9 devices, 30%): release Recommended, verify_for_insync/wait_for_completion: false
+#   group3 (edge-30..edge-35,  6 devices, 20%): release Stable,      verify_for_insync/wait_for_completion: true
+#
+# Exercises the manager's batch polling at scale (one shared GET /v1/edges-summary per round
+# covers all 30 devices, regardless of how many are actually being watched) and the per-device
+# verify_for_insync/wait_for_completion override (group2 opts out of both).
+
+{% set devices = range(6, 36) | list %}
+{% set group1 = devices[:15] %}
+{% set group2 = devices[15:24] %}
+{% set group3 = devices[24:] %}
+
+device_lifecycle:
+{% for n in group1 %}
+  - edge-{{ n }}-joule-sj-dr:
+      lifecycle_state: activated
+      release: "Latest"
+      verify_for_insync: true
+      wait_for_completion: true
+{% endfor %}
+{% for n in group2 %}
+  - edge-{{ n }}-joule-sj-dr:
+      lifecycle_state: activated
+      release: "Recommended"
+      verify_for_insync: false
+      wait_for_completion: false
+{% endfor %}
+{% for n in group3 %}
+  - edge-{{ n }}-joule-sj-dr:
+      lifecycle_state: activated
+      release: "Stable"
+      verify_for_insync: true
+      wait_for_completion: true
+{% endfor %}

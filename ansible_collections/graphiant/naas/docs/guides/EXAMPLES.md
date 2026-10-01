@@ -62,6 +62,28 @@ Similarly, template paths use `GRAPHIANT_TEMPLATES_PATH` environment variable.
 
 Check `logs/log_<date>.log` under the playbook working directory (for example `playbooks/logs/`). Secrets are masked in Ansible output via `no_log=True` on sensitive module arguments and by the library's `_SENSITIVE_LOG_KEYS` masking in `device_config_common.py` — no task-level `no_log` is needed on module tasks. The `include_vars` task that loads Ansible Vault files keeps `no_log: true` to prevent raw vault content from appearing in verbose output. See [CREDENTIAL_MANAGEMENT_GUIDE.md](CREDENTIAL_MANAGEMENT_GUIDE.md#logging). Do not commit log files.
 
+## Portal UI: Graphiant Automation Workflows
+
+Everything below can also be run without the CLI, directly from the Graphiant portal's **[Graphiant Automation Workflows](https://docs.graphiant.com/docs/graphiant-automation-workflows)** (Automate → Catalog) — a managed, template-based front end for this same collection. Each catalog bundle lets you download one of this collection's own sample YAML files as a starting template, edit and upload it; the portal then validates its syntax, runs a dry run (`ansible-playbook --check`), and — after approval — applies it. Completed runs appear in Execution History and failed runs can be re-run.
+
+| Bundle | Collection module(s) | Sample file(s) |
+|---|---|---|
+| System Bundle | `graphiant_sites`, `graphiant_device_system` | `sample_sites.yaml`, `sample_device_system.yaml` |
+| Network Bundle | `graphiant_interfaces`, `graphiant_vrrp`, `graphiant_lag_interfaces`, `graphiant_macsec` (no-vault) | `sample_interface_config.yaml`, `sample_circuit_config.yaml`, `sample_vrrp_config.yaml`, `sample_lag_interface_config.yaml`, `sample_macsec.yaml` |
+| Services Bundle | `graphiant_edge_services`, `graphiant_dhcp_relay`, `graphiant_ntp` | `sample_edge_services.yaml`, `sample_dhcp_relay_config.yaml`, `sample_device_ntp.yaml` |
+| Gateway Services Bundle | `graphiant_gateway_services` (no-vault) | `sample_gateway_services_config.yaml` |
+| Data Exchange Local Bundle | `graphiant_public_vif` (no-vault), `graphiant_local_extranet` | `sample_public_vif_services.yaml`, `sample_local_extranet_policies.yaml` |
+| Policies Bundle | `graphiant_prefix_port_list`, `graphiant_traffic_policy`, `graphiant_security_policy`, `graphiant_nat_policy`, `graphiant_data_assurance` | `sample_prefix_and_port_list.yaml`, `sample_device_traffic_policies.yaml`, `sample_device_security_policies.yaml`, `sample_device_nat_policies.yaml`, `sample_data_assurance_policies.yaml` |
+| Routing Bundle | `graphiant_site_to_site_vpn` (no-vault), `graphiant_static_routes`, `graphiant_bgp` (no-vault), `graphiant_ospfv2` (no-vault) | `sample_site_to_site_vpn.yaml`, `sample_static_route.yaml`, `sample_bgp_peering.yaml`, `sample_ospfv2.yaml` |
+| System Objects Bundle | `graphiant_global_config` (LAN segments, site lists, prefix sets, BGP/Graphiant filters, SNMP, syslog, IPFIX, global NTP, VPN profiles), `graphiant_sites` (attach/detach) | `sample_global_lan_segments.yaml`, `sample_global_site_lists.yaml`, `sample_global_prefix_lists.yaml`, `sample_global_bgp_filters.yaml`, `sample_global_graphiant_filters.yaml`, `sample_global_snmp_services.yaml`, `sample_global_syslog_servers.yaml`, `sample_global_ipfix_exporters.yaml`, `sample_global_ntp.yaml`, `sample_global_vpn_profiles.yaml`, `sample_site_attachments.yaml` |
+| Data Exchange Bundle | `graphiant_data_exchange` (no-vault) | `de_workflows_configs/sample_data_exchange_services.yaml`, `sample_data_exchange_customers.yaml`, `sample_data_exchange_matches.yaml`, `sample_data_exchange_acceptance.yaml` |
+| Device Lifecycle Bundle | `graphiant_device_lifecycle` (change_state / schedule_upgrade / rollback) | `sample_device_lifecycle.yaml` |
+
+Two things worth knowing about this portal surface, both specific to how it's wired rather than anything in the modules themselves:
+- **Device Lifecycle Bundle**: `change_state`, `schedule_upgrade`, and `rollback` are three separate upload slots that all read the same `device_lifecycle:` file shape. Upload via each operation's own Upload button, not the portal's combined drop zone — a file dropped there with no slot chosen matches every slot sharing that file shape and can fire more than one operation at once.
+- **Read-only `_info` modules aren't exposed** — `graphiant_device_lifecycle_info` and every other `_info` module (`graphiant_data_exchange_info`, `graphiant_macsec_info`, etc.) are query-only and have no bundle slot; this portal surface is specifically the upload → validate → dry-run → deploy flow, not a status/reporting one. Use the CLI, or the portal's own status pages, for those.
+
+The portal also pins this collection to one specific released commit at a time, so a module or feature that only just merged to `main` may not be available there yet — check with your Graphiant contact if a bundle looks out of date.
 
 ## Device system settings (name, region, site)
 
@@ -3515,6 +3537,147 @@ No config file — the policies are passed directly as module parameters:
   ansible.builtin.debug:
     msg: "{{ da_deconfigure_result.msg }}"
 ```
+
+## Device Lifecycle Management
+
+### Module: graphiant.naas.graphiant_device_lifecycle
+
+Matches the portal's **Maintain > Device Lifecycle** page: changes lifecycle state (`PUT /v1/devices/bringup`) and schedules/rolls back software upgrades (`PUT /v1/devices/upgrade/schedule`). Use `graphiant.naas.graphiant_device_lifecycle_info` (read-only) to just query status.
+
+Three operations, selected with `operation` (always a module parameter — never settable in the config file, since one task run is always exactly one operation for the whole device list):
+
+| Operation | Does | Idempotent skip |
+|-----------|------|------------------|
+| `change_state` | Sets `lifecycle_state`: `activated`/`staging`/`maintenance`/`deactivated`/`decommissioned` | Device already in that state is skipped. `decommissioned` is rejected unless the device is currently `deactivated` (matches the portal UI). |
+| `schedule_upgrade` | Schedules a release channel (`release`: `Stable`/`Recommended`/`Latest`/`Custom`) via `upgrade_action` (`InstallActivate`/`Install`/`Activate`) | Device already resolved to be running the requested `release` is skipped; a device with no portal connectivity isn't scheduled either, but that one fails the task (see below). |
+| `rollback` | Schedules `action: Activate` back to `upgradeSummary.lastRunningVersion` — always, there is no override | Device with no `lastRunningVersion` is skipped (nothing to roll back to) — the *only* skip; `lastRunningVersion` always differs from what's currently running, so there's no "already on this version" case, and `changed: true` on every device actually rolled back. |
+
+All three read/write the same `device_lifecycle` config-file list (`configs/sample_device_lifecycle.yaml`) — one device entry can carry `lifecycle_state` **and** `release` at once, since each operation only looks at the field(s) it needs. `release` matches the portal's own "Change Release" dropdown exactly; `Custom` only resolves to anything for an enterprise that has a custom image enabled, and there is no way to target an arbitrary exact build string instead of a channel for either `schedule_upgrade` or `rollback`.
+
+**`schedule_upgrade`'s connectivity guard:** a device whose portal Connectivity Status is Down (`ttConnCount` below 1/Impaired) isn't scheduled — there's no tunnel-terminator connection to deliver the upgrade over — and lands in `not_connected_devices`. Unlike the already-on-release skip above, this one fails the task even when other devices in the same batch were scheduled successfully; `msg` reads "Upgrade scheduled, but ..." when something else did go through, or "No devices were scheduled; ..." when this was the only device in the batch.
+
+**Schedule-in-progress guard (`schedule_upgrade` and `rollback`):** a device whose existing `upgradeSummary.schedule.state` hasn't reached `Success`/`Failed` yet — including `Idle` — isn't (re-)scheduled, and lands in `schedule_in_progress_devices`. Submitting a new schedule while a prior one is still in progress can race the upgrade backend's own duplicate-request guard; this has been observed live to cause a schedule to fail with `FailureReason: "Internal error"`. Unlike the connectivity guard above, this is a soft skip like the already-on-release/no-`lastRunningVersion` skips — it doesn't fail the task, since the device's prior schedule is itself still making progress toward the same goal.
+
+**Unknown devices:** a `device`/`config_file` entry naming a device not found via the portal fails the task before any `PUT` is sent — every unresolved device in the batch is collected and named together in one failure, not just the first one hit, so a config file with several bad names surfaces all of them in a single run.
+
+**Whole-run settings vs. per-device settings:**
+- `operation`, `upgrade_action`, `ts` apply to the entire call (one `PUT` batches every device under a single action/time) — module parameters only, not settable in the config file.
+- `verify_for_insync` and `wait_for_completion` default from the module parameter (`true` unless set) but can be overridden per device in that device's own `device_lifecycle` entry — see `edge-2-sdktest` below.
+
+**Polling:** `change_state` polls `portalStatus=Ready` after a mutation (`verify_for_insync`). `schedule_upgrade`/`rollback` first poll `upgradeSummary.schedule.state` to `Success`/`Failed` (`wait_for_completion`), then also poll `portalStatus=Ready` once a device's own schedule reaches `Success` — a `Success` schedule doesn't mean the portal has settled back to `Ready` yet. All polls and PUTs run concurrently across every targeted device, sharing one `GET /v1/edges-summary` per round regardless of device count. A device that fails any of these checks (`not_insync_devices`/`failed_devices`) fails the task even though the underlying change was already applied — see `configured_devices`/`completed_devices` for what went through.
+
+**Release catalog and `--diff` (`schedule_upgrade`/`rollback`):** both operations resolve the requested `release` channel against `GET /v1/software/releases/summary` to find its current build, compared against each device's own `swVersion` to decide skip-vs-schedule. With `detailed_logs: true`, this catalog (`Release`/`Version`/`Name`) is logged as its own table right before the devices table, so the decision for every device is auditable without a separate manual query. `--check --diff` shows this resolved `before`/`after` build per device for both operations (falling back to just the release channel name when the catalog can't resolve a build for it).
+
+### Playbook
+
+```bash
+# Change lifecycle state for devices listed in sample_device_lifecycle.yaml
+ansible-playbook playbooks/device_lifecycle_management.yml --tags change_state --check --diff
+ansible-playbook playbooks/device_lifecycle_management.yml --tags change_state
+
+# Change lifecycle state for one device via module parameters (no config file)
+ansible-playbook playbooks/device_lifecycle_management.yml --tags change_state_single \
+  -e "portal_device_hostname=edge-1-sdktest" -e "lifecycle_state=staging"
+
+# Schedule/roll back upgrades from the config file (add -e wait_for_completion=false to
+# fire-and-forget instead of polling for completion)
+ansible-playbook playbooks/device_lifecycle_management.yml --tags schedule_upgrade_config_file
+ansible-playbook playbooks/device_lifecycle_management.yml --tags rollback_config_file
+
+# Read-only status query
+ansible-playbook playbooks/device_lifecycle_management.yml --tags get_summary_config_file
+```
+
+### Config file (`configs/sample_device_lifecycle.yaml`)
+
+```yaml
+device_lifecycle:
+  - edge-1-sdktest:
+      lifecycle_state: activated    # change_state
+      release: "Latest"             # schedule_upgrade
+
+  - edge-2-sdktest:
+      lifecycle_state: staging
+      verify_for_insync: false      # per-device override: skip the Ready poll for this one
+      release: "Recommended"
+      wait_for_completion: false    # per-device override: fire-and-forget this one's schedule
+
+  - edge-3-sdktest:
+      lifecycle_state: maintenance
+      release: "Stable"
+```
+
+### Module task — change_state
+
+```yaml
+- name: Change device lifecycle state
+  graphiant.naas.graphiant_device_lifecycle:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: change_state
+    config_file: "sample_device_lifecycle.yaml"
+    detailed_logs: true
+  register: change_state_result
+
+- name: Display result
+  ansible.builtin.debug:
+    msg: |
+      {{ change_state_result.msg }}
+      insync_devices={{ change_state_result.insync_devices }}
+      not_insync_devices={{ change_state_result.not_insync_devices }}
+```
+
+### Module task — schedule_upgrade / rollback
+
+```yaml
+- name: Schedule an upgrade for devices from the config file
+  graphiant.naas.graphiant_device_lifecycle:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: schedule_upgrade
+    config_file: "sample_device_lifecycle.yaml"
+    upgrade_action: "InstallActivate"   # whole-batch setting; module parameter only
+    detailed_logs: true
+  register: schedule_upgrade_result
+
+- name: Display schedule_upgrade result
+  ansible.builtin.debug:
+    msg: |
+      {{ schedule_upgrade_result.msg }}
+      completed_devices={{ schedule_upgrade_result.completed_devices }}
+      insync_devices={{ schedule_upgrade_result.insync_devices }}
+      not_insync_devices={{ schedule_upgrade_result.not_insync_devices }}
+
+- name: Roll back a single device to its previous running version
+  graphiant.naas.graphiant_device_lifecycle:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    operation: rollback
+    device: "edge-1-sdktest"
+  register: rollback_result
+```
+
+### Module: graphiant.naas.graphiant_device_lifecycle_info (read-only)
+
+```yaml
+- name: Get lifecycle/upgrade status for devices in the config file
+  graphiant.naas.graphiant_device_lifecycle_info:
+    host: "{{ graphiant_host }}"
+    username: "{{ graphiant_username }}"
+    password: "{{ graphiant_password }}"
+    config_file: "sample_device_lifecycle.yaml"
+    detailed_logs: true
+  register: status_result
+
+- name: Show status
+  ansible.builtin.debug:
+    var: status_result.devices
+```
+
+> Named devices (via `device` or the config file) fail the task if not found; querying by `role` (or with no filter) just returns whatever exists.
 
 ## Data Exchange Workflows
 

@@ -1,0 +1,24 @@
+# Site definitions - prereq for device system settings if not already created
+# Refer sample_sites.yaml
+
+sites:
+  - name: "New York-sdktest"
+    location:
+      addressLine1: "8th avenue"
+      latitude: 40.74153
+      longitude: -74.00324
+      city: "New York"
+      state: "New York"
+      stateCode: "NY"
+      postalCode: "10011"
+
+  - name: "San Jose-sdktest"
+    location:
+      addressLine1: "1940 zanker rd"
+      addressLine2: "Suite 50"
+      latitude: 37.37616
+      longitude: -121.91035
+      city: "San Jose"
+      state: "California"
+      stateCode: "CA"
+      postalCode: "95112"
