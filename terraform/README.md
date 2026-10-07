@@ -10,9 +10,10 @@ Production-ready Terraform modules for deploying cloud networking infrastructure
 
 This Terraform configuration provides modules to automate:
 
-**Edge Services** — Deploy Graphiant Virtual Edge appliances in the cloud:
+**Edge Services** — Deploy Graphiant Virtual Edge appliances in the cloud or on-premises:
 - AWS vEdge deployment and VPC provisioning with subnets, route tables and security groups
 - Azure vEdge deployment and VNet provisioning with subnets, route tables and security groups
+- KVM vEdge deployment on an on-premises libvirt/KVM hypervisor, attaching to host bridges or module-managed libvirt networks
 
 **Gateway Services** — Connect cloud networks to the Graphiant backbone:
 - Azure ExpressRoute circuit and VNet configuration
@@ -30,14 +31,15 @@ Provider versions are specified in each module's `terraform {}` block and are in
 | Requirement | Purpose |
 |-------------|---------|
 | **Terraform CLI** | Infrastructure provisioning (required for all providers) |
-| **Cloud Account** | Active cloud subscription (Azure/AWS/GCP) |
+| **Cloud Account** | Active cloud subscription (Azure/AWS/GCP) — cloud modules only |
+| **KVM Hypervisor** | libvirt with OVMF (UEFI) firmware and swtpm — KVM module only |
 | **Permissions** | Resource creation and management rights |
 
 ## Directory Structure
 
 ```
 terraform/
-├── edge_services/                 # Cloud edge service modules
+├── edge_services/                 # Edge service modules
 │   ├── aws/                       # AWS edge modules
 │   │   ├── deploy_vedge/          # Deploy Graphiant vEdge EC2
 │   │   │   ├── configs/           # aws_deploy_vedge_config.tfvars, devtest tfvars
@@ -49,14 +51,20 @@ terraform/
 │   │       ├── main.tf
 │   │       ├── variables.tf
 │   │       └── outputs.tf
-│   └── azure/                     # Azure edge modules
-│       ├── deploy_vedge/          # Deploy Graphiant vEdge VM
-│       │   ├── configs/           # azure_deploy_vedge_config.tfvars, devtest tfvars
-│       │   ├── main.tf
-│       │   ├── variables.tf
-│       │   └── outputs.tf
-│       └── deploy_vnet/           # Deploy Azure VNet, subnets, route tables
-│           ├── configs/           # azure_deploy_vnet_config.tfvars
+│   ├── azure/                     # Azure edge modules
+│   │   ├── deploy_vedge/          # Deploy Graphiant vEdge VM
+│   │   │   ├── configs/           # azure_deploy_vedge_config.tfvars, devtest tfvars
+│   │   │   ├── main.tf
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   └── deploy_vnet/           # Deploy Azure VNet, subnets, route tables
+│   │       ├── configs/           # azure_deploy_vnet_config.tfvars
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       └── outputs.tf
+│   └── kvm/                       # On-premises KVM edge modules
+│       └── deploy_vedge/          # Deploy Graphiant vEdge libvirt domain
+│           ├── configs/           # kvm_deploy_vedge_config.tfvars, devtest tfvars
 │           ├── main.tf
 │           ├── variables.tf
 │           └── outputs.tf
@@ -485,6 +493,240 @@ terraform destroy -var-file="configs/azure_deploy_vedge_config.tfvars"
 ### Dev/test mode (internal use only)
 
 Use `configs/azure_deploy_vedge_devtest_config.tfvars` with `mode = "devtest"`.
+
+---
+
+# KVM — Graphiant Virtual Edge (on-premises)
+
+One Terraform module is provided:
+- **`deploy_vedge`** — deploys the Graphiant vEdge as a libvirt domain on a KVM hypervisor: one or more ISP WAN NICs, a local-mgmt NIC for the local web server, N LAN NICs, and — in devtest mode only — a leading kernel-managed NIC for SSH access. Each interface attaches to a host bridge you name, or to a libvirt network the module creates.
+
+Two deployment modes are supported:
+- **Production** — Use `edge_services/kvm/deploy_vedge/configs/kvm_deploy_vedge_config.tfvars`
+- **Devtest** (Only for Internal Usage) — Use `edge_services/kvm/deploy_vedge/configs/kvm_deploy_vedge_devtest_config.tfvars`
+
+Unlike the cloud modules there is no separate networking module: `deploy_vedge` either uses host bridges that already exist (Option B) or creates the libvirt networks itself (Option A).
+
+### Prerequisites
+
+#### Hypervisor packages
+
+GNOS boots via **UEFI** and expects an **emulated TPM 2.0**, so the OVMF firmware and swtpm packages are required in addition to libvirt:
+
+```bash
+# Debian / Ubuntu
+sudo apt install qemu-kvm libvirt-daemon-system ovmf swtpm swtpm-tools xsltproc
+
+# RHEL-family
+sudo dnf install qemu-kvm libvirt edk2-ovmf swtpm swtpm-tools libxslt
+```
+
+`xsltproc` is required on whichever machine runs Terraform: the libvirt provider shells out to it to place the cloud-init CD-ROM on a SATA bus, which q35 requires.
+
+Verify libvirt and the firmware paths:
+
+```bash
+virsh version
+ls /usr/share/OVMF/OVMF_CODE.fd /usr/share/OVMF/OVMF_VARS.fd
+```
+
+On RHEL-family hosts the firmware usually lives at `/usr/share/edk2/ovmf/OVMF_CODE.fd` and `/usr/share/edk2/ovmf/OVMF_VARS.fd` — set `uefi_loader_path` and `uefi_nvram_template_path` accordingly.
+
+#### libvirt connection
+
+Run Terraform on the hypervisor itself (`qemu:///system`), or target a remote host:
+
+```hcl
+libvirt_uri = "qemu+ssh://graphiant@10.0.0.10/system"
+```
+
+For the remote case the SSH user must be able to reach the **system** libvirt socket — add it to the `libvirt` group on the hypervisor and confirm:
+
+```bash
+virsh --connect qemu+ssh://graphiant@10.0.0.10/system list --all
+```
+
+#### GNOS image
+
+Set `image_source` to a local path on the hypervisor or an HTTP(S) URL for the GNOS qcow2. The module imports it once as a base volume and backs the vEdge disk with a thin qcow2 overlay. Reuse it across deployments by passing the `base_volume_id` output of an earlier apply instead of re-importing the image.
+
+#### Host bridges (production)
+
+The WAN bridge must have outbound reachability to the Graphiant backbone (DNS/53, HTTPS/443, IKE/500, IPsec NAT-T/4500, TLS/16000, NTP/123).
+
+```bash
+ip link show type bridge
+```
+
+### Quick start
+
+Only two values are required. With no host bridges configured, the module creates the libvirt networks itself, so a hypervisor with nothing prepared still brings up a working edge:
+
+```hcl
+image_source = "/var/lib/libvirt/images/gnos.qcow2"
+token        = "<onboarding token from the Graphiant Portal>"
+```
+
+```bash
+cd terraform/edge_services/kvm/deploy_vedge
+terraform init
+terraform apply -var-file="configs/kvm_deploy_vedge_config.tfvars"
+```
+
+### Interface ordering
+
+GNOS assigns interface roles **positionally** (by PCI address), so the module attaches NICs in a fixed order. That order depends on the mode, because the kernel-managed (non-VPP) `mgmt` interface exists only in devtest/devtest-persist images:
+
+```
+production:       wan1, local-mgmt, wan2..wanN, lan1..lanN
+devtest:    mgmt, wan1, local-mgmt, wan2..wanN, lan1..lanN
+```
+
+**Production** (`mode = "production"`)
+
+| NIC | Role |
+|-----|------|
+| 0 | First ISP WAN — the interface used to onboard |
+| 1 | Local Mgmt VRF, where GNOS serves its local web server |
+| 2..N | Further ISP WANs, one per extra entry in `wan_bridges` |
+| N+1.. | LAN (customer ingress), `lan_count` of them |
+
+**Devtest** (`mode = "devtest"`) — one extra NIC at the front, everything else shifts down:
+
+| NIC | Role |
+|-----|------|
+| 0 | Kernel-managed (non-VPP) `ens<s>`, for SSH/console access — this is `mgmt_bridge` |
+| 1 | First ISP WAN — the interface used to onboard |
+| 2 | Local Mgmt VRF, where GNOS serves its local web server |
+| 3..N | Further ISP WANs, one per extra entry in `wan_bridges` |
+| N+1.. | LAN (customer ingress), `lan_count` of them |
+
+`mgmt_bridge` and `mgmt_network_prefix` are devtest-only — setting `mgmt_bridge` with `mode = "production"` is rejected, because the NIC it would add is taken by GNOS as the first ISP WAN. Note also that only the first WAN and the Local Mgmt VRF are fixed roles; anything after them is a generic VPP interface, so the `wan2..`/`lan..` split is this module's convention and the real role is assigned in the Graphiant Portal.
+
+Confirm with `terraform output interface_order`, and cross-check against `virsh domiflist <domain_name>`.
+
+### Option A: Deploy vEdge with module-created networks
+
+Leave the bridge settings empty. The module creates a NAT network for WAN (so the edge can reach the Graphiant backbone) and an isolated network per LAN (so the vEdge is the only path off the LAN). Nothing needs to exist on the hypervisor beforehand.
+
+```hcl
+wan_bridges = []
+lan_bridge  = ""
+lan_count   = 1
+
+# CIDR for the created WAN NAT network
+# wan_network_prefix = "10.30.1.0/24"
+```
+
+### Option B: Deploy vEdge onto existing host bridges
+
+Name your own bridges to put the edge on your real networks. Check what exists with `ip link show type bridge`.
+
+```hcl
+wan_bridges = ["br-wan"]            # add a second entry for dual-WAN
+lan_bridge  = "br-lan"
+lan_count   = 1
+```
+
+The WAN bridge needs outbound reachability to the Graphiant backbone: DNS/53, HTTPS/443, IKE/500, IPsec NAT-T/4500, TLS/16000, NTP/123.
+
+The two options mix freely — each interface is independent, so you can bridge the WAN to your uplink while letting the module create the LAN networks.
+
+Whichever you choose, the per-device `<vm_name>-local-mgmt` network is always created. `terraform output host_bridges_required` lists exactly what this deployment expects to already exist.
+
+> **LLDP on isolated LAN networks.** If you let the module create LAN networks and need LLDP to pass, write `0x4000` to the bridge's `group_fwd_mask` — a sysfs write the libvirt provider cannot perform:
+> ```bash
+> echo 0x4000 | sudo tee /sys/class/net/<bridge>/bridge/group_fwd_mask
+> ```
+> Find the bridge name with `virsh net-info <network>`.
+
+### Adapting to your hypervisor
+
+Everything host-specific is a variable, so the module assumes no particular distribution or directory layout:
+
+| Variable | Debian / Ubuntu | RHEL-family |
+|----------|-----------------|-------------|
+| `uefi_loader_path` | `/usr/share/OVMF/OVMF_CODE.fd` | `/usr/share/edk2/ovmf/OVMF_CODE.fd` |
+| `uefi_nvram_template_path` | `/usr/share/OVMF/OVMF_VARS.fd` | `/usr/share/edk2/ovmf/OVMF_VARS.fd` |
+| `nvram_dir` | `/var/lib/libvirt/qemu/nvram` | same |
+| `storage_pool` | `default` | whatever `virsh pool-list` shows |
+
+Check yours before the first apply:
+
+```bash
+ls /usr/share/OVMF/ /usr/share/edk2/ovmf/ 2>/dev/null
+virsh pool-list --all
+ip link show type bridge
+```
+
+### Variables
+
+**Required**
+
+| Variable | Description |
+|----------|-------------|
+| `image_source` | Path or URL to the GNOS qcow2 (or set `base_volume_id` to reuse an imported one) |
+| `token` | Edge onboarding token from the Graphiant Portal |
+
+**Common**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `vm_name` | `graphiant-vedge` | libvirt domain name |
+| `libvirt_uri` | `qemu:///system` | Set to `qemu+ssh://user@host/system` for a remote hypervisor |
+| `wan_bridges` | `[]` | ISP WAN host bridges in order; empty creates one NAT network |
+| `lan_bridge` | `""` | Shared LAN host bridge; empty creates one isolated network per LAN |
+| `lan_count` | `1` | Number of LAN interfaces |
+| `vcpus` / `memory_mb` / `disk_size_gb` | `4` / `8192` / `20` | Domain sizing |
+
+**Advanced** — defaults match the GNOS boot requirements and rarely need changing: `graphnos_role`, `storage_pool`, `machine_type`, `cpu_mode`, `uefi_loader_path`, `uefi_nvram_template_path`, `vnc_listen_address`, `wan_network_prefix`.
+
+### Post-deployment: Configure the vEdge in Graphiant Portal
+
+After the vEdge domain is deployed and onboarded:
+
+1. Go to the **Graphiant Portal**
+2. Navigate to **Configure** -> **Devices** -> select the vEdge
+3. Update the following:
+   - **Site Name** — assign the vEdge to a site
+   - **Edge LAN Segment** — select the LAN segment for customer workload traffic
+   - **IP Address** — the vEdge LAN address
+
+GNOS manages the WAN and LAN interfaces under VPP, so read addresses from the hypervisor rather than from Terraform:
+
+```bash
+virsh domifaddr <domain_name>
+virsh domiflist <domain_name>            # confirms NIC order
+terraform output serial_console_command  # prints the virsh console command
+```
+
+### Optional: Test VM on the LAN
+
+A Debian test VM can be deployed on the LAN to verify traffic actually flows through the vEdge. It is statically addressed, with its default route pointing at the vEdge.
+
+The vEdge LAN address is not known to Terraform — it is configured in the Portal — so supply it as `test_vm_gateway`. Deploy this **after** the edge has onboarded and you have set its LAN address.
+
+```hcl
+deploy_test_vm         = true
+test_vm_ip_cidr        = "192.168.100.10/24"
+test_vm_gateway        = "192.168.100.1"   # the vEdge LAN address
+test_vm_password       = "<password>"
+test_vm_ssh_public_key = "<public key>"
+```
+
+
+### Destroy
+
+```bash
+cd terraform/edge_services/kvm/deploy_vedge
+terraform destroy -var-file="configs/kvm_deploy_vedge_config.tfvars"
+```
+
+### Dev/test mode (internal use only)
+
+Use `configs/kvm_deploy_vedge_devtest_config.tfvars` with `mode = "devtest"`. Compared with production this adds a cloud-init user with SSH access, and attaches the kernel-managed mgmt NIC that devtest GNOS images have — so the interface order gains a leading `mgmt` and NIC 0 is no longer the first ISP WAN. It requires a devtest GNOS image: the image decides which build boots, not this setting.
+
+Devtest cloud-init also carries `onboarding_auth_url` / `onboarding_gateway`. Both are required - devtest images have no onboarding endpoints of their own - and `terraform plan` fails if either is empty. Production cloud-init carries neither.
 
 ---
 
