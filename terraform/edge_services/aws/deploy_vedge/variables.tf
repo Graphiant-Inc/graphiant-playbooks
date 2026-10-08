@@ -1,17 +1,6 @@
 # -----------------------------------------------------------------------------
 # Core
 # -----------------------------------------------------------------------------
-variable "mode" {
-  description = "Deployment mode: 'production' for customer-facing, 'devtest' for internal use with SSH access"
-  type        = string
-  default     = "production"
-
-  validation {
-    condition     = contains(["production", "devtest"], var.mode)
-    error_message = "Mode must be either 'production' or 'devtest'."
-  }
-}
-
 variable "aws_region" {
   description = "AWS region to deploy resources into"
   type        = string
@@ -36,7 +25,7 @@ variable "vm_name" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type (allowed values depend on mode)"
+  description = "EC2 instance type"
   type        = string
   default     = "c5.large"
 
@@ -77,46 +66,6 @@ variable "token" {
 }
 
 # -----------------------------------------------------------------------------
-# Devtest-specific
-# -----------------------------------------------------------------------------
-variable "ssh_public_key" {
-  description = "SSH public key for the cloud-init user (devtest only)"
-  type        = string
-  default     = ""
-}
-
-variable "cloud_init_username" {
-  description = "Username for the cloud-init user created in devtest mode"
-  type        = string
-  default     = "gnos"
-}
-
-variable "cloud_init_password" {
-  description = "Password for the cloud-init user created in devtest mode"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "onboarding_auth_url" {
-  description = "Internal Graphiant OAuth authentication endpoint (devtest only)"
-  type        = string
-  default     = ""
-}
-
-variable "onboarding_gateway" {
-  description = "Internal Graphiant onboarding service hostname and port (devtest only)"
-  type        = string
-  default     = ""
-}
-
-variable "allowed_cidr" {
-  description = "Public IPv4 (/32) allowed to connect to the devtest mgmt/SSH ports"
-  type        = string
-  default     = "127.0.0.1/32"
-}
-
-# -----------------------------------------------------------------------------
 # VPC (existing or new)
 # -----------------------------------------------------------------------------
 variable "vpc_id" {
@@ -147,7 +96,7 @@ variable "internet_gateway_id" {
 }
 
 variable "create_internet_gateway" {
-  description = "When internet_gateway_id is empty: null (default) creates an IGW for a new VPC and uses the IGW attached to an existing VPC; true creates a new IGW (existing VPC without one); false deploys without an IGW (no IGW routes, no mgmt/WAN/cloud-init EIPs; the WAN route table needs operator-provided egress such as NAT/TGW)."
+  description = "When internet_gateway_id is empty: null (default) creates an IGW for a new VPC and uses the IGW attached to an existing VPC; true creates a new IGW (existing VPC without one); false deploys without an IGW (no IGW routes, no mgmt/WAN EIPs; the WAN route table needs operator-provided egress such as NAT/TGW)."
   type        = bool
   default     = null
 }
@@ -156,18 +105,6 @@ variable "create_internet_gateway" {
 # Subnets — each subnet_*_id provided is reused; empty creates a new subnet from
 # subnet_*_prefix in the VPC in use (IPv4 only).
 # -----------------------------------------------------------------------------
-variable "subnet_cloud_init_id" {
-  description = "Existing cloud-init subnet ID (devtest only). When empty, a new subnet is created from subnet_cloud_init_prefix."
-  type        = string
-  default     = ""
-}
-
-variable "subnet_cloud_init_prefix" {
-  description = "CIDR for the new cloud-init subnet (devtest only; used when subnet_cloud_init_id is empty)"
-  type        = string
-  default     = "10.1.0.0/24"
-}
-
 variable "subnet_mgmt_id" {
   description = "Existing mgmt subnet ID. When empty, a new subnet is created from subnet_mgmt_prefix."
   type        = string
@@ -214,7 +151,7 @@ variable "subnet_lan_ipv6_netnum" {
 # Route tables (existing or new)
 # -----------------------------------------------------------------------------
 variable "route_table_wan_id" {
-  description = "Existing WAN route table ID. Newly created mgmt/wan/cloud-init subnets are associated with it; existing subnets keep their current association. When empty, a new WAN RT is created if any of those subnets is new (default routes to the IGW, or no routes without an IGW)."
+  description = "Existing WAN route table ID. Newly created mgmt/wan subnets are associated with it; existing subnets keep their current association. When empty, a new WAN RT is created if any of those subnets is new (default routes to the IGW, or no routes without an IGW)."
   type        = string
   default     = ""
 }
@@ -228,12 +165,6 @@ variable "route_table_lan_id" {
 # -----------------------------------------------------------------------------
 # Security groups (existing or new) — must belong to the VPC in use
 # -----------------------------------------------------------------------------
-variable "security_group_cloud_init_id" {
-  description = "Existing security group ID for the cloud-init NIC (devtest only). When empty, a new SG is created."
-  type        = string
-  default     = ""
-}
-
 variable "security_group_mgmt_id" {
   description = "Existing security group ID for the mgmt NIC. When empty, a new SG is created."
   type        = string

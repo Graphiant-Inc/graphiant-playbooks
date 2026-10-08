@@ -3,11 +3,6 @@ output "action_performed" {
   value       = var.action
 }
 
-output "mode" {
-  description = "The deployment mode (production or devtest)"
-  value       = var.mode
-}
-
 output "resource_group_id" {
   description = "Resource group ID used for the deployment"
   value       = local.use_existing_rg ? var.resource_group_id : try(azurerm_resource_group.rg[0].id, null)
@@ -25,12 +20,11 @@ output "vnet_id" {
 }
 
 output "subnet_ids" {
-  description = "Subnet IDs used by the vEdge NICs (cloud_init is devtest only)"
+  description = "Subnet IDs used by the vEdge NICs"
   value = var.action == "create" ? {
-    cloud_init = local.is_devtest ? local.subnet_cloud_init_id : null
-    mgmt       = local.subnet_mgmt_id
-    wan        = local.subnet_wan_id
-    lan        = local.subnet_lan_id
+    mgmt = local.subnet_mgmt_id
+    wan  = local.subnet_wan_id
+    lan  = local.subnet_lan_id
   } : null
 }
 
@@ -43,24 +37,18 @@ output "route_table_ids" {
 }
 
 output "nsg_ids" {
-  description = "NSG IDs attached to the NICs (cloud_init is devtest only, test_vm only with deploy_test_vm)"
+  description = "NSG IDs attached to the NICs (test_vm only with deploy_test_vm)"
   value = var.action == "create" ? {
-    cloud_init = local.is_devtest ? local.nsg_cloud_init_id : null
-    mgmt       = local.nsg_mgmt_id
-    wan        = local.nsg_wan_id
-    lan        = local.nsg_lan_id
-    test_vm    = var.deploy_test_vm ? local.nsg_test_vm_id : null
+    mgmt    = local.nsg_mgmt_id
+    wan     = local.nsg_wan_id
+    lan     = local.nsg_lan_id
+    test_vm = var.deploy_test_vm ? local.nsg_test_vm_id : null
   } : null
 }
 
 output "vm_id" {
   description = "vEdge VM ID (only available when action is 'create')"
   value       = var.action == "create" ? try(azurerm_linux_virtual_machine.vedge[0].id, null) : null
-}
-
-output "cloud_init_public_ip" {
-  description = "Public IP address of the cloud-init interface (devtest only, only available when action is 'create')"
-  value       = var.action == "create" && var.mode == "devtest" ? try(azurerm_public_ip.cloud_init[0].ip_address, null) : null
 }
 
 output "mgmt_public_ip" {

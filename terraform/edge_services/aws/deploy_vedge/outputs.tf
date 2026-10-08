@@ -3,11 +3,6 @@ output "region" {
   value       = var.aws_region
 }
 
-output "mode" {
-  description = "Deployment mode (production or devtest)"
-  value       = var.mode
-}
-
 output "vpc_id" {
   description = "VPC ID used for the deployment (new or existing)"
   value       = local.vpc_id_resolved
@@ -31,11 +26,6 @@ output "instance_id" {
 output "instance_name" {
   description = "vEdge EC2 Name tag"
   value       = var.vm_name
-}
-
-output "cloud_init_public_ip" {
-  description = "Public IP of the cloud-init interface (devtest only; null without an IGW)"
-  value       = local.is_devtest ? try(aws_eip.cloud_init[0].public_ip, null) : null
 }
 
 output "mgmt_public_ip" {
