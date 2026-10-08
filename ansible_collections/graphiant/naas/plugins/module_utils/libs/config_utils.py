@@ -114,31 +114,6 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process global Graphiant filter %s: %s", kwargs.get("name"), str(e))
             raise ConfigurationError(f"Global Graphiant filter processing failed: {str(e)}")
 
-    def device_interface(self, config_payload, action="add", **kwargs):
-        """
-        Update the device interfaces section of the configuration payload.
-
-        Args:
-            config_payload (dict): Dictionary to be updated with interface data.
-            action (str, optional): Action to perform, either "add", "default_lan", or "delete".
-            **kwargs: Additional parameters passed to the template renderer.
-
-        Raises:
-            ConfigurationError: If required parameters are missing.
-        """
-        self._validate_required_params(kwargs, ["name"])
-        LOG.info("Device interface: %s %s", action.upper(), kwargs.get("name"))
-
-        try:
-            result = self.template.render_interface(action=action, **kwargs)
-            if "interfaces" in result:
-                config_payload["interfaces"].update(result["interfaces"])
-            else:
-                LOG.warning("No interfaces found in template result for %s", kwargs.get("name"))
-        except Exception as e:
-            LOG.error("Failed to process device interface %s: %s", kwargs.get("name"), str(e))
-            raise ConfigurationError(f"Device interface processing failed: {str(e)}")
-
     def device_backbone_interface(self, config_payload, action="add", **kwargs):
         """
         Update the device interfaces section of a Graphiant Core (backbone) payload.
@@ -217,31 +192,6 @@ class ConfigUtils(PortalUtils):
         except Exception as e:
             LOG.error("Failed to process VRRP on interfaces %s: %s", kwargs.get("name"), str(e))
             raise ConfigurationError(f"VRRP on interfaces processing failed: {str(e)}")
-
-    def device_circuit(self, config_payload, action="add", **kwargs):
-        """
-        Update the device circuits section of the configuration payload.
-
-        Args:
-            config_payload (dict): Dictionary to be updated with circuit data.
-            action (str, optional): Action to perform, either "add" or "delete".
-            **kwargs: Additional parameters passed to the template renderer.
-
-        Raises:
-            ConfigurationError: If required parameters are missing.
-        """
-        self._validate_required_params(kwargs, ["circuit"])
-        LOG.debug("Device circuit: %s %s", action.upper(), kwargs.get("circuit"))
-
-        try:
-            result = self.template.render_circuit(action=action, **kwargs)
-            if "circuits" in result:
-                config_payload["circuits"].update(result["circuits"])
-            else:
-                LOG.warning("No circuits found in template result for %s", kwargs.get("circuit"))
-        except Exception as e:
-            LOG.error("Failed to process device circuit %s: %s", kwargs.get("circuit"), str(e))
-            raise ConfigurationError(f"Device circuit processing failed: {str(e)}")
 
     def global_snmp(self, config_payload, action="add", **kwargs):
         """

@@ -366,7 +366,9 @@ There is no `deconfigure` operation for the module as a whole. To revert setting
 
 ## Interface Management
 
-Check mode (`--check`) is supported for interface operations: no configuration is pushed, and the payloads that would be pushed are logged with a `[check_mode]` prefix so you can see exactly what would be applied.
+**Prerequisite:** LAN segments referenced by `lan:` (on an interface or subinterface) must exist first — create them with `lan_segments_management.yml --tag configure`. Configure operations validate referenced segment names against live portal state and fail fast (listing the available segments) if one is missing.
+
+Check mode (`--check`) and diff mode (`--diff`) are supported for all interface operations: no configuration is pushed, the payloads that would be pushed are logged with a `[check_mode]` prefix, and `--diff` shows the per-device `before`/`after` (also returned as `details.diff_plan`). Both configure and deconfigure operations are field-level idempotent — they read live device state and skip devices already in the desired state (`skipped_devices`), so `changed` is accurate. The comparison covers functional fields (lan/circuit, ipv4/ipv6 static-vs-DHCP, adminStatus, MTU, TCP MSS, loopback, circuit parameters, static routes); `description`/`alias` are compared only when you set them in the config. Preview any operation with `--check --diff`.
 
 ### Module: graphiant.naas.graphiant_interfaces
 
@@ -560,6 +562,57 @@ ansible-playbook playbooks/interface_management.yml --tag configure
     msg: "{{ configure_result.msg }}"
   when: configure_result is defined and configure_result.msg is defined
   tags: ['interfaces', 'configure']
+```
+
+#### Remove a specific interface or subinterface (per-entry `state: absent`)
+
+Add `state: absent` to a single interface or subinterface entry to remove it inline within a configure run — all other entries in the same config file are configured normally. Both levels are idempotent: if the item is already absent (or already at the enterprise default state) the device is skipped and `changed` stays `false`. The same syntax works with `configure_lan_interfaces` (LAN-only path) and `configure_wan_circuits_interfaces` (WAN path).
+
+**Remove a subinterface** — only `vlan` is required alongside `state: absent`; the parent interface and all other subinterfaces are configured normally:
+
+```yaml
+# sample_interface_config.yaml (excerpt)
+interfaces:
+  - edge-1-sdktest:
+    - name: GigabitEthernet7/0/0
+      lan: lan-1-test
+      ipv4: 10.1.11.1/24
+      subinterfaces:
+        - vlan: 18
+          lan: lan-7-test        # kept — configured normally
+          ipv4: 10.1.17.1/24
+        - vlan: 19
+          state: absent           # removed from device (sends interface: null)
+```
+
+**Remove a main interface** — only `name` is required alongside `state: absent`; the interface is reset to the enterprise default LAN and all its subinterfaces are deleted (equivalent to running `deconfigure_interfaces` for that one interface). Other interfaces in the same file are configured normally:
+
+```yaml
+# sample_interface_config.yaml (excerpt)
+interfaces:
+  - edge-1-sdktest:
+    - name: GigabitEthernet5/0/0
+      state: absent              # resets to default LAN and clears circuit/subinterfaces
+    - name: GigabitEthernet7/0/0
+      lan: lan-1-test            # configured normally
+      ipv4: 10.1.11.1/24
+```
+
+```bash
+ansible-playbook playbooks/interface_management.yml --tag configure --check --diff
+ansible-playbook playbooks/interface_management.yml --tag configure
+```
+
+```yaml
+- name: Configure interfaces — remove GigabitEthernet5/0/0, keep GigabitEthernet7/0/0
+  graphiant.naas.graphiant_interfaces:
+    <<: *graphiant_client_params
+    interface_config_file: "sample_interface_config.yaml"
+    operation: "configure_interfaces"
+    detailed_logs: true
+    state: present
+  tags: ['interfaces', 'configure']
+  register: configure_result
 ```
 
 ## Core (Backbone) Management
