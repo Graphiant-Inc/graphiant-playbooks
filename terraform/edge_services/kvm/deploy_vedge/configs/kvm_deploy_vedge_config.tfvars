@@ -17,13 +17,11 @@ token = ""
 # =============================================================================
 # Networking
 #
-# NIC order presented to GNOS in production:
+# NIC order presented to GNOS:
 #
 #   wan1, local-mgmt, wan2..wanN, lan1..lanN
 #
-# NIC 0 is your first ISP uplink - the interface used to onboard. Production
-# GNOS images have no kernel-managed interface, so there is no mgmt NIC here;
-# mgmt_bridge is devtest-only and must stay unset.
+# NIC 0 is your first ISP uplink - the interface used to onboard.
 #
 # Name a host bridge to put an interface on your existing network, or leave it
 # empty and this module creates a libvirt network for it. Check what you have

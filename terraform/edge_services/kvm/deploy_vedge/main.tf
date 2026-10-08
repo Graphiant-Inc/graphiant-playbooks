@@ -19,27 +19,14 @@ provider "libvirt" {
 # Locals
 # -----------------------------------------------------------------------------
 locals {
-  is_devtest = var.mode == "devtest"
-
-  # Only devtest images have a kernel-managed NIC; in production it would be
-  # read as the first ISP WAN and shift every other role down one.
-  attach_mgmt_nic = local.is_devtest
-
   # An interface attaches to the host bridge you name, or - if you leave it
   # empty - to a libvirt network this module creates.
-  create_mgmt_net = local.attach_mgmt_nic && var.mgmt_bridge == ""
   create_wan_net  = length(var.wan_bridges) == 0
   create_lan_nets = var.lan_bridge == ""
 
   # GNOS assigns interface roles by PCI order, so this order is a contract:
-  #   devtest:    mgmt, wan1, local-mgmt, wan2..wanN, lan1..lanN
-  #   production:       wan1, local-mgmt, wan2..wanN, lan1..lanN
+  #   wan1, local-mgmt, wan2..wanN, lan1..lanN
   nics = concat(
-    local.attach_mgmt_nic ? [{
-      label      = "mgmt"
-      bridge     = local.create_mgmt_net ? null : var.mgmt_bridge
-      network_id = local.create_mgmt_net ? libvirt_network.mgmt[0].id : null
-    }] : [],
     [{
       label      = "wan1"
       bridge     = local.create_wan_net ? null : var.wan_bridges[0]
@@ -66,37 +53,14 @@ locals {
 
   lan_network_id = local.create_lan_nets ? try(libvirt_network.lan[0].id, null) : null
 
-  # Cloud-init user data: the graphnos block GNOS reads at first boot. devtest
-  # additionally creates an SSH user and carries the onboarding endpoints.
-  user_data_production = <<-USERDATA
+  # Cloud-init user data: the graphnos block GNOS reads at first boot.
+  user_data = <<-USERDATA
     #cloud-config
 
     graphnos:
       role: ${var.graphnos_role}
       token: "${var.token}"
   USERDATA
-
-  ssh_key_lines = var.ssh_public_key == "" ? "" : "\n    ssh-authorized-keys:\n      - ${var.ssh_public_key}"
-
-  user_data_devtest = <<-USERDATA
-    #cloud-config
-
-    graphnos:
-      role: ${var.graphnos_role}
-      onboarding-auth-url: ${var.onboarding_auth_url}
-      onboarding-gw: ${var.onboarding_gateway}
-      token: "${var.token}"
-
-    users:
-      - name: ${var.cloud_init_username}
-        plain_text_passwd: '${var.cloud_init_password}'
-        sudo: ["ALL=(ALL) NOPASSWD:ALL"]
-        lock_passwd: false
-        groups: sudo
-        shell: /bin/bash${local.ssh_key_lines}
-  USERDATA
-
-  user_data = local.is_devtest ? local.user_data_devtest : local.user_data_production
 
   base_volume_id = var.base_volume_id != "" ? var.base_volume_id : try(libvirt_volume.gnos_base[0].id, "")
 
@@ -124,27 +88,10 @@ locals {
 }
 
 # -----------------------------------------------------------------------------
-# Networks — created only for interfaces with no host bridge. mgmt and WAN are
-# NAT so the vEdge can reach the backbone; LAN is isolated so the vEdge is the
-# only way off it.
+# Networks — created only for interfaces with no host bridge. WAN is NAT so the
+# vEdge can reach the backbone; LAN is isolated so the vEdge is the only way
+# off it.
 # -----------------------------------------------------------------------------
-resource "libvirt_network" "mgmt" {
-  count = local.create_mgmt_net ? 1 : 0
-
-  name      = "${var.vm_name}-mgmt"
-  mode      = "nat"
-  addresses = [var.mgmt_network_prefix]
-  autostart = true
-
-  dhcp {
-    enabled = true
-  }
-
-  dns {
-    enabled = true
-  }
-}
-
 resource "libvirt_network" "wan" {
   count = local.create_wan_net ? 1 : 0
 
@@ -192,10 +139,6 @@ resource "libvirt_volume" "gnos_base" {
       condition     = var.image_source != ""
       error_message = "Set image_source to the GNOS qcow2 (hypervisor path or HTTP(S) URL), or base_volume_id to reuse an imported base volume."
     }
-    precondition {
-      condition     = var.mode != "production" || length(regexall("(?i)devtest", var.image_source)) == 0
-      error_message = "mode is 'production' but image_source looks like a devtest image. The mode only shapes cloud-init - the image decides which GNOS build boots. Use a production qcow2, or set mode = \"devtest\"."
-    }
   }
 }
 
@@ -218,13 +161,6 @@ resource "libvirt_cloudinit_disk" "vedge" {
     local-hostname: gnos
     instance-id: ${var.vm_name}
   METADATA
-
-  lifecycle {
-    precondition {
-      condition     = !local.is_devtest || (var.onboarding_auth_url != "" && var.onboarding_gateway != "")
-      error_message = "devtest requires onboarding_auth_url and onboarding_gateway. Devtest GNOS images carry no onboarding endpoints of their own."
-    }
-  }
 }
 
 # -----------------------------------------------------------------------------
@@ -286,13 +222,6 @@ resource "libvirt_domain" "vedge" {
 
   xml {
     xslt = local.domain_xslt
-  }
-
-  lifecycle {
-    precondition {
-      condition     = local.is_devtest || var.mgmt_bridge == ""
-      error_message = "mgmt_bridge is devtest-only. Production GNOS images have no kernel-managed (non-VPP) interface, so this module attaches no mgmt NIC in production and NIC 0 is the first ISP WAN. Leave mgmt_bridge empty and put your uplink in wan_bridges."
-    }
   }
 }
 

@@ -1,17 +1,6 @@
 # -----------------------------------------------------------------------------
 # Core
 # -----------------------------------------------------------------------------
-variable "mode" {
-  description = "Shape of the cloud-init handed to GNOS. This does NOT choose the GNOS build - the image at image_source does that. Use 'production' with a production qcow2; 'devtest' is for internal Graphiant use and additionally creates an SSH user."
-  type        = string
-  default     = "production"
-
-  validation {
-    condition     = contains(["production", "devtest"], var.mode)
-    error_message = "Mode must be either 'production' or 'devtest'."
-  }
-}
-
 variable "libvirt_uri" {
   description = "libvirt connection URI. Use 'qemu:///system' when Terraform runs on the hypervisor, or 'qemu+ssh://<user>@<host>/system' for a remote KVM host. Note the GNOS image at image_source is read by whichever machine runs Terraform."
   type        = string
@@ -131,59 +120,17 @@ variable "vnc_listen_address" {
 }
 
 # -----------------------------------------------------------------------------
-# Devtest-specific
-# -----------------------------------------------------------------------------
-variable "ssh_public_key" {
-  description = "SSH public key for the cloud-init user (devtest only)"
-  type        = string
-  default     = ""
-}
-
-variable "cloud_init_username" {
-  description = "Username for the cloud-init user created in devtest mode"
-  type        = string
-  default     = "gnos"
-}
-
-variable "cloud_init_password" {
-  description = "Password for the cloud-init user created in devtest mode"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-# -----------------------------------------------------------------------------
 # Networking
 #
 # NIC order is a contract with GNOS, which assigns interface roles positionally
-# by PCI address. The order differs by mode, because the kernel-managed
-# (non-VPP) 'mgmt' NIC only exists in devtest/devtest-persist images:
+# by PCI address:
 #
-#   devtest:    mgmt, wan1, local-mgmt, wan2..wanN, lan1..lanN
-#   production:       wan1, local-mgmt, wan2..wanN, lan1..lanN
+#   wan1, local-mgmt, wan2..wanN, lan1..lanN
 #
 # Each interface either attaches to a host bridge you name, or - when you leave
 # that setting empty - to a libvirt network this module creates. Leaving them all
 # empty deploys a working edge on a hypervisor with no networking prepared.
 # -----------------------------------------------------------------------------
-variable "onboarding_auth_url" {
-  description = "Onboarding OAuth endpoint. Required in devtest, unused in production."
-  type        = string
-  default     = ""
-}
-
-variable "onboarding_gateway" {
-  description = "Onboarding service host and port. Required in devtest, unused in production."
-  type        = string
-  default     = ""
-}
-
-variable "mgmt_bridge" {
-  description = "devtest only. Host bridge for the kernel-managed (non-VPP) interface, NIC 0 - the SSH/console path. This is NOT the GNOS Local Mgmt VRF, which is always attached. Leave empty to have the module create a NAT network for it. Production GNOS images have no kernel-managed interface, so no mgmt NIC is attached and setting this with mode = production is rejected."
-  type        = string
-  default     = ""
-}
-
 variable "wan_bridges" {
   description = "Host bridges for the ISP WAN interfaces, in order; the first is the interface used to onboard. Add a second entry for dual-WAN. Leave the list empty to have the module create a single NAT WAN network."
   type        = list(string)
@@ -205,12 +152,6 @@ variable "lan_count" {
     condition     = var.lan_count >= 0
     error_message = "lan_count cannot be negative."
   }
-}
-
-variable "mgmt_network_prefix" {
-  description = "CIDR for the management NAT network. devtest only, and only used when mgmt_bridge is empty."
-  type        = string
-  default     = "10.30.0.0/24"
 }
 
 variable "wan_network_prefix" {
