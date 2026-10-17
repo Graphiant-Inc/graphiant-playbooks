@@ -96,6 +96,24 @@ def _normalize_raw_access_token(value):
     return t or None
 
 
+def _api_error_title(exc: Exception) -> str:
+    """
+    Condense an SDK ``ApiException`` into ``"<status> <reason>: <displayError>"`` instead of its
+    own ``str()``, which dumps the full response (headers included) — notably ``Set-Cookie``
+    session tokens, which must never land in a log line or a playbook's failure output.
+    """
+    title = f"{getattr(exc, 'status', None)} {getattr(exc, 'reason', None)}".strip()
+    detail = None
+    body = getattr(exc, "body", None)
+    if body:
+        try:
+            parsed = json.loads(body)
+            detail = parsed.get("displayError") or parsed.get("detailedError")
+        except (ValueError, TypeError, AttributeError):
+            detail = None
+    return f"{title}: {detail}" if detail else title or str(exc)
+
+
 class GraphiantPortalClient:
     def __init__(self, base_url=None, username=None, password=None, access_token=None, check_mode=False):
         if not HAS_GRAPHIANT_SDK:
@@ -444,11 +462,16 @@ class GraphiantPortalClient:
             return None
 
     @poller(timeout=180, wait=15)
-    def verify_device_portal_status(self, device_id: int):
+    def verify_device_portal_status(self, device_id: int, device_name: Optional[str] = None):
         """
         Verifies device portal sync Ready status (InSync) and
          also verifies device connections to tunnel terminators status.
+
+        ``device_name``, when given, is folded into the raised message — which ``@poller``'s
+        retry log echoes verbatim on every attempt — so concurrent polls can be told apart by
+        hostname, not just device ID. Optional; callers with no name handy simply omit it.
         """
+        label = f"{device_id} ({device_name})" if device_name else str(device_id)
         edge_summary = self.get_edges_summary(device_id=device_id)
         if edge_summary.portal_status == "Ready":
             if edge_summary.tt_conn_count and edge_summary.tt_conn_count >= 2:
@@ -457,14 +480,13 @@ class GraphiantPortalClient:
                 # No separate LOG.info here — @poller's own retry log already surfaces this
                 # exception's message, so a duplicate line here would just repeat it.
                 raise APIError(
-                    f"verify_device_portal_status: {device_id} tunnel terminitor conn count: "
+                    f"verify_device_portal_status: {label} tunnel terminitor conn count: "
                     f"{edge_summary.tt_conn_count} Expected: tt_conn_count>=2"
                 )
 
         else:
             raise APIError(
-                f"verify_device_portal_status: {device_id} Portal Status: "
-                f"{edge_summary.portal_status} Expected: Ready"
+                f"verify_device_portal_status: {label} Portal Status: " f"{edge_summary.portal_status} Expected: Ready"
             )
 
     def put_device_config(self, device_id: int, core=None, edge=None):
@@ -675,7 +697,10 @@ class GraphiantPortalClient:
                         - 'maintenance' → 'Maintenance'
 
         Returns:
-            bool: True if the status update was successful, False if ApiException occurs.
+            bool: True if the status update was successful (or in check_mode).
+
+        Raises:
+            APIError: if the API call fails, with the underlying exception's detail included.
         """
         data = {"deviceIds": device_ids, "status": ""}
         data["status"] = status
@@ -697,8 +722,10 @@ class GraphiantPortalClient:
             self.api.v1_devices_bringup_put(authorization=self.bearer_token, v1_devices_bringup_put_request=data)
             time.sleep(15)
             return True
-        except ApiException:
-            return False
+        except ApiException as e:
+            title = _api_error_title(e)
+            LOG.error("put_devices_bringup : %s failed for %s", title, data)
+            raise APIError(f"put_devices_bringup failed for {data}: {title}") from e
 
     def get_edges_summary_with_upgrade(self, role=None, device_id=None):
         """
@@ -826,7 +853,10 @@ class GraphiantPortalClient:
             ts (dict, optional): ``{"seconds": <int>, "nanos": <int>}``. Defaults to now.
 
         Returns:
-            bool: True if the schedule request was accepted, False if ApiException occurs.
+            bool: True if the schedule request was accepted (or in check_mode).
+
+        Raises:
+            APIError: if the API call fails, with the underlying exception's detail included.
         """
         data = {
             "action": action,
@@ -842,8 +872,10 @@ class GraphiantPortalClient:
                 authorization=self.bearer_token, v1_devices_upgrade_schedule_put_request=data
             )
             return True
-        except ApiException:
-            return False
+        except ApiException as e:
+            title = _api_error_title(e)
+            LOG.error("put_devices_upgrade_schedule : %s failed for %s", title, data)
+            raise APIError(f"put_devices_upgrade_schedule failed for {data}: {title}") from e
 
     def patch_global_config(self, **kwargs):
         """

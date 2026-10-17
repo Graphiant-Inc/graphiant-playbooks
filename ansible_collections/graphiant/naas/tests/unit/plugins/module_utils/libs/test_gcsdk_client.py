@@ -10,9 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ansible_collections.graphiant.naas.plugins.module_utils.libs.gcsdk_client import (
+    APIError,
     ApiException,
     GraphiantPortalClient,
     ValidationError,
+    _api_error_title,
 )
 
 
@@ -1214,12 +1216,30 @@ def test_put_devices_bringup_maps_friendly_status_names(_mock_sleep: MagicMock) 
     )
 
 
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.gcsdk_client.time.sleep")
-def test_put_devices_bringup_returns_false_on_api_error(_mock_sleep: MagicMock) -> None:
-    client = _make_client()
-    client.api.v1_devices_bringup_put.side_effect = ApiException(status=500, reason="failed")
+def test_api_error_title_extracts_status_reason_and_display_error() -> None:
+    exc = ApiException(status=504, reason="Gateway Timeout")
+    exc.body = '{"errorCode":4,"displayError":"context deadline exceeded"}'
 
-    assert client.put_devices_bringup([1], "activated") is False
+    assert _api_error_title(exc) == "504 Gateway Timeout: context deadline exceeded"
+
+
+def test_api_error_title_falls_back_without_a_parseable_body() -> None:
+    exc = ApiException(status=500, reason="Internal Server Error")
+
+    assert _api_error_title(exc) == "500 Internal Server Error"
+
+
+@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.gcsdk_client.time.sleep")
+def test_put_devices_bringup_raises_api_error_with_reason(_mock_sleep: MagicMock) -> None:
+    client = _make_client()
+    exc = ApiException(status=500, reason="failed")
+    exc.headers = {"Set-Cookie": "connect.sid=super-secret-session-token; Path=/; HttpOnly"}
+    client.api.v1_devices_bringup_put.side_effect = exc
+
+    with pytest.raises(APIError, match="500") as exc_info:
+        client.put_devices_bringup([1], "activated")
+
+    assert "super-secret-session-token" not in str(exc_info.value)
 
 
 def test_put_devices_bringup_check_mode_skips_api_call() -> None:
@@ -1419,11 +1439,16 @@ def test_put_devices_upgrade_schedule_uses_explicit_ts() -> None:
     assert payload["ts"] == ts
 
 
-def test_put_devices_upgrade_schedule_returns_false_on_api_error() -> None:
+def test_put_devices_upgrade_schedule_raises_api_error_with_reason() -> None:
     client = _make_client()
-    client.api.v1_devices_upgrade_schedule_put.side_effect = ApiException(status=500, reason="failed")
+    exc = ApiException(status=500, reason="failed")
+    exc.headers = {"Set-Cookie": "connect.sid=super-secret-session-token; Path=/; HttpOnly"}
+    client.api.v1_devices_upgrade_schedule_put.side_effect = exc
 
-    assert client.put_devices_upgrade_schedule(device_versions=[], action="InstallActivate") is False
+    with pytest.raises(APIError, match="500") as exc_info:
+        client.put_devices_upgrade_schedule(device_versions=[], action="InstallActivate")
+
+    assert "super-secret-session-token" not in str(exc_info.value)
 
 
 def test_put_devices_upgrade_schedule_check_mode_skips_api_call() -> None:
@@ -1461,3 +1486,62 @@ def test_verify_device_portal_status_ready_with_tt_conn_count_above_two_succeeds
     client.get_edges_summary = MagicMock(return_value=edge_summary)
 
     client.verify_device_portal_status(100)  # must not raise
+
+
+def _fake_time_for_single_poller_attempt():
+    """
+    Side_effect for ``poller.time.time`` that lets the ``@poller`` while-loop run its body
+    exactly once (so the decorated function is called exactly once) before its own timeout check
+    sees the limit exceeded — without looping for real wall-clock seconds. Returns small values
+    for the first two calls (poller's own ``start_time`` and its first condition check, so the
+    loop is entered) and a value past any real timeout for every call after that, regardless of
+    how many extra ``time.time()`` calls happen in between (each ``LOG.info``/``LOG.warning``
+    call inside the loop also consumes one, via the logging module's own record-timestamping —
+    an exact call count isn't something this test can predict or should depend on).
+    """
+    calls = {"n": 0}
+
+    def _fake_time():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return 0
+        if calls["n"] == 2:
+            return 1
+        return 99999
+
+    return _fake_time
+
+
+def test_verify_device_portal_status_includes_device_name_in_raised_message() -> None:
+    """
+    When given, device_name is folded into the raised message — @poller's own retry log echoes
+    this message verbatim on every attempt, so a caller that knows the hostname (e.g.
+    DeviceLifecycleManager._poll_device_ready) gets it named in every 15s retry line, not just
+    the bare numeric device_id.
+    """
+    client = _make_client()
+    edge_summary = MagicMock(portal_status="Configuring", tt_conn_count=2)
+    client.get_edges_summary = MagicMock(return_value=edge_summary)
+
+    with patch(
+        "ansible_collections.graphiant.naas.plugins.module_utils.libs.poller.time.time",
+        side_effect=_fake_time_for_single_poller_attempt(),
+    ), patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.poller.time.sleep"):
+        with pytest.raises(APIError, match=r"100 \(edge-1\) Portal Status: Configuring"):
+            client.verify_device_portal_status(100, device_name="edge-1")
+
+
+def test_verify_device_portal_status_omits_device_name_when_not_given() -> None:
+    """The method's other internal callers never pass device_name — must still get the original
+    ID-only message, not e.g. "100 (None)"."""
+    client = _make_client()
+    edge_summary = MagicMock(portal_status="Configuring", tt_conn_count=2)
+    client.get_edges_summary = MagicMock(return_value=edge_summary)
+
+    with patch(
+        "ansible_collections.graphiant.naas.plugins.module_utils.libs.poller.time.time",
+        side_effect=_fake_time_for_single_poller_attempt(),
+    ), patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.poller.time.sleep"):
+        with pytest.raises(APIError, match=r"^verify_device_portal_status: 100 Portal Status: Configuring") as exc_info:
+            client.verify_device_portal_status(100)
+    assert "(" not in str(exc_info.value)
