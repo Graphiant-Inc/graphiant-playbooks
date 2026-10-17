@@ -272,20 +272,23 @@ class DeviceLifecycleManager(BaseManager):
             validate_device_cfg=self._validate_state_cfg,
         )
 
-    def _poll_device_ready(self, device_id: int) -> Optional[str]:
+    def _poll_device_ready(self, device_id: int, device_name: Optional[str] = None) -> Optional[str]:
         """
         Poll ``device_id`` for readiness, returning ``None`` on success or the error message on
-        failure/timeout. Never raises: called from ``_apply_device_change`` (itself submitted to
-        ``execute_concurrent_tasks``, see ``change_state``), whose ``wait_checked`` would
-        otherwise treat one device's poller timeout as a task failure and abort the whole
-        concurrent batch, hiding whether *other* devices reached Ready. The manager still records
-        every timeout in the result's ``not_insync_devices`` list; the module
+        failure/timeout — never raises, so one device's timeout doesn't abort the whole
+        ``execute_concurrent_tasks`` batch (via ``wait_checked``) and hide whether *other* devices
+        reached Ready. Submitted directly to that batch by both ``change_state``'s readiness-poll
+        phase and ``_poll_schedule_completions`` (``schedule_upgrade``/``rollback``). The manager
+        still records every timeout in the result's ``not_insync_devices`` list; the module
         (``graphiant_device_lifecycle.py``) is what fails the overall task on a non-empty list —
         portalStatus reaching Ready is a requirement, not merely informational, but each device's
         poll must still run to completion independently.
+
+        ``device_name``, when given, is passed through to ``verify_device_portal_status`` so its
+        retry log lines name the device, not just its ID (see that method's docstring).
         """
         try:
-            self.gsdk.verify_device_portal_status(device_id)
+            self.gsdk.verify_device_portal_status(device_id, device_name=device_name)
             return None
         except Exception as e:  # noqa: BLE001 - collected into not_insync_devices, not raised here
             return str(e)
@@ -328,7 +331,7 @@ class DeviceLifecycleManager(BaseManager):
             if state == "Success":
                 outcome["completed_devices"].append(device_name)
                 if verify_for_insync_by_name.get(device_name, True):
-                    ready_poll_tasks[device_name] = {"device_id": device_id}
+                    ready_poll_tasks[device_name] = {"device_id": device_id, "device_name": device_name}
             elif state == "Failed":
                 LOG.warning(
                     "%s Device '%s' upgrade schedule failed: %s",
@@ -380,53 +383,49 @@ class DeviceLifecycleManager(BaseManager):
             post_op_edges.append(edge)
         _log_edges_table(post_op_edges, self.gsdk.enterprise_info, label=label, release_catalog=release_catalog)
 
-    def _apply_device_change(
+    def _apply_status_group(
         self,
-        device_name: str,
-        device_id: int,
         desired: str,
-        before_label: Any,
-        verify_for_insync: bool,
+        device_entries: List[Dict[str, Any]],
         check_mode: bool,
-    ) -> Optional[str]:
+    ) -> None:
         """
-        Apply one device's lifecycle_state change (``PUT /v1/devices/bringup``) and, if eligible,
-        its post-op readiness poll — one unit of work submitted to ``execute_concurrent_tasks``
-        (see ``change_state``) so both steps run concurrently across all targeted devices rather
-        than sequentially (each PUT pauses ~15s, and the poll can take up to 180s).
+        Apply one ``PUT /v1/devices/bringup`` call covering every device in ``device_entries``
+        that shares the same ``desired`` lifecycle state, instead of one call per device —
+        matches the portal UI's own behavior (a single ``deviceIds`` list per status change) and
+        avoids the backend load a large batch of concurrent single-device calls can cause.
+        Submitted to ``execute_concurrent_tasks`` once per distinct ``desired`` value in a batch
+        (see ``change_state`` — almost always exactly one group).
 
-        Returns the poll's error message (``None`` on success, or if the device wasn't polled at
-        all). A ``put_devices_bringup`` failure, unlike a poll failure, DOES raise here — a real
-        API failure, aggregated across the whole batch by ``wait_checked`` (same convention as
-        ``device_system_manager``) — so it's only discovered once every device's PUT (and poll,
-        if eligible) has already run to completion.
+        Readiness polling is a separate, per-device phase run after every group's PUT succeeds
+        (see ``change_state``); it's a read-only GET, unaffected by the batching here.
         """
-        LOG.info(
-            "%s%s %s %s: %s -> %s",
-            _LOG_PREFIX,
-            " [check_mode]" if check_mode else "",
-            "Would change" if check_mode else "Changing",
-            device_name,
-            before_label,
-            desired,
-        )
-        ok = self.gsdk.put_devices_bringup([device_id], _FRIENDLY_TO_API[desired])
-        if not ok:
-            raise APIError(f"Failed to change lifecycle state for device '{device_name}' to '{desired}'")
+        for entry in device_entries:
+            LOG.info(
+                "%s%s %s %s: %s -> %s",
+                _LOG_PREFIX,
+                " [check_mode]" if check_mode else "",
+                "Would change" if check_mode else "Changing",
+                entry["device_name"],
+                entry["before_label"],
+                desired,
+            )
+        try:
+            self.gsdk.put_devices_bringup([entry["device_id"] for entry in device_entries], _FRIENDLY_TO_API[desired])
+        except APIError as e:
+            names = ", ".join(entry["device_name"] for entry in device_entries)
+            raise APIError(f"Failed to change lifecycle state to '{desired}' for device(s) {names}: {e}") from e
 
-        LOG.info(
-            "%s%s ✓ %s %s to %s%s",
-            _LOG_PREFIX,
-            " [check_mode]" if check_mode else "",
-            "Would change" if check_mode else "Changed",
-            device_name,
-            desired,
-            " (no changes applied)" if check_mode else "",
-        )
-
-        if verify_for_insync and desired in _READY_AFTER and not check_mode:
-            return self._poll_device_ready(device_id)
-        return None
+        for entry in device_entries:
+            LOG.info(
+                "%s%s ✓ %s %s to %s%s",
+                _LOG_PREFIX,
+                " [check_mode]" if check_mode else "",
+                "Would change" if check_mode else "Changed",
+                entry["device_name"],
+                desired,
+                " (no changes applied)" if check_mode else "",
+            )
 
     def _fetch_edges_by_hostname(self) -> Dict[str, Any]:
         """
@@ -495,11 +494,8 @@ class DeviceLifecycleManager(BaseManager):
             release_catalog=release_catalog,
         )
 
-        # Devices that need a PUT (+ readiness poll if eligible), keyed by device name -> kwargs
-        # for _apply_device_change. Both steps run concurrently across all such devices (below,
-        # after this loop) instead of inline per-device: put_devices_bringup itself pauses ~15s
-        # per call and verify_device_portal_status can take up to 180s, so doing either
-        # sequentially across N devices summed that cost N times over instead of once.
+        # Devices that need a PUT (+ readiness poll if eligible), keyed by device name -> per-
+        # device info used below to build _apply_status_group's groups and the poll phase.
         apply_tasks: Dict[str, Dict[str, Any]] = {}
         # Subset of apply_tasks whose desired state actually gets polled (insync_devices below is
         # only meaningful for these — a device never polled at all isn't "ready", it's just
@@ -551,8 +547,6 @@ class DeviceLifecycleManager(BaseManager):
                 "device_id": device_id,
                 "desired": desired,
                 "before_label": current_friendly or current_status,
-                "verify_for_insync": device_verify_for_insync,
-                "check_mode": check_mode,
             }
             if device_verify_for_insync and desired in _READY_AFTER and not check_mode:
                 poll_eligible.add(device_name)
@@ -565,29 +559,53 @@ class DeviceLifecycleManager(BaseManager):
             )
 
         if apply_tasks:
-            # execute_concurrent_tasks raises (APIError, via wait_checked) if ANY device's PUT
-            # failed — a real API failure, aggregated across the whole batch only after every
-            # device's PUT (and poll, if eligible) has already run to completion independently;
-            # see _apply_device_change. That means a PUT failure here still discards this
-            # result's configured_devices/insync_devices/not_insync_devices for the whole batch
-            # (the caller never reaches the loop below), the same limitation the previous
-            # sequential implementation already had — not a regression, just now applying to a
-            # concurrent batch instead of one device failing partway through a sequential loop.
-            outcomes = self.execute_concurrent_tasks(self._apply_device_change, apply_tasks)
+            # Group devices by desired lifecycle_state so each group gets one put_devices_bringup
+            # call (see _apply_status_group) instead of one call per device — almost always
+            # exactly one group per run. Submitted through execute_concurrent_tasks so distinct
+            # groups apply concurrently; raises (APIError, via wait_checked) if any group's PUT
+            # failed, only after every group has run to completion.
+            groups: Dict[str, List[Dict[str, Any]]] = {}
+            for device_name, task in apply_tasks.items():
+                groups.setdefault(task["desired"], []).append(
+                    {
+                        "device_name": device_name,
+                        "device_id": task["device_id"],
+                        "before_label": task["before_label"],
+                    }
+                )
+            group_tasks = {
+                desired: {"desired": desired, "device_entries": entries, "check_mode": check_mode}
+                for desired, entries in groups.items()
+            }
+            self.execute_concurrent_tasks(self._apply_status_group, group_tasks)
+
             for device_name in apply_tasks:
-                not_ready_error = outcomes[device_name].result()
                 result["configured_devices"].append(device_name)
                 result["changed"] = True
-                if not_ready_error:
-                    LOG.warning(
-                        "%s Device '%s' did not reach Ready after lifecycle change: %s",
-                        _LOG_PREFIX,
-                        device_name,
-                        not_ready_error,
-                    )
-                    result["not_insync_devices"].append(device_name)
-                elif device_name in poll_eligible:
-                    result["insync_devices"].append(device_name)
+
+            # Readiness polling is a separate per-device phase, run after every group's PUT
+            # succeeds — a read-only GET, unaffected by the batching above.
+            if poll_eligible:
+                poll_tasks = {
+                    device_name: {
+                        "device_id": apply_tasks[device_name]["device_id"],
+                        "device_name": device_name,
+                    }
+                    for device_name in poll_eligible
+                }
+                poll_outcomes = self.execute_concurrent_tasks(self._poll_device_ready, poll_tasks)
+                for device_name in poll_eligible:
+                    not_ready_error = poll_outcomes[device_name].result()
+                    if not_ready_error:
+                        LOG.warning(
+                            "%s Device '%s' did not reach Ready after lifecycle change: %s",
+                            _LOG_PREFIX,
+                            device_name,
+                            not_ready_error,
+                        )
+                        result["not_insync_devices"].append(device_name)
+                    else:
+                        result["insync_devices"].append(device_name)
 
             # Re-fetch and log the resulting state, the same way the pre-op table does, so the
             # log shows both a before and an after snapshot instead of making the reader infer
@@ -827,13 +845,14 @@ class DeviceLifecycleManager(BaseManager):
         if not device_versions:
             return result
 
-        ok = self.gsdk.put_devices_upgrade_schedule(
-            device_versions=device_versions, action=effective_action, ts=effective_ts
-        )
-        if not ok:
-            raise APIError(
-                f"Failed to schedule upgrade (action={effective_action}) for device(s): {', '.join(configured)}"
+        try:
+            self.gsdk.put_devices_upgrade_schedule(
+                device_versions=device_versions, action=effective_action, ts=effective_ts
             )
+        except APIError as e:
+            raise APIError(
+                f"Failed to schedule upgrade (action={effective_action}) for device(s) " f"{', '.join(configured)}: {e}"
+            ) from e
 
         result["changed"] = True
         result["configured_devices"] = configured
@@ -961,9 +980,10 @@ class DeviceLifecycleManager(BaseManager):
         if not device_versions:
             return result
 
-        ok = self.gsdk.put_devices_upgrade_schedule(device_versions=device_versions, action="Activate", ts=effective_ts)
-        if not ok:
-            raise APIError(f"Failed to schedule rollback for device(s): {', '.join(configured)}")
+        try:
+            self.gsdk.put_devices_upgrade_schedule(device_versions=device_versions, action="Activate", ts=effective_ts)
+        except APIError as e:
+            raise APIError(f"Failed to schedule rollback for device(s) {', '.join(configured)}: {e}") from e
 
         result["changed"] = True
         result["configured_devices"] = configured

@@ -126,7 +126,7 @@ def test_change_state_pushes_when_different() -> None:
     assert r["insync_devices"] == ["edge-1"]
     assert r["not_insync_devices"] == []
     mgr.gsdk.put_devices_bringup.assert_called_once_with([100], "Pending")
-    mgr.gsdk.verify_device_portal_status.assert_called_once_with(100)
+    mgr.gsdk.verify_device_portal_status.assert_called_once_with(100, device_name="edge-1")
 
 
 def test_change_state_raises_when_put_devices_bringup_fails() -> None:
@@ -136,9 +136,9 @@ def test_change_state_raises_when_put_devices_bringup_fails() -> None:
     """
     mgr = _make_manager()
     mgr.gsdk.get_edges_summary.return_value = [_edge(status="active")]
-    mgr.gsdk.put_devices_bringup.return_value = False
+    mgr.gsdk.put_devices_bringup.side_effect = APIError("put_devices_bringup failed for {...}: 403 Forbidden")
 
-    with pytest.raises(APIError, match="Failed to change lifecycle state"):
+    with pytest.raises(APIError, match="Failed to change lifecycle state.*403 Forbidden"):
         mgr.change_state(None, {"device": "edge-1", "lifecycle_state": "staging"})
 
     mgr.gsdk.verify_device_portal_status.assert_not_called()
@@ -300,7 +300,7 @@ def test_change_state_per_device_verify_for_insync_false_skips_poll_for_that_dev
     r = mgr.change_state("cfg.yaml", {"device": None})
 
     assert r["changed"] is True
-    mgr.gsdk.verify_device_portal_status.assert_called_once_with(200)
+    mgr.gsdk.verify_device_portal_status.assert_called_once_with(200, device_name="edge-2")
     assert r["insync_devices"] == ["edge-2"]
     assert r["not_insync_devices"] == []
 
@@ -319,7 +319,7 @@ def test_change_state_explicit_verify_for_insync_overrides_yaml() -> None:
     r = mgr.change_state("cfg.yaml", {"device": None}, verify_for_insync=True)
 
     assert r["changed"] is True
-    mgr.gsdk.verify_device_portal_status.assert_called_once_with(100)
+    mgr.gsdk.verify_device_portal_status.assert_called_once_with(100, device_name="edge-1")
 
 
 def test_change_state_not_ready_is_recorded_not_raised() -> None:
@@ -334,12 +334,12 @@ def test_change_state_not_ready_is_recorded_not_raised() -> None:
     assert r["insync_devices"] == []
 
 
-def test_change_state_applies_multiple_devices_in_one_concurrent_batch() -> None:
+def test_change_state_batches_same_status_devices_into_one_put_call() -> None:
     """
-    Both the PUT (put_devices_bringup) and the readiness poll for several devices (here: edge-1
-    and edge-2) must be submitted as a single concurrent_task_execution batch covering both
-    device names, not one call per device — that's what makes both steps run concurrently
-    instead of the devices waiting on each other's PUT pause / ~180s poll timeout in turn.
+    Devices sharing the same desired lifecycle_state (here: edge-1 and edge-2, both -> staging)
+    must be applied via a single put_devices_bringup call carrying both device_ids in one
+    deviceIds list — matching the portal UI's own behavior — instead of one call per device.
+    Readiness polling still runs per device (a read-only GET, unaffected by this batching).
     """
     mgr = _make_manager()
     mgr.config_utils.render_config_file = MagicMock(
@@ -360,18 +360,41 @@ def test_change_state_applies_multiple_devices_in_one_concurrent_batch() -> None
 
     assert r["changed"] is True
     assert set(r["configured_devices"]) == {"edge-1", "edge-2"}
-    mgr.config_utils.concurrent_task_execution.assert_called_once()
-    (apply_function, apply_config_dict), _kwargs = mgr.config_utils.concurrent_task_execution.call_args
-    assert set(apply_config_dict) == {"edge-1", "edge-2"}
-    assert apply_config_dict["edge-1"]["device_id"] == 100
-    assert apply_config_dict["edge-1"]["desired"] == "staging"
-    assert apply_config_dict["edge-2"]["device_id"] == 200
-    assert apply_function == mgr._apply_device_change
-    mgr.gsdk.put_devices_bringup.assert_any_call([100], "Pending")
-    mgr.gsdk.put_devices_bringup.assert_any_call([200], "Pending")
+    mgr.gsdk.put_devices_bringup.assert_called_once_with([100, 200], "Pending")
     assert mgr.gsdk.verify_device_portal_status.call_count == 2
-    mgr.gsdk.verify_device_portal_status.assert_any_call(100)
-    mgr.gsdk.verify_device_portal_status.assert_any_call(200)
+    mgr.gsdk.verify_device_portal_status.assert_any_call(100, device_name="edge-1")
+    mgr.gsdk.verify_device_portal_status.assert_any_call(200, device_name="edge-2")
+    assert set(r["insync_devices"]) == {"edge-1", "edge-2"}
+
+
+def test_change_state_applies_distinct_status_groups_concurrently() -> None:
+    """
+    A mixed batch (edge-1 -> staging, edge-2 -> deactivated) must issue one put_devices_bringup
+    call per distinct desired status, each carrying only the device_ids that share it — never
+    merging devices with different target statuses into the same call.
+    """
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file = MagicMock(
+        return_value={
+            "device_lifecycle": [
+                {"edge-1": {"lifecycle_state": "staging"}},
+                {"edge-2": {"lifecycle_state": "deactivated"}},
+            ]
+        }
+    )
+    mgr.gsdk.get_edges_summary.return_value = [
+        _edge(hostname="edge-1", device_id=100, status="active"),
+        _edge(hostname="edge-2", device_id=200, status="active"),
+    ]
+    mgr.gsdk.put_devices_bringup.return_value = True
+
+    r = mgr.change_state("cfg.yaml", {"device": None})
+
+    assert r["changed"] is True
+    assert set(r["configured_devices"]) == {"edge-1", "edge-2"}
+    assert mgr.gsdk.put_devices_bringup.call_count == 2
+    mgr.gsdk.put_devices_bringup.assert_any_call([100], "Pending")
+    mgr.gsdk.put_devices_bringup.assert_any_call([200], "Denied")
 
 
 def test_change_state_resolves_batch_with_one_shared_fetch_per_round() -> None:
@@ -422,7 +445,7 @@ def test_change_state_insync_and_not_insync_devices_partition_configured_devices
         _edge(hostname="edge-2", device_id=200, status="active"),
     ]
     mgr.gsdk.put_devices_bringup.return_value = True
-    mgr.gsdk.verify_device_portal_status.side_effect = lambda device_id: (
+    mgr.gsdk.verify_device_portal_status.side_effect = lambda device_id, device_name=None: (
         (x for x in ()).throw(Exception("timed out")) if device_id == 200 else None
     )
 
@@ -698,7 +721,7 @@ def test_schedule_upgrade_polls_for_ready_after_success_and_reports_not_insync_o
     assert r["completed_devices"] == ["edge-1"]
     assert r["not_insync_devices"] == ["edge-1"]
     assert r["insync_devices"] == []
-    mgr.gsdk.verify_device_portal_status.assert_called_once_with(100)
+    mgr.gsdk.verify_device_portal_status.assert_called_once_with(100, device_name="edge-1")
 
 
 def test_schedule_upgrade_ready_poll_not_run_for_failed_or_in_progress_device() -> None:
@@ -928,10 +951,9 @@ def test_schedule_upgrade_multiple_missing_devices_reported_together() -> None:
 def test_schedule_upgrade_api_failure_raises_api_error() -> None:
     mgr = _make_manager()
     mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
-    mgr.gsdk.put_devices_upgrade_schedule.return_value = False
-    from ansible_collections.graphiant.naas.plugins.module_utils.libs.exceptions import APIError
+    mgr.gsdk.put_devices_upgrade_schedule.side_effect = APIError("put_devices_upgrade_schedule failed: 503")
 
-    with pytest.raises(APIError):
+    with pytest.raises(APIError, match="503"):
         mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Stable"})
 
 

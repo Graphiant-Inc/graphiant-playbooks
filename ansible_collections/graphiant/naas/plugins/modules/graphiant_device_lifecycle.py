@@ -71,8 +71,12 @@ notes:
     RV(not_insync_devices) and fail the task (RV(msg) is replaced with a summary naming them; the
     state change itself was still applied — see RV(configured_devices)); devices that did reach
     Ready land in RV(insync_devices). Set O(verify_for_insync=false) to skip this for every
-    device, or set C(verify_for_insync) per device in O(config_file). Multiple devices' C(PUT)
-    and poll run concurrently, not one at a time.
+    device, or set C(verify_for_insync) per device in O(config_file). Devices sharing the same
+    desired O(lifecycle_state) are applied via a single batched C(PUT) call (matching the portal
+    UI's own behavior), not one call per device; the readiness poll afterward still runs
+    concurrently per device, not one at a time, and each retry logged while polling names the
+    device by hostname (not just its numeric ID) so concurrent devices' log lines can be told
+    apart.
   - >-
     After O(operation=schedule_upgrade) / O(operation=rollback) succeeds, the module polls each
     scheduled device's C(upgradeSummary.schedule.state) until it reaches C(Success) or C(Failed)
