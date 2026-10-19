@@ -24,7 +24,7 @@ description:
     subinterfaces (VLANs).
   - All operations use Jinja2 templates for consistent configuration deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-  - All operations are idempotent - safe to run multiple times without causing errors or unintended changes.
+  - "V(enable)/V(deconfigure) are idempotent; V(configure) is not - see Idempotency Details below."
 version_added: "26.1.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
@@ -32,6 +32,7 @@ notes:
   - >
     - configure: Configure VRRP groups on interfaces and subinterfaces.
       Creates new VRRP configurations with specified virtual router IDs and IP addresses.
+      Not idempotent - always pushes and reports changed=true.
   - >
     - deconfigure: Disable VRRP groups from interfaces and subinterfaces.
       Idempotent - skips if VRRP is already disabled.
@@ -44,10 +45,8 @@ notes:
   - "The module automatically resolves device names to IDs."
   - "Idempotency Details:"
   - >
-    The module queries existing VRRP state before making changes. For deconfigure
-    operations, it checks if VRRP is already disabled and skips if so. For enable
-    operations, it checks if VRRP is already enabled and skips if so. This ensures
-    safe repeated execution without errors.
+    V(deconfigure)/V(enable) query existing VRRP state and skip if already disabled/enabled.
+    V(configure) does not query existing state - it always pushes.
   - "Interfaces must be configured first before applying VRRP using M(graphiant.naas.graphiant_interfaces) module."
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
@@ -99,8 +98,9 @@ attributes:
     details: >
       When run with C(--check), the module logs the exact payloads that would be pushed
       with a C([check_mode]) prefix so you can see what configuration would be applied.
-      The module does not perform state comparison, so V(changed) may be V(True) even
-      when the configuration is already applied.
+      O(operation=configure) always reports V(changed=True); O(operation=enable)/
+      O(operation=deconfigure) compare against live state and report V(changed=False)
+      when already in the desired state.
 
 requirements:
   - python >= 3.7

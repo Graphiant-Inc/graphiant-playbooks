@@ -277,7 +277,7 @@ EXAMPLES = r"""
 #   interfaces:
 #     - edge-1:
 #       - name: GigabitEthernet5/0/0
-#         state: absent              # resets to default LAN and clears circuit/subinterfaces
+#         state: absent              # resets LAN attachment to enterprise default; subinterfaces untouched
 #       - name: GigabitEthernet7/0/0
 #         lan: lan-1-test            # configured normally
 #         ipv4: 10.1.11.1/24

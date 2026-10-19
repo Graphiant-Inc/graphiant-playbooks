@@ -8,6 +8,10 @@ VRRP configuration is applied to both main interfaces and subinterfaces (VLANs).
 Idempotency Support:
     - deconfigure: Checks if VRRP is already disabled before pushing config.
       Skips interfaces where VRRP is already disabled (enabled=false).
+    - enable: Checks if VRRP is already enabled before pushing config.
+      Skips interfaces where VRRP is already enabled.
+    - configure: NOT idempotent - pushes every interface in the file on every run,
+      with no comparison against existing state.
 """
 
 from typing import Any, Dict

@@ -38,7 +38,10 @@ notes:
   - "  - V(detach_objects): Detach global objects from sites (sites remain)."
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves site names and global object names to IDs."
-  - "All operations are idempotent and safe to run multiple times."
+  - >-
+    All operations are idempotent in a live run. V(attach_objects)/V(detach_objects) (and
+    V(configure)/V(deconfigure)'s attach/detach step) cannot detect a no-op in check mode -
+    see the C(check_mode) attribute details below.
   - "Global objects must be created using M(graphiant.naas.graphiant_global_config) module before attaching to sites."
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
@@ -94,8 +97,11 @@ attributes:
     details: >
       When run with C(--check), the module logs the exact payloads that would be pushed
       with a C([check_mode]) prefix so you can see what configuration would be applied.
-      The module does not perform state comparison, so V(changed) may be V(True) even
-      when the configuration is already applied.
+      O(operation=configure_sites)/O(operation=deconfigure_sites) check existing state first,
+      so V(changed) is accurate in check mode too. O(operation=attach_objects)/
+      O(operation=detach_objects) only detect a no-op via an error from the real API call,
+      which check mode never makes - so V(changed) is always V(True) for them (and for
+      O(operation=configure)/O(operation=deconfigure)'s attach/detach step) under C(--check).
 
 requirements:
   - python >= 3.7
@@ -185,7 +191,10 @@ msg:
 changed:
   description:
     - Whether the operation made changes to the system.
-    - V(true) for all configure/deconfigure/attach/detach operations.
+    - >-
+      V(false) when nothing needed changing. In check mode, V(attach_objects)/V(detach_objects)
+      (and V(configure)/V(deconfigure)'s attach/detach step) always report V(true) instead -
+      see the C(check_mode) attribute details below.
   type: bool
   returned: always
   sample: true

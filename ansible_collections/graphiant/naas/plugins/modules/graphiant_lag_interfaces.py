@@ -29,15 +29,15 @@ description:
   - All operations use Jinja2 templates for consistent configuration
     deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-  - All operations are idempotent - safe to run multiple times without
-    causing errors or unintended changes.
+  - "All operations except V(configure) are idempotent; V(configure) is not - see Idempotency Details below."
 version_added: "26.1.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
   - "LAG Operations:"
   - >
     - configure: Configure LAG on physical interfaces (and optionally
-      subinterfaces). Idempotent - creates new LAGs or updates existing ones.
+      subinterfaces). Creates new LAGs or updates existing ones. Not idempotent - always
+      pushes and reports changed=true.
   - >
     - deconfigure: Delete ALL subinterfaces (if present) and then delete the
       main LAG interface. This is a complete cleanup operation that removes
@@ -61,16 +61,10 @@ notes:
   - "The module automatically resolves device names to IDs."
   - "Idempotency Details:"
   - >
-    The module queries existing LAG state before making changes. For configure
-    operations, duplicate alias assignments are automatically handled by
-    removing the alias from the payload when it matches the existing alias.
-    For member operations, existing members are checked and only necessary
-    changes are applied. For LACP updates, current mode/timer are compared
-    before pushing configuration. For deconfigure, all existing subinterfaces
-    are automatically detected and deleted before removing the main LAG.
-    For delete_lag_subinterfaces, only specified subinterfaces are deleted. For deconfigure, all existing subinterfaces
-    are automatically detected and deleted before removing the main LAG.
-    For delete_lag_subinterfaces, only specified subinterfaces are deleted.
+    V(configure) only reads existing aliases, to avoid a duplicate-alias API error - not for
+    idempotency. The other operations (see above) do check existing state before pushing.
+    For deconfigure, all existing subinterfaces are automatically detected and deleted before
+    removing the main LAG.
   - >
     Member interfaces must exist on the device; interface names in the config
     are resolved to interface IDs via device info.
@@ -136,8 +130,8 @@ attributes:
     details: >
       When run with C(--check), the module logs the exact payloads that would be pushed
       with a C([check_mode]) prefix so you can see what configuration would be applied.
-      The module does not perform state comparison, so V(changed) may be V(True) even
-      when the configuration is already applied.
+      O(operation=configure) always reports V(changed=True); the other operations compare
+      against live state and report V(changed=False) when already in the desired state.
 
 requirements:
   - python >= 3.7

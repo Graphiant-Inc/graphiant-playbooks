@@ -5,9 +5,10 @@ This module handles LAG (Link Aggregation Group) interface configuration managem
 for Graphiant Edge/Gateway devices.
 
 Idempotency Support:
-    All operations in this module are idempotent and safe to run multiple times:
-    - configure (add): Creates new LAGs or updates existing ones. Handles duplicate
-      alias assignments by removing alias from payload when it matches existing.
+    - configure (add): NOT idempotent - always creates or updates LAGs, with no comparison
+      against the LAG's existing config. (It does avoid a duplicate-alias API error by
+      removing an alias from the payload when it already matches, but that's an error
+      workaround, not an idempotency check.)
     - deconfigure: Skips LAGs that don't exist.
     - add_lag_members: Skips members already present in the LAG.
     - remove_lag_members: Skips members already removed from the LAG.
@@ -155,11 +156,12 @@ class LagInterfaceManager(BaseManager):
 
     def configure(self, config_yaml_file: str) -> dict:  # pylint: disable=arguments-renamed
         """
-        Configure LAG interfaces for multiple devices concurrently (idempotent).
+        Configure LAG interfaces for multiple devices concurrently (NOT idempotent - always
+        pushes every LAG in the file, with no comparison against existing config).
 
-        Creates new LAGs or updates existing ones. Automatically handles duplicate
-        alias assignments by removing alias from payload when it matches existing.
-        Subinterface aliases are also handled to prevent duplicate alias errors.
+        Automatically handles duplicate alias assignments by removing alias from payload when
+        it matches existing (an API-error workaround, not an idempotency check). Subinterface
+        aliases are also handled to prevent duplicate alias errors.
 
         Args:
             config_yaml_file: Path to the YAML file containing LAG interface configurations.
@@ -296,15 +298,17 @@ class LagInterfaceManager(BaseManager):
 
     def configure_lag_interfaces(self, config_yaml_file: str, action: str = "add") -> dict:
         """
-        Configure/update LAG interfaces for multiple devices concurrently (idempotent).
+        Configure/update LAG interfaces for multiple devices concurrently.
 
-        This is the core method that handles all LAG configuration operations with
-        built-in idempotency checks:
-            - add: Creates or updates LAGs. Handles duplicate aliases automatically.
+        This is the core method that handles all LAG configuration operations. All actions
+        except ``add`` have built-in idempotency checks:
+            - add: NOT idempotent - always creates or updates LAGs, no comparison against
+              existing config. Handles duplicate aliases automatically (an API-error
+              workaround, not an idempotency check).
             - add_lag_members: Skips already-present members.
             - remove_lag_members: Skips already-absent members.
             - update_lacp_configs: Skips if mode/timer already match.
-            - delete: Deletes subinterfaces under LAG.
+            - delete: Deletes subinterfaces under LAG, skipping ones that don't exist.
 
         Args:
             config_yaml_file: Path to the YAML file containing LAG interface configurations.

@@ -11,6 +11,13 @@ Deconfigure workflow consistency (with global_config_manager, interface_manager)
   returns changed, attached/detached, skipped. No 'failed' list (errors raise).
 - Logging: "Attempting to delete/detach ..." with target names, then "Deconfigure completed: ..."
   with explicit lists (aligned with global_config and interface_manager).
+
+Check-mode caveat: _manage_sites (configure_sites/deconfigure_sites) checks existing site
+state with a read-only call before deciding to create/delete, so it is idempotent under
+check mode too. _manage_site_objects (attach_objects/detach_objects) has NO such pre-check -
+it detects an already-attached/detached no-op only by catching a specific error from the
+real gsdk.post_site_config() call, which check mode never makes, so changed is always True
+under check mode whenever the file has any site_attachments, even with nothing to do.
 """
 
 from typing import Any, Dict, Optional, Union, cast
@@ -32,6 +39,9 @@ class SiteManager(BaseManager):
     def configure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Configure sites: create sites and attach global system objects.
+
+        Site creation is idempotent under check mode; the attach step is not (see module
+        docstring).
 
         Args:
             config_yaml_file: Path to the YAML file containing site configurations
@@ -57,6 +67,9 @@ class SiteManager(BaseManager):
     def deconfigure(self, config_yaml_file: str) -> Dict[str, Any]:
         """
         Deconfigure sites: detach global system objects and delete sites.
+
+        Site deletion is idempotent under check mode; the detach step is not (see module
+        docstring).
 
         Args:
             config_yaml_file: Path to the YAML file containing site configurations
@@ -258,7 +271,8 @@ class SiteManager(BaseManager):
 
     def attach_objects(self, config_yaml_file: str) -> Dict[str, Any]:
         """
-        Attach global system objects to sites.
+        Attach global system objects to sites (idempotent in a live run; see module
+        docstring for the check-mode caveat).
 
         Args:
             config_yaml_file: Path to the YAML file containing site attachment configurations
@@ -270,7 +284,8 @@ class SiteManager(BaseManager):
 
     def detach_objects(self, config_yaml_file: str) -> Dict[str, Any]:
         """
-        Detach global system objects from sites.
+        Detach global system objects from sites (idempotent in a live run; see module
+        docstring for the check-mode caveat).
 
         Args:
             config_yaml_file: Path to the YAML file containing site attachment configurations
@@ -283,6 +298,9 @@ class SiteManager(BaseManager):
     def _manage_site_objects(self, config_yaml_file: str, operation: str) -> Dict[str, Any]:
         """
         Manage global system objects on sites (attach or detach).
+
+        Idempotent in a live run (see the except blocks below); NOT under check mode -
+        see module docstring.
 
         Args:
             config_yaml_file: Path to the YAML file containing site management definitions

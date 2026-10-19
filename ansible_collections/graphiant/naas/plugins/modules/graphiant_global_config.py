@@ -39,7 +39,12 @@ notes:
   - Process only the specific configuration type."
   - "Configuration files support Jinja2 templating syntax for dynamic configuration generation."
   - "The module automatically resolves names to IDs for sites, LAN segments, and other referenced objects."
-  - "All operations are idempotent and safe to run multiple times."
+  - >-
+    All V(deconfigure)/V(deconfigure_*), plus V(configure_lan_segments)/V(configure_site_lists),
+    are idempotent. The other 8 configure_* operations (prefix sets, BGP filters, Graphiant
+    filters, SNMP, syslog, NTP, IPFIX, VPN profiles) are NOT - they push unconditionally and
+    report V(changed=true) whenever their object type is present in the file. V(configure) (the
+    all-types dispatcher) inherits this per-type behavior.
   - "Global objects can be referenced by other modules (BGP, Sites, Data Exchange) after creation."
   - "When both O(operation) and O(state) are provided, O(operation) takes precedence."
 extends_documentation_fragment:
@@ -128,8 +133,9 @@ attributes:
     details: >
       When run with C(--check), the module logs the exact payloads that would be pushed
       with a C([check_mode]) prefix so you can see what configuration would be applied.
-      The module does not perform state comparison, so V(changed) may be V(True) even
-      when the configuration is already applied.
+      The 8 non-idempotent configure_* operations (see note above) always report
+      V(changed=True); the rest compare against live state and report V(changed=False)
+      when already in the desired state.
 
 requirements:
   - python >= 3.7

@@ -2,7 +2,10 @@
 Global Configuration Manager for Graphiant Playbooks.
 
 Manages prefix sets, routing policies (BGP filters), SNMP, syslog, NTP, IPFIX, VPN profiles,
-LAN segments, and site lists. Deconfigure operations are idempotent.
+LAN segments, and site lists. Deconfigure operations are idempotent for all object types.
+Configure operations are idempotent only for LAN segments and site lists - the other 8 types
+(prefix sets, BGP filters, Graphiant routing policies, SNMP, syslog, NTP, IPFIX, VPN profiles)
+push unconditionally whenever present in the YAML, with no comparison against existing state.
 
 Result lists are mutually exclusive:
 - skipped: objects that do not exist on the portal.
@@ -35,13 +38,19 @@ class GlobalConfigManager(BaseManager):
         This method handles the configuration of all global objects including:
         - Prefix sets (global_prefix_sets)
         - BGP filters (routing_policies)
+        - Graphiant routing policies (graphiant_routing_policies)
         - SNMP global objects (snmps)
         - Syslog global objects (syslog_servers)
         - NTP global objects (ntps)
         - IPFIX global objects (ipfix_exporters)
         - VPN profile global objects (vpn_profiles)
-        - LAN segments (lan_segments)
-        - Site lists (site_lists)
+        - LAN segments (lan_segments) - idempotent, skips already-existing segments
+        - Site lists (site_lists) - idempotent, skips already-existing lists
+
+        All types above except LAN segments/site lists are NOT idempotent - they push
+        unconditionally whenever their YAML key is present, so ``changed=True`` every run
+        regardless of portal state. Their ``deconfigure_*`` counterparts ARE idempotent -
+        the gap is configure-side only.
 
         Args:
             config_yaml_file: Path to the YAML file containing global configurations
@@ -77,6 +86,7 @@ class GlobalConfigManager(BaseManager):
                 result["details"]["routing_policies"] = sub
 
             # Configure Graphiant routing policies (GraphiantIn/GraphiantOut filters)
+            # (no idempotency check - assume changed if present)
             if "graphiant_routing_policies" in config_data:
                 sub = self.configure_graphiant_filters(config_yaml_file)
                 if sub.get("changed"):

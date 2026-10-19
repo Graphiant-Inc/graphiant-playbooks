@@ -588,7 +588,7 @@ ansible-playbook playbooks/interface_management.yml --tag configure
 
 #### Remove a specific interface or subinterface (per-entry `state: absent`)
 
-Add `state: absent` to a single interface or subinterface entry to remove it inline within a configure run — all other entries in the same config file are configured normally. Both levels are idempotent: if the item is already absent (or already at the enterprise default state) the device is skipped and `changed` stays `false`. The same syntax works with `configure_lan_interfaces` (LAN-only path) and `configure_wan_circuits_interfaces` (WAN path).
+Add `state: absent` to a single interface or subinterface entry to remove it inline within a configure run — all other entries in the same config file are configured normally. Both levels are idempotent: if the item is already absent (or already at the enterprise default state) the device is skipped and `changed` stays `false`. This is LAN-only — it works within `configure_interfaces` and `configure_lan_interfaces`; WAN interfaces, WAN subinterfaces, and circuits are never affected by `state: absent`, including within `configure_wan_circuits_interfaces`.
 
 **Remove a subinterface** — only `vlan` is required alongside `state: absent`; the parent interface and all other subinterfaces are configured normally:
 
@@ -607,14 +607,14 @@ interfaces:
           state: absent           # removed from device (sends interface: null)
 ```
 
-**Remove a main interface** — only `name` is required alongside `state: absent`; the interface is reset to the enterprise default LAN and all its subinterfaces are deleted (equivalent to running `deconfigure_interfaces` for that one interface). Other interfaces in the same file are configured normally:
+**Remove a main interface** — only `name` is required alongside `state: absent`; a non-default LAN attachment is reset to the enterprise default LAN. Subinterfaces are left untouched — remove them individually with per-sub `state: absent`. Other interfaces in the same file are configured normally:
 
 ```yaml
 # sample_interface_config.yaml (excerpt)
 interfaces:
   - edge-1-sdktest:
     - name: GigabitEthernet5/0/0
-      state: absent              # resets to default LAN and clears circuit/subinterfaces
+      state: absent              # resets LAN attachment to enterprise default; subinterfaces untouched
     - name: GigabitEthernet7/0/0
       lan: lan-1-test            # configured normally
       ipv4: 10.1.11.1/24
@@ -831,6 +831,8 @@ ansible-playbook playbooks/backbone_management.yml --tag deconfigure_syslog_targ
 ### Module: graphiant.naas.graphiant_vrrp
 
 #### Configure VRRP on interfaces
+
+Not idempotent: `configure` does not check existing state, so it always pushes and reports `changed: true` when the file has any VRRP entries. `enable` and `deconfigure` (below) do check existing state and skip already-matching interfaces.
 
 ```bash
 ansible-playbook playbooks/vrrp_interface_management.yml --tag configure --check
@@ -1185,6 +1187,8 @@ dhcp_relay_config:
 ### Module: graphiant.naas.graphiant_lag_interfaces
 
 #### Configure LAG interfaces and subinterfaces
+
+Not idempotent: `configure` does not compare a LAG's existing config first, so it always pushes and reports `changed: true` for every LAG in the file. `add_lag_members`/`remove_lag_members`/`update_lacp_configs`/`delete_lag_subinterfaces` (below) do compare and skip no-ops.
 
 ```bash
 ansible-playbook playbooks/lag_interface_management.yml --tag configure --check
@@ -2644,6 +2648,8 @@ bgpPeering:
 When both `operation` and `state` are provided, `operation` takes precedence.
 
 ### Module: graphiant.naas.graphiant_global_config
+
+**Idempotency:** All `deconfigure`/`deconfigure_*` operations are idempotent (skip objects that don't exist), as are `configure_lan_segments` and `configure_site_lists` (skip objects that already exist). The other 8 configure operations below — prefix sets, BGP filters, Graphiant filters, SNMP, syslog, NTP, IPFIX, and VPN profiles — are **not** idempotent: they push unconditionally whenever their object type is present in the file and report `changed: true`, even if the portal already matches.
 
 #### Configure / deconfigure prefix lists
 
