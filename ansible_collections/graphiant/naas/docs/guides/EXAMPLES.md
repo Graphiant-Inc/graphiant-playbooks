@@ -832,10 +832,10 @@ ansible-playbook playbooks/backbone_management.yml --tag deconfigure_syslog_targ
 
 #### Configure VRRP on interfaces
 
-Not idempotent: `configure` does not check existing state, so it always pushes and reports `changed: true` when the file has any VRRP entries. `enable` and `deconfigure` (below) do check existing state and skip already-matching interfaces.
+Field-level idempotent: `configure` reads live VRRP state and pushes only the interfaces whose VRRP groups differ (a merge PUT), leaving unchanged interfaces and devices untouched (`skipped_interfaces`/`skipped_devices`) and reporting `changed: false` when everything already matches. `enable` and `deconfigure` (below) likewise check existing state and skip already-matching interfaces. Check mode (`--check`) and diff mode (`--diff`) are supported — no config is pushed in check mode, and `--diff` shows per-interface `before`/`after` (also returned in `details.diff_plan`), keyed by interface name (`GigabitEthernet8/0/0.28` for a subinterface) then `ipv4`/`ipv6`. The `configure` comparison covers `enabled`, `priority`, `virtualIp`, `preempt`, `allowInterOperability`, and `trackedInterfaces`; `description` is compared only when set in the config, and `virtualRouterId` is excluded because the device GET model does not expose it. To remove all tracked interfaces, set `trackedInterfaces: []` (or leave the key empty, `trackedInterfaces:`) — the module pushes the portal's clear sentinel (`[{}]`) to remove them; omitting the key entirely leaves any existing tracked interfaces on the device unchanged.
 
 ```bash
-ansible-playbook playbooks/vrrp_interface_management.yml --tag configure --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag configure --check --diff
 ansible-playbook playbooks/vrrp_interface_management.yml --tag configure
 ```
 
@@ -859,10 +859,11 @@ ansible-playbook playbooks/vrrp_interface_management.yml --tag configure
 
 #### Disable VRRP on interfaces
 
+Idempotent: `deconfigure` reads live VRRP state and disables only interfaces where VRRP is currently enabled, reporting `changed: false` when everything is already disabled. Check mode (`--check`) and diff mode (`--diff`) are supported — `--diff` shows the per-interface `enabled` toggle (`true` → `false`) under `edge.interfaces`, keyed by interface name then `ipv4`/`ipv6` (also returned in `details.diff_plan`).
+
 ```bash
-ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure --check --diff
 ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure
-ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure --check
 ```
 
 ```yaml
@@ -885,10 +886,11 @@ ansible-playbook playbooks/vrrp_interface_management.yml --tag deconfigure --che
 
 #### Enable existing VRRP configuration on interfaces
 
+Idempotent: `enable` only turns on VRRP that already exists (it fails if the VRRP group is not configured) and skips interfaces already enabled, reporting `changed: false` when nothing needs enabling. Check mode (`--check`) and diff mode (`--diff`) are supported — `--diff` shows the per-interface `enabled` toggle (`false` → `true`) under `edge.interfaces`, keyed by interface name then `ipv4`/`ipv6` (also returned in `details.diff_plan`).
+
 ```bash
-ansible-playbook playbooks/vrrp_interface_management.yml --tag enable --check
+ansible-playbook playbooks/vrrp_interface_management.yml --tag enable --check --diff
 ansible-playbook playbooks/vrrp_interface_management.yml --tag enable
-ansible-playbook playbooks/vrrp_interface_management.yml --tag enable --check
 ```
 
 ```yaml

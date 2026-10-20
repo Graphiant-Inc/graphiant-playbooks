@@ -104,19 +104,6 @@ def test_global_graphiant_filter_add(_mock_client, mock_tmpl_class) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
-def test_vrrp_interfaces_creates_interfaces_dict(_mock_client, mock_tmpl_class) -> None:
-    template = MagicMock()
-    template.render_vrrp_interfaces.return_value = {"interfaces": {"eth0": {"v": 1}}}
-    mock_tmpl_class.return_value = template
-
-    cu = ConfigUtils(base_url="https://api.example.com", username="u", password="p")
-    payload: dict = {}
-    cu.vrrp_interfaces(payload, action="add", name="eth0")
-    assert "eth0" in payload["interfaces"]
-
-
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
 def test_global_syslog_lan_segment_to_vrf(_mock_client, mock_tmpl_class) -> None:
     client = MagicMock()
     client.get_lan_segment_id.return_value = 7

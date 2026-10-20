@@ -65,7 +65,6 @@ class ConfigTemplates:
         "ipfix_service": "global_ipfix_template.yaml",
         "vpn_profile": "global_vpn_profile_template.yaml",
         "site_list": "global_site_lists_template.yaml",
-        "vrrp_interfaces": "vrrp_interfaces_template.yaml",
     }
 
     def __init__(self, config_template_path: str):
@@ -192,10 +191,6 @@ class ConfigTemplates:
     def render_syslog_service(self, **kwargs) -> Dict[str, Any]:
         """Render syslog service template."""
         return self.render_by_type("syslog_service", **kwargs)
-
-    def render_vrrp_interfaces(self, **kwargs) -> Dict[str, Any]:
-        """Render VRRP on interfaces template."""
-        return self.render_by_type("vrrp_interfaces", **kwargs)
 
     def render_ipfix_service(self, **kwargs) -> Dict[str, Any]:
         """Render IPFIX service template."""

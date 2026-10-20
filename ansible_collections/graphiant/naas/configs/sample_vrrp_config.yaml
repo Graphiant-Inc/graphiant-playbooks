@@ -13,6 +13,9 @@
 #   trackedInterfaces: (optional) - List of interfaces to track
 #     - interface: "InterfaceName" - Interface to track
 #       priorityDecrement: 1-255 - Priority decrease if tracked interface goes down
+#     To remove all tracked interfaces, set an empty list (trackedInterfaces: [])
+#     or leave the key empty (trackedInterfaces:). Omitting the key entirely leaves
+#     any existing tracked interfaces on the device unchanged.
 
 vrrp_config:
   # Edge Device 1: Configure VRRP on main interface

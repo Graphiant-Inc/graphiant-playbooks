@@ -841,7 +841,8 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         result = graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
         LOG.info("Configure VRRP interfaces result: %s", result)
         result = graphiant_config.vrrp_interfaces.configure("sample_vrrp_config.yaml")
-        LOG.info("Configure VRRP interfaces result (rerun check): %s", result)
+        LOG.info("Configure VRRP interfaces result (idempotency check): %s", result)
+        assert result['changed'] is False, "Configure VRRP interfaces idempotency failed"
 
     def test_deconfigure_vrrp_interfaces(self):
         """

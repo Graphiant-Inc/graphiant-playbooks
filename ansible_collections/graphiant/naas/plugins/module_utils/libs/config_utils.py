@@ -166,33 +166,6 @@ class ConfigUtils(PortalUtils):
             LOG.error("Failed to process LAG on interfaces %s: %s", kwargs.get("name"), str(e))
             raise ConfigurationError(f"LAG on interfaces processing failed: {str(e)}")
 
-    def vrrp_interfaces(self, config_payload, action="add", **kwargs):
-        """
-        Update the device interfaces section with VRRP configuration.
-
-        Args:
-            config_payload (dict): Dictionary to be updated with VRRP data.
-            action (str, optional): Action to perform, either "add" or "delete".
-            **kwargs: Additional parameters passed to the template renderer.
-
-        Raises:
-            ConfigurationError: If required parameters are missing.
-        """
-        self._validate_required_params(kwargs, ["name"])
-        LOG.info("VRRP on interfaces: %s %s", action.upper(), kwargs.get("name"))
-
-        try:
-            result = self.template.render_vrrp_interfaces(action=action, **kwargs)
-            if "interfaces" in result:
-                if "interfaces" not in config_payload:
-                    config_payload["interfaces"] = {}
-                config_payload["interfaces"].update(result["interfaces"])
-            else:
-                LOG.warning("No interfaces found in VRRP template result for %s", kwargs.get("name"))
-        except Exception as e:
-            LOG.error("Failed to process VRRP on interfaces %s: %s", kwargs.get("name"), str(e))
-            raise ConfigurationError(f"VRRP on interfaces processing failed: {str(e)}")
-
     def global_snmp(self, config_payload, action="add", **kwargs):
         """
         Update the snmps section of configuration payload.
