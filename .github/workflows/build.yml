@@ -32,10 +32,12 @@ jobs:
         working-directory: ansible_collections/graphiant/naas
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -58,7 +60,7 @@ jobs:
           python ${{ github.workspace }}/scripts/build_collection.py
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: collection-tarball
           path: ${{ github.workspace }}/build/graphiant-naas-*.tar.gz

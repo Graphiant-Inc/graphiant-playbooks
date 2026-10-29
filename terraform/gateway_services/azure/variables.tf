@@ -209,6 +209,12 @@ variable "vm_ssh_public_key" {
   default     = ""
 }
 
+variable "ssh_allowed_cidr" {
+  description = "Source CIDR allowed to SSH to the test VM (restrict to your own IP range)"
+  type        = string
+  default     = "*"
+}
+
 variable "vnet_vm_address_prefix" {
   description = "Virtual Network VM subnet"
   type        = string

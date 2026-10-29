@@ -76,7 +76,7 @@ attributes:
 
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.9.0
+  - graphiant-sdk >= 26.10.0
   - tabulate
 
 seealso:
