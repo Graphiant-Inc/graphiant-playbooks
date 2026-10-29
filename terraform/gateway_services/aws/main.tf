@@ -138,6 +138,10 @@ resource "aws_instance" "vm" {
   key_name                    = var.key_name
   associate_public_ip_address = false # Private subnet
 
+  metadata_options {
+    http_tokens = "required" # IMDSv2 only
+  }
+
   tags = {
     Name = "${var.project_name}-vm"
   }

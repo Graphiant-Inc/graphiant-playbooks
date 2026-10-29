@@ -20,28 +20,40 @@ jobs:
       actions: read
     steps:
       - name: Check user permissions
+        env:
+          ACTOR: ${{ github.actor }}
         run: |
           PERMISSION=$(curl -s -H "Authorization: Bearer ${{ github.token }}" \
-            "https://api.github.com/repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission" | \
+            "https://api.github.com/repos/${{ github.repository }}/collaborators/${ACTOR}/permission" | \
             jq -r '.permission')
           
           if [ "$PERMISSION" != "admin" ] && [ "$PERMISSION" != "maintain" ]; then
             echo "❌ Error: Only repository admins and maintainers can trigger this workflow."
-            echo "   Current user: ${{ github.actor }}"
+            echo "   Current user: $ACTOR"
             echo "   Permission level: $PERMISSION"
             echo "   Required: admin or maintain"
             exit 1
           fi
           
-          echo "✅ User ${{ github.actor }} has permission level: $PERMISSION"
+          echo "✅ User $ACTOR has permission level: $PERMISSION"
+
+      - name: Validate version input
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          # Reject anything that isn't a plain version string before it is used as a git ref
+          if [[ ! "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "❌ Error: Invalid version '$VERSION' (expected e.g. 26.9.0 or v26.9.0)"
+            exit 1
+          fi
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -81,12 +93,13 @@ jobs:
             echo "   - Add GALAXY_API_KEY (get token from https://galaxy.ansible.com/ui/token/)"
             exit 0
           fi
-          ansible-galaxy collection publish $COLLECTION_FILE --api-key=$GALAXY_API_KEY
+          ansible-galaxy collection publish "$COLLECTION_FILE" --api-key="$GALAXY_API_KEY"
 
       - name: Create Git tag
         id: tag
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
           # Ensure version starts with 'v'
           if [[ ! "$VERSION" =~ ^v ]]; then
             VERSION="v$VERSION"

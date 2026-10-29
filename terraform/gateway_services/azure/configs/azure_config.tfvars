@@ -100,4 +100,5 @@ deploy_test_vm = false  # Set to true to deploy a test VM
 # vm_size = "Standard_B1s"
 # vm_admin_username = "azureuser"
 # vm_ssh_public_key = ""  # Replace with your SSH public key
+# ssh_allowed_cidr = "203.0.113.0/24"  # Restrict SSH to the test VM (default "*" allows any source)
 # vnet_vm_address_prefix = "10.0.1.32/28" # Address space from vnet_address_prefix for VM subnet

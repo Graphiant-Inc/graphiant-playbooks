@@ -72,7 +72,7 @@ attributes:
       so you can see exactly what NTP objects would change.
 requirements:
   - python >= 3.7
-  - graphiant-sdk >= 26.9.0
+  - graphiant-sdk >= 26.10.0
 author:
   - Graphiant Team (@graphiant)
 """
