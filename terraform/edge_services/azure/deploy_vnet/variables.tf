@@ -45,6 +45,17 @@ variable "vnet_address_space" {
   default     = "10.1.0.0/16"
 }
 
+variable "vnet_address_space_v6" {
+  description = "IPv6 CIDR (/48 to /64) added to the VNet; only the LAN subnet uses it (index 3 /64). Empty keeps the VNet IPv4-only."
+  type        = string
+  default     = "fd00:10:1::/48"
+
+  validation {
+    condition     = var.vnet_address_space_v6 == "" || (can(regex(":", var.vnet_address_space_v6)) && can(cidrsubnet(var.vnet_address_space_v6, 64 - tonumber(split("/", var.vnet_address_space_v6)[1]), 3)))
+    error_message = "vnet_address_space_v6 must be empty or an IPv6 CIDR with a prefix length of /62 or shorter (e.g. fd00:10:1::/48)."
+  }
+}
+
 variable "subnet_mgmt_prefix" {
   description = "CIDR for the mgmt subnet"
   type        = string

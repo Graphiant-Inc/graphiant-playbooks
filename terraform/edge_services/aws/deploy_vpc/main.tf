@@ -24,7 +24,7 @@ locals {
 }
 
 # -----------------------------------------------------------------------------
-# VPC (IPv4 + Amazon-provided IPv6)
+# VPC (IPv4 + Amazon-provided IPv6, used by the LAN subnet only)
 # -----------------------------------------------------------------------------
 resource "aws_vpc" "this" {
   cidr_block                       = var.vpc_address_range
@@ -46,24 +46,20 @@ resource "aws_internet_gateway" "this" {
 }
 
 # -----------------------------------------------------------------------------
-# Subnets — IPv4 from var prefixes; IPv6 /64s carved from the VPC /56 block
+# Subnets — IPv4 from var prefixes; only LAN also gets an IPv6 /64 (index 3 of the VPC /56)
 # -----------------------------------------------------------------------------
 resource "aws_subnet" "mgmt" {
-  vpc_id                          = aws_vpc.this.id
-  availability_zone               = var.availability_zone
-  cidr_block                      = var.subnet_mgmt_prefix
-  ipv6_cidr_block                 = cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, 1)
-  assign_ipv6_address_on_creation = true
+  vpc_id            = aws_vpc.this.id
+  availability_zone = var.availability_zone
+  cidr_block        = var.subnet_mgmt_prefix
 
   tags = merge(local.tags, { Name = "${var.project_name}-mgmt" })
 }
 
 resource "aws_subnet" "wan" {
-  vpc_id                          = aws_vpc.this.id
-  availability_zone               = var.availability_zone
-  cidr_block                      = var.subnet_wan_prefix
-  ipv6_cidr_block                 = cidrsubnet(aws_vpc.this.ipv6_cidr_block, 8, 2)
-  assign_ipv6_address_on_creation = true
+  vpc_id            = aws_vpc.this.id
+  availability_zone = var.availability_zone
+  cidr_block        = var.subnet_wan_prefix
 
   tags = merge(local.tags, { Name = "${var.project_name}-wan" })
 }
@@ -95,13 +91,6 @@ resource "aws_route" "wan_default_ipv4" {
   route_table_id     = aws_route_table.wan.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id         = aws_internet_gateway.this[0].id
-}
-
-resource "aws_route" "wan_default_ipv6" {
-  count               = var.create_internet_gateway ? 1 : 0
-  route_table_id      = aws_route_table.wan.id
-  destination_ipv6_cidr_block = "::/0"
-  gateway_id          = aws_internet_gateway.this[0].id
 }
 
 resource "aws_route_table_association" "mgmt" {

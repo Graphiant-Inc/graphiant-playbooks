@@ -153,7 +153,7 @@ terraform init
 terraform validate
 
 # Plan
-terraform plan -var-file="config/<cloud>_config.tfvars" -out=tfplan
+terraform plan -var-file="configs/<cloud>_config.tfvars" -out=tfplan
 
 # Apply
 terraform apply tfplan
@@ -162,7 +162,7 @@ terraform apply tfplan
 terraform output
 
 # Destroy
-terraform destroy -var-file="config/<cloud>_config.tfvars"
+terraform destroy -var-file="configs/<cloud>_config.tfvars"
 ```
 
 ### View Outputs
@@ -272,7 +272,7 @@ terraform apply tfplan
 
 ### Option B: Deploy vEdge into an existing VPC
 
-Use this when you already have a VPC, subnets, and route tables pre-existing in your AWS account.
+Use this when you already have a VPC in your AWS account. Every network resource is resolved independently: set its `*_id` to reuse it, or leave it empty to have it created in the existing VPC.
 
 #### Optional: To provision the new VPC, subnets and route tables first via `deploy_vpc`
 
@@ -295,10 +295,12 @@ terraform output    # capture vpc_id, subnet_*_id, route_table_*_id
    - **AMI** — set exactly one of `image_id` or `marketplace_product_id` (+ optional `marketplace_version`) — same as Option A
    - `token` — Graphiant Portal onboarding token
    - `vpc_id` — existing VPC ID
-   - `subnet_mgmt_id`, `subnet_wan_id`, `subnet_lan_id` — existing subnet IDs
-   - `subnet_cloud_init_id` — required for **devtest** only
-   - `route_table_lan_id` — existing LAN route table; a `0.0.0.0/0` route via the vEdge LAN ENI will be added to it
-   - `route_table_wan_id` — existing WAN route table (the mgmt+wan subnets you supply must already be associated with an IGW-routed RT)
+   - `subnet_mgmt_id`, `subnet_wan_id`, `subnet_lan_id` (and `subnet_cloud_init_id` for **devtest**) — existing subnet IDs, or leave empty and set `subnet_*_prefix` to create new subnets. New subnets are IPv4 only, except the LAN subnet: it gets an IPv6 /64 (`subnet_lan_ipv6_netnum`, default 3) when the VPC has an IPv6 block, and the vEdge LAN and test VM interfaces get an IPv6 address. Plan fails if a subnet with the exact same CIDR already exists in the VPC (the error names its ID to set as `subnet_*_id`); partially overlapping CIDRs are only rejected by AWS at apply
+   - `route_table_lan_id` — existing LAN route table; a `0.0.0.0/0` route via the vEdge LAN ENI will be added to it. **Required** when `subnet_lan_id` is set; when empty, a new LAN route table is created and associated with the new LAN subnet
+   - `internet_gateway_id` — existing Internet Gateway (AWS allows one per VPC). When empty, `create_internet_gateway` decides: unset (default) creates one for a new VPC and uses the IGW already attached to an existing VPC (plan fails if it has none); `true` creates a new IGW; `false` deploys without one — no Elastic IPs and no IGW routes, so add egress (e.g. NAT/TGW) to the WAN route table yourself. The LAN route table always gets `0.0.0.0/0` via the vEdge LAN interface
+   - `route_table_wan_id` — existing WAN route table for new mgmt/wan subnets; when empty, a new one is created (default routes to the IGW, or no routes without an IGW). Existing subnets keep their current route table association
+   - `security_group_mgmt_id`, `security_group_wan_id`, `security_group_lan_id` (and `security_group_cloud_init_id` for **devtest**, `security_group_test_vm_id` with `deploy_test_vm`) — optional existing security groups in the same VPC; when empty, new ones are created
+   - `eip_mgmt_allocation_id`, `eip_wan_allocation_id` — optional pre-allocated Elastic IPs (must not be associated elsewhere; not released on destroy); when empty, new EIPs are allocated. Requires an IGW
    - **Test VM (optional)** — `deploy_test_vm`, `test_vm_name`, `test_vm_instance_type`, `test_vm_key_name`, `test_vm_ami`, `test_vm_ingress_allowed_subnets`, `test_vm_enable_ssh_public_ip`, `test_vm_ssh_allowed_subnets` (see [Optional: Test VM on LAN subnet](#optional-test-vm-on-lan-subnet))
 
 2. Deploy:
@@ -369,7 +371,7 @@ Tear down `deploy_vedge` before `deploy_vpc` so nothing still references the VPC
 
 ### Dev/test mode (internal use only)
 
-Use `configs/aws_deploy_vedge_devtest_config.tfvars` with `mode = "devtest"`. This adds a cloud-init NIC + EIP for SSH access, opens TCP 22/443 on the mgmt SG from `allowed_cidr`/`allowed_cidr_v6`, and seeds a `cloud_init_username` user via cloud-init with `ssh_public_key` and `cloud_init_password`.
+Use `configs/aws_deploy_vedge_devtest_config.tfvars` with `mode = "devtest"`. This adds a cloud-init NIC + EIP for SSH access, opens TCP 22/443 on the mgmt SG from `allowed_cidr`, and seeds a `cloud_init_username` user via cloud-init with `ssh_public_key` and `cloud_init_password`.
 
 ---
 
@@ -382,6 +384,8 @@ Two Terraform modules are provided:
 Two deployment modes are supported:
 - **Production** — 3 NICs (mgmt, wan, lan), Marketplace image or Shared Image Gallery Image, no SSH access (onboard via token)
 - **Devtest** (internal) — 4 NICs (+cloud-init for SSH), Shared Image Gallery image, SSH + password access
+
+IPv6 is LAN-side only, as on AWS: the VNet gets an IPv6 range (`vnet_address_space_v6`, default `fd00:10:1::/48`; `""` keeps it IPv4-only), a new LAN subnet gets a /64 from it (`subnet_lan_ipv6_netnum`, default 3), and the vEdge LAN and test VM NICs get an IPv6 address with a `::/0` route via the vEdge LAN. In an existing VNet the VNet's own IPv6 range is used; an existing LAN subnet is used for IPv6 only if it already has an IPv6 prefix. mgmt, WAN and cloud-init are always IPv4-only.
 
 ### Prerequisites
 
@@ -432,7 +436,7 @@ terraform apply tfplan
 
 ### Option B: Deploy vEdge into an existing VNet
 
-Use this when you already have a VNet, subnets, and route tables — either created by `deploy_vnet` or pre-existing in your Azure subscription.
+Use this when you already have a VNet and some or all of its networking — either created by `deploy_vnet` or pre-existing in your Azure subscription. Each subnet, route table, NSG (`nsg_*_id`) and public IP (`public_ip_*_id`) is independent: set its `*_id` to reuse it, or leave it empty and it is created (new subnets are created in the existing VNet and associated with the new or existing route table). New subnets are named `cloud-init`/`mgmt`/`wan`/`lan` by default; set `subnet_*_name` when the VNet already has a subnet with that name (e.g. a second vEdge in the same VNet).
 
 1. Edit `edge_services/azure/deploy_vedge/configs/azure_deploy_vedge_config.tfvars`:
    - `mode` — deployment mode (`production` or `devtest`)
@@ -443,11 +447,9 @@ Use this when you already have a VNet, subnets, and route tables — either crea
    - `ssh_public_key` — SSH public key (required by Azure)
    - `token` — Graphiant Portal onboarding token
    - `vnet_id` — existing VNet ID
-   - `subnet_mgmt_id` — existing mgmt subnet ID
-   - `subnet_wan_id` — existing WAN subnet ID
-   - `subnet_lan_id` — existing LAN subnet ID
+   - `subnet_mgmt_id` / `subnet_wan_id` / `subnet_lan_id` — existing subnet IDs (or `subnet_*_prefix` to create new)
    - `route_table_wan_id` — existing WAN route table ID (optional)
-   - `route_table_lan_id` — existing LAN route table ID (optional)
+   - `route_table_lan_id` — existing LAN route table ID (required when `subnet_lan_id` is set; a default route via the vEdge LAN IP is added to it)
 
 2. Deploy the vEdge:
 
@@ -782,7 +784,7 @@ az network express-route list-service-providers --query "[?name=='PacketFabric']
 ```bash
 cd graphiant-playbooks/terraform/gateway_services/azure
 terraform init
-terraform plan -var-file="config/azure_config.tfvars" -out=tfplan
+terraform plan -var-file="configs/azure_config.tfvars" -out=tfplan
 terraform apply tfplan
 ```
 
@@ -799,7 +801,7 @@ Graphiant Customer Support configures the sub-interface, fabric, and BGP peering
 After Graphiant confirms circuit provisioning, set `create_expressroute_connection = true` in `terraform/gateway_services/azure/configs/azure_config.tfvars`, then rerun:
 
 ```bash
-terraform plan -var-file="config/azure_config.tfvars" -out=tfplan
+terraform plan -var-file="configs/azure_config.tfvars" -out=tfplan
 terraform apply tfplan
 ```
 
@@ -830,7 +832,7 @@ To destroy all Azure Terraform-managed resources:
 
 ```bash
 cd terraform/gateway_services/azure
-terraform destroy -var-file="config/azure_config.tfvars"
+terraform destroy -var-file="configs/azure_config.tfvars"
 ```
 
 **⚠️ Warning:** This command will permanently delete all created Azure resources!
@@ -1163,7 +1165,7 @@ cd terraform/gateway_services/gcp
 terraform init
 
 # Review plan
-terraform plan -var-file="config/gcp_config.tfvars" -out=tfplan
+terraform plan -var-file="configs/gcp_config.tfvars" -out=tfplan
 
 # Apply configuration
 terraform apply tfplan
@@ -1353,7 +1355,7 @@ To destroy all GCP Terraform-managed resources:
 
 ```bash
 cd terraform/gateway_services/gcp
-terraform destroy -var-file="config/gcp_config.tfvars"
+terraform destroy -var-file="configs/gcp_config.tfvars"
 ```
 
 **⚠️ Warning:** This command will permanently delete all created resources!

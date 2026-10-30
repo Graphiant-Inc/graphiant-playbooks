@@ -116,17 +116,11 @@ variable "allowed_cidr" {
   default     = "127.0.0.1/32"
 }
 
-variable "allowed_cidr_v6" {
-  description = "Public IPv6 (/128) allowed to connect to the devtest mgmt/SSH ports"
-  type        = string
-  default     = "::1/128"
-}
-
 # -----------------------------------------------------------------------------
 # VPC (existing or new)
 # -----------------------------------------------------------------------------
 variable "vpc_id" {
-  description = "Existing VPC ID. When set, uses existing VPC. When empty, creates a new VPC using vpc_name + vpc_address_range."
+  description = "Existing VPC ID. When set, uses the existing VPC (new subnets/route tables can still be created in it). When empty, creates a new VPC using vpc_name + vpc_address_range."
   type        = string
   default     = ""
 }
@@ -144,67 +138,137 @@ variable "vpc_address_range" {
 }
 
 # -----------------------------------------------------------------------------
-# Subnets (existing or new)
+# Internet Gateway (existing, new, or none)
+# -----------------------------------------------------------------------------
+variable "internet_gateway_id" {
+  description = "Existing Internet Gateway ID attached to the VPC. When set, it is used and create_internet_gateway is ignored."
+  type        = string
+  default     = ""
+}
+
+variable "create_internet_gateway" {
+  description = "When internet_gateway_id is empty: null (default) creates an IGW for a new VPC and uses the IGW attached to an existing VPC; true creates a new IGW (existing VPC without one); false deploys without an IGW (no IGW routes, no mgmt/WAN/cloud-init EIPs; the WAN route table needs operator-provided egress such as NAT/TGW)."
+  type        = bool
+  default     = null
+}
+
+# -----------------------------------------------------------------------------
+# Subnets — each subnet_*_id provided is reused; empty creates a new subnet from
+# subnet_*_prefix in the VPC in use (IPv4 only).
 # -----------------------------------------------------------------------------
 variable "subnet_cloud_init_id" {
-  description = "Cloud-init subnet ID (required for devtest when using an existing VPC)"
+  description = "Existing cloud-init subnet ID (devtest only). When empty, a new subnet is created from subnet_cloud_init_prefix."
   type        = string
   default     = ""
 }
 
 variable "subnet_cloud_init_prefix" {
-  description = "CIDR for the new cloud-init subnet (devtest, new VPC only)"
+  description = "CIDR for the new cloud-init subnet (devtest only; used when subnet_cloud_init_id is empty)"
   type        = string
   default     = "10.1.0.0/24"
 }
 
 variable "subnet_mgmt_id" {
-  description = "Mgmt subnet ID (existing VPC mode)"
+  description = "Existing mgmt subnet ID. When empty, a new subnet is created from subnet_mgmt_prefix."
   type        = string
   default     = ""
 }
 
 variable "subnet_mgmt_prefix" {
-  description = "CIDR for the new mgmt subnet (new VPC mode)"
+  description = "CIDR for the new mgmt subnet (used when subnet_mgmt_id is empty)"
   type        = string
   default     = "10.1.1.0/24"
 }
 
 variable "subnet_wan_id" {
-  description = "WAN subnet ID (existing VPC mode)"
+  description = "Existing WAN subnet ID. When empty, a new subnet is created from subnet_wan_prefix."
   type        = string
   default     = ""
 }
 
 variable "subnet_wan_prefix" {
-  description = "CIDR for the new WAN subnet (new VPC mode)"
+  description = "CIDR for the new WAN subnet (used when subnet_wan_id is empty)"
   type        = string
   default     = "10.1.2.0/24"
 }
 
 variable "subnet_lan_id" {
-  description = "LAN subnet ID (existing VPC mode)"
+  description = "Existing LAN subnet ID. When set, route_table_lan_id is required. When empty, a new subnet is created from subnet_lan_prefix."
   type        = string
   default     = ""
 }
 
 variable "subnet_lan_prefix" {
-  description = "CIDR for the new LAN subnet (new VPC mode)"
+  description = "CIDR for the new LAN subnet (used when subnet_lan_id is empty)"
   type        = string
   default     = "10.1.3.0/24"
+}
+
+variable "subnet_lan_ipv6_netnum" {
+  description = "Index of the IPv6 /64 carved from the VPC /56 for a new LAN subnet (only the LAN side gets IPv6; pick an unused index in an existing VPC)"
+  type        = number
+  default     = 3
 }
 
 # -----------------------------------------------------------------------------
 # Route tables (existing or new)
 # -----------------------------------------------------------------------------
 variable "route_table_wan_id" {
-  description = "Existing WAN route table ID. When set, mgmt+wan subnets are assumed already associated. When empty, a new WAN RT is created (new VPC only)."
+  description = "Existing WAN route table ID. Newly created mgmt/wan/cloud-init subnets are associated with it; existing subnets keep their current association. When empty, a new WAN RT is created if any of those subnets is new (default routes to the IGW, or no routes without an IGW)."
   type        = string
   default     = ""
 }
 
 variable "route_table_lan_id" {
-  description = "Existing LAN route table ID. When set, the default-via-vEdge route is added to it. When empty, a new LAN RT is created (new VPC only)."
+  description = "Existing LAN route table ID. The default-via-vEdge route is added to it, and a newly created LAN subnet is associated with it. When empty, a new LAN RT is created (required when subnet_lan_id is set)."
+  type        = string
+  default     = ""
+}
+
+# -----------------------------------------------------------------------------
+# Security groups (existing or new) — must belong to the VPC in use
+# -----------------------------------------------------------------------------
+variable "security_group_cloud_init_id" {
+  description = "Existing security group ID for the cloud-init NIC (devtest only). When empty, a new SG is created."
+  type        = string
+  default     = ""
+}
+
+variable "security_group_mgmt_id" {
+  description = "Existing security group ID for the mgmt NIC. When empty, a new SG is created."
+  type        = string
+  default     = ""
+}
+
+variable "security_group_wan_id" {
+  description = "Existing security group ID for the WAN NIC. When empty, a new SG with the Graphiant WAN egress rules is created."
+  type        = string
+  default     = ""
+}
+
+variable "security_group_lan_id" {
+  description = "Existing security group ID for the LAN NIC. When empty, a new allow-all SG is created."
+  type        = string
+  default     = ""
+}
+
+variable "security_group_test_vm_id" {
+  description = "Existing security group ID for the test VM NIC (only with deploy_test_vm). When empty, a new SG is created from test_vm_ingress_allowed_subnets / test_vm_ssh_allowed_subnets; when set, those no longer shape SG rules (test_vm_ssh_allowed_subnets still drives the LAN SSH routes)."
+  type        = string
+  default     = ""
+}
+
+# -----------------------------------------------------------------------------
+# Elastic IPs (existing or new)
+# -----------------------------------------------------------------------------
+variable "eip_mgmt_allocation_id" {
+  description = "Existing Elastic IP allocation ID (eipalloc-...) for the mgmt NIC. When empty, a new EIP is allocated (none without an IGW). A provided EIP must not be associated elsewhere and is not released on destroy."
+  type        = string
+  default     = ""
+}
+
+variable "eip_wan_allocation_id" {
+  description = "Existing Elastic IP allocation ID (eipalloc-...) for the WAN NIC. When empty, a new EIP is allocated (none without an IGW). A provided EIP must not be associated elsewhere and is not released on destroy."
   type        = string
   default     = ""
 }
@@ -255,7 +319,7 @@ variable "test_vm_ingress_allowed_subnets" {
 }
 
 variable "test_vm_ssh_allowed_subnets" {
-  description = "List of CIDR blocks allowed SSH access (TCP 22) to the test VM's public IP. Only used when test_vm_enable_ssh_public_ip = true."
+  description = "List of CIDR blocks allowed SSH access (TCP 22) to the test VM's public IP. Only used when test_vm_enable_ssh_public_ip = true. Must not include CIDRs routed via the vEdge (0.0.0.0/0, or test_vm_ingress_allowed_subnets when customised)."
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }

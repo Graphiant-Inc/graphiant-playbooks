@@ -24,6 +24,7 @@ locals {
   existing_rg_name = local.use_existing_rg ? element(split("/", var.resource_group_id), 4) : ""
   rg_name          = local.use_existing_rg ? local.existing_rg_name : azurerm_resource_group.rg[0].name
   rg_location      = local.use_existing_rg ? data.azurerm_resource_group.existing[0].location : azurerm_resource_group.rg[0].location
+  lan_ipv6         = var.vnet_address_space_v6 != ""
   tags = merge(
     {
       Vendor = "Graphiant"
@@ -49,14 +50,15 @@ resource "azurerm_resource_group" "rg" {
 }
 
 # -----------------------------------------------------------------------------
-# Virtual Network & Subnets
+# Virtual Network & Subnets — IPv4 from var prefixes; when vnet_address_space_v6 is set,
+# only LAN also gets an IPv6 /64 (index 3 of the VNet IPv6 range)
 # -----------------------------------------------------------------------------
 resource "azurerm_virtual_network" "vnet" {
   count               = local.is_create ? 1 : 0
   name                = var.vnet_name
   resource_group_name = local.rg_name
   location            = local.rg_location
-  address_space       = [var.vnet_address_space]
+  address_space       = compact([var.vnet_address_space, var.vnet_address_space_v6])
 
   tags = local.tags
 }
@@ -82,7 +84,7 @@ resource "azurerm_subnet" "lan" {
   name                 = "lan"
   resource_group_name  = local.rg_name
   virtual_network_name = azurerm_virtual_network.vnet[0].name
-  address_prefixes     = [var.subnet_lan_prefix]
+  address_prefixes     = local.lan_ipv6 ? [var.subnet_lan_prefix, cidrsubnet(var.vnet_address_space_v6, 64 - tonumber(split("/", var.vnet_address_space_v6)[1]), 3)] : [var.subnet_lan_prefix]
 }
 
 # -----------------------------------------------------------------------------
