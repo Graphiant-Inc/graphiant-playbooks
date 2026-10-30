@@ -23,6 +23,7 @@ def _base_params(**overrides) -> dict:
         "release": None,
         "upgrade_action": "InstallActivate",
         "ts": None,
+        "schedule_completion_timeout": None,
         "verify_for_insync": True,
         "state": "present",
         "detailed_logs": False,
@@ -247,8 +248,51 @@ def test_main_schedule_upgrade_call_args(mock_ansible_module: MagicMock, _mock_g
     ckwargs = manager.schedule_upgrade.call_args.kwargs
     assert ckwargs["module_params"] == {"device": "edge-1-sdktest", "release": "Latest"}
     assert ckwargs["action"] == "Install"
+    assert ckwargs["schedule_completion_timeout"] is None
     mod.exit_json.assert_called_once()
     assert mod.exit_json.call_args[1]["changed"] is True
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
+def test_main_schedule_upgrade_passes_schedule_completion_timeout(
+    mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
+) -> None:
+    mod = _mock_module(
+        _base_params(
+            operation="schedule_upgrade", lifecycle_state=None, release="Latest", schedule_completion_timeout=25
+        )
+    )
+    mock_ansible_module.return_value = mod
+    manager = MagicMock()
+    manager.schedule_upgrade.return_value = {"changed": True, "configured_devices": ["edge-1-sdktest"]}
+    gc = MagicMock()
+    gc.device_lifecycle = manager
+    _mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_device_lifecycle.main()
+
+    assert manager.schedule_upgrade.call_args.kwargs["schedule_completion_timeout"] == 25
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
+def test_main_rollback_passes_schedule_completion_timeout(
+    mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
+) -> None:
+    mod = _mock_module(
+        _base_params(operation="rollback", lifecycle_state=None, release=None, schedule_completion_timeout=40)
+    )
+    mock_ansible_module.return_value = mod
+    manager = MagicMock()
+    manager.rollback.return_value = {"changed": True, "configured_devices": ["edge-1-sdktest"]}
+    gc = MagicMock()
+    gc.device_lifecycle = manager
+    _mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_device_lifecycle.main()
+
+    assert manager.rollback.call_args.kwargs["schedule_completion_timeout"] == 40
 
 
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
@@ -371,6 +415,82 @@ def test_main_schedule_upgrade_fails_when_device_schedule_failed(
 
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
+def test_main_schedule_upgrade_succeeds_with_device_still_in_progress(
+    mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
+) -> None:
+    """
+    A poll timeout alone (no failed/not_insync/not_connected device) must not fail the task —
+    only noted in msg, matching the portal's own behavior of still showing a device as
+    in-progress rather than done.
+    """
+    mod = _mock_module(
+        _base_params(operation="schedule_upgrade", lifecycle_state=None, release="Latest", upgrade_action="Install")
+    )
+    mock_ansible_module.return_value = mod
+    manager = MagicMock()
+    manager.schedule_upgrade.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "completed_devices": [],
+        "failed_devices": [],
+        "in_progress_devices": ["edge-1-sdktest"],
+    }
+    gc = MagicMock()
+    gc.device_lifecycle = manager
+    _mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_device_lifecycle.main()
+
+    mod.fail_json.assert_not_called()
+    mod.exit_json.assert_called_once()
+    payload = mod.exit_json.call_args[1]
+    assert payload["changed"] is True
+    assert payload["in_progress_devices"] == ["edge-1-sdktest"]
+    assert "Upgrade scheduled" in payload["msg"]
+    assert "Successfully" not in payload["msg"]
+    assert "outcome not yet confirmed" in payload["msg"]
+    assert "still in progress" in payload["msg"]
+    assert "edge-1-sdktest" in payload["msg"]
+    assert "graphiant_device_lifecycle_info" in payload["msg"]
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
+def test_main_schedule_upgrade_in_progress_msg_also_reports_completed_devices(
+    mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
+) -> None:
+    """
+    A mixed-outcome batch (some devices already completed, one still in progress) must not read
+    as if nothing finished - msg should name the completed devices too, not just the pending one.
+    """
+    mod = _mock_module(
+        _base_params(operation="schedule_upgrade", lifecycle_state=None, release="Latest", upgrade_action="Install")
+    )
+    mock_ansible_module.return_value = mod
+    manager = MagicMock()
+    manager.schedule_upgrade.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest", "edge-2-sdktest"],
+        "completed_devices": ["edge-1-sdktest"],
+        "failed_devices": [],
+        "in_progress_devices": ["edge-2-sdktest"],
+        "insync_devices": ["edge-1-sdktest"],
+    }
+    gc = MagicMock()
+    gc.device_lifecycle = manager
+    _mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_device_lifecycle.main()
+
+    mod.fail_json.assert_not_called()
+    payload = mod.exit_json.call_args[1]
+    assert "completed: edge-1-sdktest" in payload["msg"]
+    assert "reached Ready: edge-1-sdktest" in payload["msg"]
+    assert "edge-2-sdktest" in payload["msg"]
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
 def test_main_rollback_fails_when_device_schedule_failed(
     mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
 ) -> None:
@@ -396,6 +516,70 @@ def test_main_rollback_fails_when_device_schedule_failed(
     payload = mod.fail_json.call_args[1]
     assert payload["failed_devices"] == ["edge-1-sdktest"]
     assert "edge-1-sdktest" in payload["msg"]
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
+def test_main_rollback_succeeds_with_device_still_in_progress(
+    mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
+) -> None:
+    mod = _mock_module(_base_params(operation="rollback", lifecycle_state=None))
+    mock_ansible_module.return_value = mod
+    manager = MagicMock()
+    manager.rollback.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest"],
+        "skipped_devices": [],
+        "completed_devices": [],
+        "failed_devices": [],
+        "in_progress_devices": ["edge-1-sdktest"],
+    }
+    gc = MagicMock()
+    gc.device_lifecycle = manager
+    _mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_device_lifecycle.main()
+
+    mod.fail_json.assert_not_called()
+    mod.exit_json.assert_called_once()
+    payload = mod.exit_json.call_args[1]
+    assert payload["changed"] is True
+    assert payload["in_progress_devices"] == ["edge-1-sdktest"]
+    assert "Rollback scheduled" in payload["msg"]
+    assert "Successfully" not in payload["msg"]
+    assert "outcome not yet confirmed" in payload["msg"]
+    assert "still in progress" in payload["msg"]
+    assert "graphiant_device_lifecycle_info" in payload["msg"]
+
+
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")
+@patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.AnsibleModule")
+def test_main_rollback_in_progress_msg_also_reports_completed_devices(
+    mock_ansible_module: MagicMock, _mock_get_connection: MagicMock
+) -> None:
+    mod = _mock_module(_base_params(operation="rollback", lifecycle_state=None))
+    mock_ansible_module.return_value = mod
+    manager = MagicMock()
+    manager.rollback.return_value = {
+        "changed": True,
+        "configured_devices": ["edge-1-sdktest", "edge-2-sdktest"],
+        "skipped_devices": [],
+        "completed_devices": ["edge-1-sdktest"],
+        "failed_devices": [],
+        "in_progress_devices": ["edge-2-sdktest"],
+        "insync_devices": ["edge-1-sdktest"],
+    }
+    gc = MagicMock()
+    gc.device_lifecycle = manager
+    _mock_get_connection.return_value = MagicMock(graphiant_config=gc)
+
+    graphiant_device_lifecycle.main()
+
+    mod.fail_json.assert_not_called()
+    payload = mod.exit_json.call_args[1]
+    assert "completed: edge-1-sdktest" in payload["msg"]
+    assert "reached Ready: edge-1-sdktest" in payload["msg"]
+    assert "edge-2-sdktest" in payload["msg"]
 
 
 @patch("ansible_collections.graphiant.naas.plugins.modules.graphiant_device_lifecycle.get_graphiant_connection")

@@ -36,7 +36,9 @@
 #
 #   # Schedule a software upgrade for several devices, from a config file (see
 #   # sample_device_lifecycle.yaml); add -e upgrade_action=... to override the InstallActivate
-#   # default (it applies to the whole batch, so it's a module param, not a file key)
+#   # default (it applies to the whole batch, so it's a module param, not a file key). Add
+#   # -e schedule_completion_timeout=<minutes> (1-40, default 15) to raise the completion-poll
+#   # budget for a large batch.
 #   ansible-playbook playbooks/device_lifecycle_management.yml \
 #     --tags schedule_upgrade_config_file \
 #     -e "config_file=sample_device_lifecycle.yaml" \
@@ -166,6 +168,7 @@
         release: "{{ upgrade_release }}"
         upgrade_action: "{{ upgrade_action }}"
         wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        schedule_completion_timeout: "{{ schedule_completion_timeout | default(omit) }}"
         verify_for_insync: "{{ verify_for_insync | default(omit) }}"
         detailed_logs: true
       register: schedule_upgrade_result
@@ -194,6 +197,7 @@
         config_file: "{{ config_file }}"
         upgrade_action: "{{ upgrade_action | default(omit) }}"
         wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        schedule_completion_timeout: "{{ schedule_completion_timeout | default(omit) }}"
         verify_for_insync: "{{ verify_for_insync | default(omit) }}"
         detailed_logs: true
       register: schedule_upgrade_config_file_result
@@ -222,6 +226,7 @@
         operation: rollback
         device: "{{ portal_device_hostname }}"
         wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        schedule_completion_timeout: "{{ schedule_completion_timeout | default(omit) }}"
         verify_for_insync: "{{ verify_for_insync | default(omit) }}"
         detailed_logs: true
       register: rollback_result
@@ -248,6 +253,7 @@
         operation: rollback
         config_file: "{{ config_file }}"
         wait_for_completion: "{{ wait_for_completion | default(omit) }}"
+        schedule_completion_timeout: "{{ schedule_completion_timeout | default(omit) }}"
         verify_for_insync: "{{ verify_for_insync | default(omit) }}"
         detailed_logs: true
       register: rollback_config_file_result

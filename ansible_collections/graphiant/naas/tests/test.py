@@ -165,6 +165,12 @@ def vault_dict_from_example(config_path, key):
     return value if isinstance(value, dict) else {}
 
 
+def device_lifecycle_names(graphiant_config, config_file="sample_device_lifecycle.yaml"):
+    """Device names (list keys), in file order, from a device_lifecycle sample config."""
+    config = graphiant_config.device_lifecycle.render_config_file(config_file)
+    return [name for entry in config.get("device_lifecycle", []) for name in entry]
+
+
 class TestGraphiantPlaybooks(unittest.TestCase):
 
     def test_get_login_token(self):
@@ -3249,17 +3255,18 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Change lifecycle state for a single device via module_params only (device +
         lifecycle_state, no config_file) — exercises the direct-device resolution path that
-        bypasses the device_lifecycle YAML list entirely. edge-1-sdktest is already activated
-        (see sample_device_lifecycle.yaml / test_change_state), so this is expected to be a
-        no-op skip, not a real change.
+        bypasses the device_lifecycle YAML list entirely. Uses the first device from
+        sample_device_lifecycle.yaml, which is already activated (see test_change_state), so
+        this is expected to be a no-op skip, not a real change.
         """
         graphiant_config = graphiant_config_from_read_config()
+        device_name = device_lifecycle_names(graphiant_config)[0]
         result = graphiant_config.device_lifecycle.change_state(
-            None, {"device": "edge-1-sdktest", "lifecycle_state": "activated"}
+            None, {"device": device_name, "lifecycle_state": "activated"}
         )
         LOG.info("Change device lifecycle state via module_params result: %s", result)
-        assert result.get("changed") is False, "edge-1-sdktest should already be activated"
-        assert result.get("skipped_devices", []) == ["edge-1-sdktest"]
+        assert result.get("changed") is False, f"{device_name} should already be activated"
+        assert result.get("skipped_devices", []) == [device_name]
 
     def test_schedule_upgrade(self):
         """
@@ -3267,7 +3274,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         each schedule to reach Success/Failed (and, for a Success, portalStatus=Ready) by
         default — SLOW (several minutes per device actually rescheduled; observed ~7 minutes for
         one device against the test portal), but needed to confirm the upgrade actually
-        completed rather than just that it was accepted. edge-2-sdktest sets its own
+        completed rather than just that it was accepted. edge-2-* sets its own
         wait_for_completion: false in the sample file (per-device override — see
         sample_device_lifecycle.yaml), so it's still scheduled but never waited on here
         regardless of this call's default; it won't appear in completed_devices/
@@ -3300,8 +3307,9 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         live module_params-only input path itself works end-to-end.
         """
         graphiant_config = graphiant_config_from_read_config()
+        device_name = device_lifecycle_names(graphiant_config)[0]
         result = graphiant_config.device_lifecycle.schedule_upgrade(
-            None, {"device": "edge-1-sdktest", "release": "Latest"}
+            None, {"device": device_name, "release": "Latest"}
         )
         LOG.info("Schedule upgrade via module_params result: %s", result)
         assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
@@ -3318,7 +3326,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         upgradeSummary.lastRunningVersion (skipped if a device has none yet — there is no
         override), waiting for completion by default — SLOW (same cost as
         test_schedule_upgrade), but fire-and-forget can only confirm the rollback was accepted,
-        not that it actually took effect. edge-2-sdktest's own wait_for_completion: false
+        not that it actually took effect. edge-2-*'s own wait_for_completion: false
         override (see sample_device_lifecycle.yaml) means it's still excluded from
         completed_devices here, same as in test_schedule_upgrade.
 
@@ -3366,34 +3374,35 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Roll back a single device via module_params only (device, no config_file) — exercises
         the direct-device resolution path. Waits for completion by default and verifies the
-        rollback actually took effect (same reasoning/approach as test_rollback), for
-        edge-1-sdktest alone.
+        rollback actually took effect (same reasoning/approach as test_rollback), for the first
+        device from sample_device_lifecycle.yaml alone.
 
-        Pre-req: run test_schedule_upgrade[_module_params] first so edge-1-sdktest has a
+        Pre-req: run test_schedule_upgrade[_module_params] first so that device has a
         lastRunningVersion to roll back to. Also relies on test_rollback (same device) having
-        already finished — not just started — since both target edge-1-sdktest; the manager's
+        already finished — not just started — since both target the same device; the manager's
         schedule_in_progress_devices guard means this call is simply skipped, not failed, if
         test_rollback's own schedule for it somehow hadn't reached Success/Failed yet by the time
         this runs (see device_lifecycle_manager.py and test_rollback's docstring).
         """
         graphiant_config = graphiant_config_from_read_config()
-        pre_status = graphiant_config.device_lifecycle.get_status(None, {"device": "edge-1-sdktest"})
+        device_name = device_lifecycle_names(graphiant_config)[0]
+        pre_status = graphiant_config.device_lifecycle.get_status(None, {"device": device_name})
         pre_last_running = (
-            pre_status.get("devices", {}).get("edge-1-sdktest", {}).get("last_running_version") or {}
+            pre_status.get("devices", {}).get(device_name, {}).get("last_running_version") or {}
         ).get("version")
 
-        result = graphiant_config.device_lifecycle.rollback(None, {"device": "edge-1-sdktest", "release": None})
+        result = graphiant_config.device_lifecycle.rollback(None, {"device": device_name, "release": None})
         LOG.info("Rollback via module_params result: %s", result)
         assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
         assert result.get("not_insync_devices", []) == [], (
             f"Device(s) completed but did not reach Ready: {result.get('not_insync_devices')}"
         )
 
-        if "edge-1-sdktest" in result.get("completed_devices", []):
-            post_status = graphiant_config.device_lifecycle.get_status(None, {"device": "edge-1-sdktest"})
-            actual = post_status.get("devices", {}).get("edge-1-sdktest", {}).get("sw_version")
+        if device_name in result.get("completed_devices", []):
+            post_status = graphiant_config.device_lifecycle.get_status(None, {"device": device_name})
+            actual = post_status.get("devices", {}).get(device_name, {}).get("sw_version")
             assert actual == pre_last_running, (
-                f"edge-1-sdktest should now be running its pre-rollback lastRunningVersion "
+                f"{device_name} should now be running its pre-rollback lastRunningVersion "
                 f"{pre_last_running!r}, but is on {actual!r}"
             )
 
@@ -3414,10 +3423,11 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """Read-only lifecycle/upgrade status query for a single device via module_params
         (device), no config_file — exercises the direct-device resolution path."""
         graphiant_config = graphiant_config_from_read_config()
-        result = graphiant_config.device_lifecycle.get_status(None, {"device": "edge-1-sdktest"})
+        device_name = device_lifecycle_names(graphiant_config)[0]
+        result = graphiant_config.device_lifecycle.get_status(None, {"device": device_name})
         LOG.info("Device lifecycle status via module_params result: %s", result)
         assert result.get("failed_devices", []) == [], f"Unexpected failed_devices: {result.get('failed_devices')}"
-        assert set(result.get("devices", {})) == {"edge-1-sdktest"}
+        assert set(result.get("devices", {})) == {device_name}
 
 
 if __name__ == '__main__':
