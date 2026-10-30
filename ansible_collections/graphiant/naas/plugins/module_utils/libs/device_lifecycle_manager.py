@@ -25,15 +25,14 @@ to pin ``schedule_upgrade``/``rollback`` to an arbitrary exact build string — 
 portal's own "Change Release" dropdown exactly (``Custom`` only actually resolves to anything for
 an enterprise that has a custom image enabled; offered here unconditionally and left for the API
 to reject otherwise).
-``schedule_upgrade`` additionally skips (``not_connected_devices``) a device whose portal
-Connectivity Status is Down (``ttConnCount`` below 1/Impaired) rather than attempting a push with
-no tunnel-terminator connection to deliver it over. Both ``schedule_upgrade`` and ``rollback``
-also skip (``schedule_in_progress_devices``) a device whose existing
-``upgradeSummary.schedule.state`` hasn't reached ``Success``/``Failed`` yet, including ``Idle`` —
-submitting a new schedule while one is still in progress can race the upgrade backend's own dedup
-guard (which doesn't block on every non-terminal state), confirmed live to cause a schedule to
-fail with ``FailureReason: "Internal error"`` when it raced a still-in-flight prior
-rollback/upgrade for the same device (see ``_schedule_in_progress_state``). A
+Both ``schedule_upgrade`` and ``rollback`` also skip (``schedule_in_progress_devices``) a device
+whose existing ``upgradeSummary.schedule.state`` hasn't reached ``Success``/``Failed`` yet,
+including ``Idle`` — submitting a new schedule while one is still in progress can race the
+upgrade backend's own dedup guard (see ``_schedule_in_progress_state``). ``schedule_upgrade``
+checks this before connectivity, then additionally skips (``not_connected_devices``) a device
+whose portal Connectivity Status is Down (``ttConnCount`` below 1/Impaired) and has no schedule
+already in progress — checked in this order because a device rebooting for its own in-flight
+upgrade reads as disconnected during that window. A
 named device not found in the live edge list fails the task before any mutating call, with every
 unresolved device in the batch collected and named together (``missing_devices_message``) rather
 than stopping at the first one hit.
@@ -49,7 +48,8 @@ Polling: after a mutating call, ``change_state`` polls ``portalStatus=Ready``
 ``upgradeSummary.schedule.state`` to a terminal ``Success``/``Failed`` value
 (``wait_for_completion``, via ``_poll_schedule_completions``/
 ``GraphiantPortalClient.poll_upgrade_schedule_completion_batch`` — one shared
-``GET /v1/edges-summary`` per round covers every watched device), then also poll
+``GET /v1/edges-summary`` per round covers every watched device, for up to
+``schedule_completion_timeout`` minutes — default 15, max 40), then also poll
 ``portalStatus=Ready`` for any device whose schedule reached ``Success`` (a ``Success``
 schedule doesn't mean the portal has settled back to ``Ready`` yet). All PUT calls and polls
 for a batch run concurrently (``BaseManager.execute_concurrent_tasks``), not one device at a
@@ -57,13 +57,13 @@ time. Results land in ``completed_devices``/``failed_devices``/``in_progress_dev
 ``insync_devices``/``not_insync_devices``; a timeout before Success/Failed is not a failure,
 but a ``Failed`` schedule or a Ready-poll timeout is.
 
-``operation``/``upgrade_action``/``ts`` apply to the whole call and are module-parameter only
-(no config-file equivalent) — one invocation is exactly one operation, and one
-``put_devices_upgrade_schedule`` PUT batches every device under a single ``action``/``ts``.
-``verify_for_insync``/``wait_for_completion`` are the opposite: genuinely per-device, settable
-as a key alongside ``lifecycle_state``/``release`` in that device's own ``device_lifecycle``
-entry, which overrides the module-parameter default (itself ``True`` when unset) for just that
-device.
+``operation``/``upgrade_action``/``ts``/``schedule_completion_timeout`` apply to the whole call
+and are module-parameter only (no config-file equivalent) — one invocation is exactly one
+operation, and one ``put_devices_upgrade_schedule`` PUT batches every device under a single
+``action``/``ts``. ``verify_for_insync``/``wait_for_completion`` are the opposite: genuinely
+per-device, settable as a key alongside ``lifecycle_state``/``release`` in that device's own
+``device_lifecycle`` entry, which overrides the module-parameter default (itself ``True`` when
+unset) for just that device.
 
 With ``detailed_logs: true`` (and ``tabulate`` installed), every operation logs the current
 state of its targeted devices as a table before any mutating call; ``change_state`` also logs
@@ -125,6 +125,13 @@ _READY_AFTER = frozenset({"activated", "staging", "maintenance"})
 # (and only works via the API) for an enterprise that has a custom image enabled; offered here
 # unconditionally and left for the API itself to reject when it isn't.
 _RELEASES = frozenset({"Stable", "Recommended", "Latest", "Custom"})
+
+# How long schedule_upgrade/rollback poll a device's upgradeSummary.schedule.state for
+# Success/Failed before giving up (see _poll_schedule_completions). MAX matches the upgrade
+# backend's own worst-case ceiling for a single device's activation — waiting longer than the
+# backend itself will wait is pointless.
+_DEFAULT_SCHEDULE_COMPLETION_TIMEOUT_MINUTES = 15
+_MAX_SCHEDULE_COMPLETION_TIMEOUT_MINUTES = 40
 
 
 class DeviceLifecycleManager(BaseManager):
@@ -213,6 +220,29 @@ class DeviceLifecycleManager(BaseManager):
             return None
         return state
 
+    @staticmethod
+    def _resolve_schedule_completion_timeout_seconds(schedule_completion_timeout: Optional[int]) -> int:
+        """
+        Validate and resolve ``schedule_completion_timeout`` (minutes) to seconds for
+        ``poll_upgrade_schedule_completion_batch``. Defaults to
+        ``_DEFAULT_SCHEDULE_COMPLETION_TIMEOUT_MINUTES`` when not given; raises
+        ``ConfigurationError`` outside ``1..._MAX_SCHEDULE_COMPLETION_TIMEOUT_MINUTES`` (the
+        backend's own worst-case activation ceiling — see the constants' comment).
+        """
+        minutes = (
+            _DEFAULT_SCHEDULE_COMPLETION_TIMEOUT_MINUTES
+            if schedule_completion_timeout is None
+            else schedule_completion_timeout
+        )
+        valid_range = isinstance(minutes, int) and not isinstance(minutes, bool)
+        valid_range = valid_range and 1 <= minutes <= _MAX_SCHEDULE_COMPLETION_TIMEOUT_MINUTES
+        if not valid_range:
+            raise ConfigurationError(
+                f"schedule_completion_timeout must be an integer number of minutes between 1 and "
+                f"{_MAX_SCHEDULE_COMPLETION_TIMEOUT_MINUTES} (got {schedule_completion_timeout!r})"
+            )
+        return minutes * 60
+
     def _read_top_level_yaml(self, config_yaml_file: Optional[str]) -> Dict[str, Any]:
         """
         Return the top-level keys of ``config_yaml_file`` (currently only ``role``, read by
@@ -294,14 +324,19 @@ class DeviceLifecycleManager(BaseManager):
             return str(e)
 
     def _poll_schedule_completions(
-        self, device_id_by_name: Dict[str, int], verify_for_insync_by_name: Dict[str, bool]
+        self,
+        device_id_by_name: Dict[str, int],
+        verify_for_insync_by_name: Dict[str, bool],
+        timeout_seconds: int,
     ) -> Dict[str, List[str]]:
         """
         Poll every device in ``device_id_by_name`` (name -> device_id) for upgrade schedule
         completion — used by both ``schedule_upgrade`` and ``rollback`` after their
         ``put_devices_upgrade_schedule`` call succeeds. One shared ``GET /v1/edges-summary`` per
         round (see ``GraphiantPortalClient.poll_upgrade_schedule_completion_batch``) covers every
-        device at once instead of each polling independently.
+        device at once instead of each polling independently. ``timeout_seconds`` is the whole
+        batch's shared poll budget (see ``schedule_completion_timeout``/
+        ``_resolve_schedule_completion_timeout_seconds``).
 
         A device whose schedule reaches ``Success`` isn't necessarily settled from the portal's
         perspective yet, so (when its own ``verify_for_insync_by_name`` entry is enabled) it's
@@ -324,7 +359,9 @@ class DeviceLifecycleManager(BaseManager):
             return outcome
 
         name_by_device_id = {device_id: name for name, device_id in device_id_by_name.items()}
-        results = self.gsdk.poll_upgrade_schedule_completion_batch(list(device_id_by_name.values()))
+        results = self.gsdk.poll_upgrade_schedule_completion_batch(
+            list(device_id_by_name.values()), timeout=timeout_seconds
+        )
         ready_poll_tasks: Dict[str, Dict[str, Any]] = {}
         for device_id, (state, failure_reason) in results.items():
             device_name = name_by_device_id[device_id]
@@ -706,19 +743,24 @@ class DeviceLifecycleManager(BaseManager):
         ts: Optional[Dict[str, int]] = None,
         wait_for_completion: Optional[bool] = None,
         verify_for_insync: Optional[bool] = None,
+        schedule_completion_timeout: Optional[int] = None,
     ) -> dict:
         by_name = self._load_upgrade_targets(config_yaml_file, module_params, require_release=True)
         if not by_name:
             LOG.info("%s No '%s' entries to process", _LOG_PREFIX, _YAML_KEY)
             return new_apply_result(no_input=True)
 
-        # action/ts apply to the whole batch (one PUT covers every scheduled device under a
-        # single action/ts), so these are module-param-only, with no per-device or config-file
-        # fallback. wait_for_completion/verify_for_insync's defaults here may still be overridden
-        # per device (see _validate_upgrade_cfg) since both polls already track devices
-        # individually.
+        # action/ts/schedule_completion_timeout apply to the whole batch (one PUT covers every
+        # scheduled device under a single action/ts, and the completion poll covers all of them
+        # in one shared loop — see _poll_schedule_completions), so these are module-param-only,
+        # with no per-device or config-file fallback. wait_for_completion/verify_for_insync's
+        # defaults here may still be overridden per device (see _validate_upgrade_cfg) since both
+        # polls already track devices individually.
         effective_action = action or "InstallActivate"
         effective_ts = ts
+        schedule_completion_timeout_seconds = self._resolve_schedule_completion_timeout_seconds(
+            schedule_completion_timeout
+        )
         default_wait_for_completion = True if wait_for_completion is None else wait_for_completion
         default_verify_for_insync = True if verify_for_insync is None else verify_for_insync
         check_mode = getattr(self.gsdk, "check_mode", False)
@@ -744,12 +786,29 @@ class DeviceLifecycleManager(BaseManager):
                 continue
             matched_edges.append(edge)
 
+            # A prior schedule that hasn't reached Success/Failed yet — submitting a new one now
+            # can race the backend's own dedup guard, see _schedule_in_progress_state. Checked
+            # before connectivity (see below): a device rebooting to activate its own in-flight
+            # upgrade always reads ttConnCount 0 during that window, but it has a schedule in
+            # progress, not a connectivity problem.
+            in_progress_state = self._schedule_in_progress_state(edge)
+            if in_progress_state is not None:
+                LOG.info(
+                    "%s ✓ '%s' has a schedule already in progress (state=%s), skipping to avoid a duplicate request",
+                    _LOG_PREFIX,
+                    device_name,
+                    in_progress_state,
+                )
+                busy.append(device_name)
+                continue
+
             # Portal Connectivity Status: Up (ttConnCount>=2) or Impaired (ttConnCount>=1) is
             # required to schedule an upgrade — a device with no tunnel-terminator connections at
-            # all (ttConnCount 0/None) can't actually receive one, so trying would just fail at
-            # the API. Skipped here rather than attempted and left to fail; not a "nothing to do"
-            # skip like the already-on-target-version one below, so it lands in its own result
-            # field (not_connected_devices).
+            # all (ttConnCount 0/None) and no in-flight schedule of its own can't actually
+            # receive one, so trying would just fail at the API. Skipped here rather than
+            # attempted and left to fail; not a "nothing to do" skip like the
+            # already-on-target-version one below, so it lands in its own result field
+            # (not_connected_devices).
             tt_conn_count = getattr(edge, "tt_conn_count", None) or 0
             if tt_conn_count < 1:
                 LOG.info(
@@ -760,21 +819,6 @@ class DeviceLifecycleManager(BaseManager):
                     tt_conn_count,
                 )
                 not_connected.append(device_name)
-                continue
-
-            # A prior schedule that hasn't reached Success/Failed yet — submitting a new one now
-            # can race the backend's own (narrower) dedup guard, see _schedule_in_progress_state.
-            # Skipped rather than attempted, same as not_connected_devices above, so it lands in
-            # its own result field (schedule_in_progress_devices).
-            in_progress_state = self._schedule_in_progress_state(edge)
-            if in_progress_state is not None:
-                LOG.info(
-                    "%s ✓ '%s' has a schedule already in progress (state=%s), skipping to avoid a duplicate request",
-                    _LOG_PREFIX,
-                    device_name,
-                    in_progress_state,
-                )
-                busy.append(device_name)
                 continue
 
             version = {"release": cfg["release"]}
@@ -859,7 +903,11 @@ class DeviceLifecycleManager(BaseManager):
         result["diff_plan"] = diff_plan
 
         if device_id_by_name and not check_mode:
-            result.update(self._poll_schedule_completions(device_id_by_name, verify_for_insync_by_name))
+            result.update(
+                self._poll_schedule_completions(
+                    device_id_by_name, verify_for_insync_by_name, schedule_completion_timeout_seconds
+                )
+            )
             self._log_post_schedule_table(configured, "Resulting state after schedule_upgrade", release_catalog)
 
         return result
@@ -871,17 +919,23 @@ class DeviceLifecycleManager(BaseManager):
         ts: Optional[Dict[str, int]] = None,
         wait_for_completion: Optional[bool] = None,
         verify_for_insync: Optional[bool] = None,
+        schedule_completion_timeout: Optional[int] = None,
     ) -> dict:
         by_name = self._load_upgrade_targets(config_yaml_file, module_params, require_release=False)
         if not by_name:
             LOG.info("%s No '%s' entries to process", _LOG_PREFIX, _YAML_KEY)
             return new_apply_result(no_input=True)
 
-        # ts applies to the whole batch (one PUT covers every scheduled device under a single
-        # ts), so it's module-param-only, with no per-device or config-file fallback.
-        # wait_for_completion/verify_for_insync's defaults here may still be overridden per
-        # device (see _validate_upgrade_cfg) since both polls already track devices individually.
+        # ts/schedule_completion_timeout apply to the whole batch (one PUT covers every scheduled
+        # device under a single ts, and the completion poll covers all of them in one shared loop
+        # — see _poll_schedule_completions), so these are module-param-only, with no per-device or
+        # config-file fallback. wait_for_completion/verify_for_insync's defaults here may still be
+        # overridden per device (see _validate_upgrade_cfg) since both polls already track devices
+        # individually.
         effective_ts = ts
+        schedule_completion_timeout_seconds = self._resolve_schedule_completion_timeout_seconds(
+            schedule_completion_timeout
+        )
         default_wait_for_completion = True if wait_for_completion is None else wait_for_completion
         default_verify_for_insync = True if verify_for_insync is None else verify_for_insync
         check_mode = getattr(self.gsdk, "check_mode", False)
@@ -990,7 +1044,11 @@ class DeviceLifecycleManager(BaseManager):
         result["diff_plan"] = diff_plan
 
         if device_id_by_name and not check_mode:
-            result.update(self._poll_schedule_completions(device_id_by_name, verify_for_insync_by_name))
+            result.update(
+                self._poll_schedule_completions(
+                    device_id_by_name, verify_for_insync_by_name, schedule_completion_timeout_seconds
+                )
+            )
             self._log_post_schedule_table(configured, "Resulting state after rollback", release_catalog)
 
         return result

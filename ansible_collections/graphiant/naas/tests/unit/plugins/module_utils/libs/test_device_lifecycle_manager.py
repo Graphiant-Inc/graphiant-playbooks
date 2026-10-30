@@ -51,7 +51,7 @@ def _make_manager() -> DeviceLifecycleManager:
     # completion polling) aren't affected by wait_for_completion defaulting to True. Tests
     # exercising the poll itself override this per-test.
     config_utils.gsdk.poll_upgrade_schedule_completion_batch = MagicMock(
-        side_effect=lambda device_ids: {device_id: ("Success", None) for device_id in device_ids}
+        side_effect=lambda device_ids, timeout=900: {device_id: ("Success", None) for device_id in device_ids}
     )
     config_utils.concurrent_task_execution = MagicMock(side_effect=_sync_concurrent_task_execution)
     return DeviceLifecycleManager(config_utils)
@@ -663,7 +663,44 @@ def test_schedule_upgrade_polls_and_reports_completed_devices() -> None:
     assert r["completed_devices"] == ["edge-1"]
     assert r["failed_devices"] == []
     assert r["in_progress_devices"] == []
-    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([100])
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([100], timeout=900)
+
+
+def test_schedule_upgrade_schedule_completion_timeout_passed_through() -> None:
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.return_value = {100: ("Success", None)}
+
+    mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Latest"}, schedule_completion_timeout=25)
+
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([100], timeout=1500)
+
+
+@pytest.mark.parametrize("bad_value", [0, 41, -5, 15.5, "15"])
+def test_schedule_upgrade_schedule_completion_timeout_rejects_out_of_range(bad_value) -> None:
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+
+    with pytest.raises(ConfigurationError, match="schedule_completion_timeout"):
+        mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Latest"}, schedule_completion_timeout=bad_value)
+
+
+def test_rollback_schedule_completion_timeout_passed_through() -> None:
+    mgr = _make_manager()
+    upgrade_summary = MagicMock()
+    upgrade_summary.last_running_version = _sw_version("Stable", "25.1.1", "25.1")
+    upgrade_summary.running_version = _sw_version("Latest", "26.1.1", "26.1")
+    upgrade_summary.schedule = None
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [
+        _edge(hostname="edge-1", device_id=100, upgrade_summary=upgrade_summary)
+    ]
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.return_value = {100: ("Success", None)}
+
+    mgr.rollback(None, {"device": "edge-1"}, schedule_completion_timeout=40)
+
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([100], timeout=2400)
 
 
 def test_schedule_upgrade_reports_failed_device_and_logs_failure_reason(caplog) -> None:
@@ -813,7 +850,7 @@ def test_schedule_upgrade_per_device_wait_for_completion_override() -> None:
     assert r["changed"] is True
     assert sorted(r["configured_devices"]) == ["edge-1", "edge-2"]
     assert r["completed_devices"] == ["edge-2"]
-    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([200])
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([200], timeout=900)
 
 
 def test_schedule_upgrade_post_op_table_uses_one_shared_fetch_per_batch() -> None:
@@ -1051,18 +1088,36 @@ def test_schedule_upgrade_skips_device_with_schedule_in_progress() -> None:
     mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
 
 
-def test_schedule_upgrade_not_connected_wins_over_schedule_in_progress() -> None:
+def test_schedule_upgrade_schedule_in_progress_wins_over_not_connected() -> None:
     """
     A device that is both unreachable (ttConnCount 0) and has a schedule already in progress must
-    land in not_connected_devices, not schedule_in_progress_devices — the connectivity check runs
-    first (see schedule_upgrade's device loop), since there's no portal connection to deliver
-    anything over regardless of what its existing schedule is doing.
+    land in schedule_in_progress_devices, not not_connected_devices — the in-progress check runs
+    first (see schedule_upgrade's device loop), since a device mid-reboot to activate its own
+    in-flight upgrade always reads ttConnCount 0 during that window.
     """
     mgr = _make_manager()
     upgrade_summary = MagicMock()
     upgrade_summary.schedule = _schedule("Downloading")
     mgr.gsdk.get_edges_summary_with_upgrade.return_value = [
         _edge(hostname="edge-1", device_id=100, upgrade_summary=upgrade_summary, tt_conn_count=0)
+    ]
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Latest"})
+
+    assert r["schedule_in_progress_devices"] == ["edge-1"]
+    assert r["not_connected_devices"] == []
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_schedule_upgrade_not_connected_with_no_schedule_in_progress() -> None:
+    """
+    A device that is unreachable (ttConnCount 0) with NO schedule in progress still lands in
+    not_connected_devices — the reordering in the test above only changes the outcome for a
+    device that actually has an in-flight schedule.
+    """
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [
+        _edge(hostname="edge-1", device_id=100, upgrade_summary=None, tt_conn_count=0)
     ]
 
     r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Latest"})
@@ -1510,7 +1565,7 @@ def test_rollback_per_device_wait_for_completion_override() -> None:
     assert r["changed"] is True
     assert sorted(r["configured_devices"]) == ["edge-1", "edge-2"]
     assert r["completed_devices"] == ["edge-2"]
-    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([200])
+    mgr.gsdk.poll_upgrade_schedule_completion_batch.assert_called_once_with([200], timeout=900)
 
 
 def test_rollback_check_mode_skips_poll() -> None:

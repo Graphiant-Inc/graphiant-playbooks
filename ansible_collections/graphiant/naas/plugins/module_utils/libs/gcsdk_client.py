@@ -763,7 +763,7 @@ class GraphiantPortalClient:
     # hasn't finished yet (see its own-schedule-already-in-progress guard).
     UPGRADE_SCHEDULE_TERMINAL_STATES = frozenset({"Success", "Failed"})
 
-    def poll_upgrade_schedule_completion_batch(self, device_ids, timeout=600, wait=20):
+    def poll_upgrade_schedule_completion_batch(self, device_ids, timeout=900, wait=20):
         """
         Poll ``GET /v1/edges-summary`` (``upgradeSummary=true``) for every device in
         ``device_ids`` until each one's ``upgradeSummary.schedule.state`` reaches a terminal
