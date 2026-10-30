@@ -41,20 +41,22 @@ description:
     skip, since C(lastRunningVersion) always differs from what's currently running, so there's no
     "already on this version" case; a repeat C(rollback) right after a previous one simply
     targets whichever build the device just came from, reporting C(changed=true) again.
-    C(schedule_upgrade) additionally does not schedule a device whose portal Connectivity Status
-    is Down (C(ttConnCount) below V(1)/Impaired) rather than attempting a push with nothing to
-    deliver it over — unlike the other two skips, this one (RV(not_connected_devices)) fails the
+    Both C(schedule_upgrade) and C(rollback) also skip (RV(schedule_in_progress_devices)) a
+    device whose existing schedule hasn't reached a terminal state yet, to avoid racing a
+    still-in-flight prior schedule for the same device — a soft skip like RV(skipped_devices),
+    not a failure (see notes). C(schedule_upgrade) additionally does not schedule a device whose
+    portal Connectivity Status is Down (C(ttConnCount) below V(1)/Impaired) and has no schedule
+    already in progress (checked first — see notes), rather than attempting a push with nothing
+    to deliver it over; unlike the other skips, this one (RV(not_connected_devices)) fails the
     task, even when other devices in the same batch were scheduled successfully (RV(msg) is
-    replaced with a summary; see notes). Both C(schedule_upgrade) and C(rollback) also skip
-    (RV(schedule_in_progress_devices)) a device whose existing schedule hasn't reached a terminal
-    state yet, to avoid racing a still-in-flight prior schedule for the same device — a soft skip
-    like RV(skipped_devices), not a failure (see notes).
+    replaced with a summary; see notes).
   - >-
     Supply O(config_file) for a C(device_lifecycle) list, and/or O(device) with
     O(lifecycle_state) / O(release) to run a single device or override one device from the file.
   - >-
-    Precedence is NOT the same for every option: O(operation), O(upgrade_action), and O(ts)
-    apply to the whole run and are module-parameter only (no O(config_file) equivalent).
+    Precedence is NOT the same for every option: O(operation), O(upgrade_action), O(ts), and
+    O(schedule_completion_timeout) apply to the whole run and are module-parameter only (no
+    O(config_file) equivalent).
     O(lifecycle_state) and O(release) follow the usual rule — a module parameter set via
     O(device) overrides that one device's entry in the file. O(verify_for_insync) and
     O(wait_for_completion) work the OPPOSITE way: the module parameter only sets the whole-run
@@ -82,14 +84,19 @@ notes:
     scheduled device's C(upgradeSummary.schedule.state) until it reaches C(Success) or C(Failed)
     (every other value, including any new one the API might add, means still in progress — not a
     failure, since downloads/installs can take minutes), landing in RV(completed_devices) /
-    RV(failed_devices) / RV(in_progress_devices). A device whose schedule reaches C(Success) is
-    then also polled for C(portalStatus=Ready) the same way O(operation=change_state) is (same
-    O(verify_for_insync) toggle, same RV(insync_devices)/RV(not_insync_devices) result fields) —
-    C(Success) doesn't mean the portal has settled back to C(Ready) yet. A C(Failed) schedule, or
-    a non-empty RV(not_insync_devices), fails the task even though the schedule/rollback was still
-    applied. Set O(wait_for_completion=false) to skip the schedule-state poll (and, since there's
-    then no C(Success) to follow, the Ready poll too) for every device, or override either toggle
-    per device in O(config_file).
+    RV(failed_devices) / RV(in_progress_devices) — a non-empty RV(in_progress_devices) is
+    reflected in RV(msg) too, but doesn't affect C(changed) or fail the task. This poll's budget is
+    O(schedule_completion_timeout) minutes (whole batch, shared across however many devices were
+    scheduled) — default V(15), maximum V(40); raise it for a large batch where devices may queue
+    behind each other at the same site. A device whose schedule
+    reaches C(Success) is then also polled for C(portalStatus=Ready) the same way
+    O(operation=change_state) is (same O(verify_for_insync) toggle, same
+    RV(insync_devices)/RV(not_insync_devices) result fields) — C(Success) doesn't mean the portal
+    has settled back to C(Ready) yet. A C(Failed) schedule, or a non-empty RV(not_insync_devices),
+    fails the task even though the schedule/rollback was still applied. Set
+    O(wait_for_completion=false) to skip the schedule-state poll (and, since there's then no
+    C(Success) to follow, the Ready poll too) for every device, or override either toggle per
+    device in O(config_file).
   - >-
     With O(detailed_logs=true) and C(tabulate) installed, every operation logs the targeted
     devices' current state as a table before any C(PUT) (see
@@ -112,6 +119,8 @@ notes:
     C(FailureReason: "Internal error"). Not a failure here; this is reported the same way as
     RV(skipped_devices) (counted in the "N device(s) skipped" summary) rather than failing the
     task, since the device's prior schedule is itself still making progress toward the same goal.
+    O(operation=schedule_upgrade) checks this before connectivity, since a device rebooting to
+    activate its own in-flight upgrade always reads as disconnected during that window.
 extends_documentation_fragment:
   - graphiant.naas.graphiant_portal_auth
 options:
@@ -143,9 +152,10 @@ options:
         C(wait_for_completion) / C(verify_for_insync) if overriding those (the rollback target is
         always the device's own last running version — an empty dict is enough otherwise).
       - >-
-        O(upgrade_action) and O(ts) apply to the whole batch (one C(PUT) schedules every
-        device's upgrade under a single action/time) and so, like O(operation), are
-        module-parameter only — they cannot be set in this file.
+        O(upgrade_action), O(ts), and O(schedule_completion_timeout) apply to the whole batch
+        (one C(PUT) schedules every device's upgrade under a single action/time, and one poll
+        loop waits for all of them) and so, like O(operation), are module-parameter only — they
+        cannot be set in this file.
     type: str
     required: false
   device:
@@ -193,6 +203,17 @@ options:
         C({"seconds": <int>, "nanos": <int>}). Applies to every device in the batch (one C(PUT)
         call, one time) — module-parameter only, not settable in O(config_file); omit to run now.
     type: dict
+    required: false
+  schedule_completion_timeout:
+    description:
+      - >-
+        Minutes to poll for O(operation=schedule_upgrade) / O(operation=rollback)'s schedule
+        completion (see notes) before giving up — V(1) to V(40), default V(15) (a single device
+        typically completes in ~10-15 minutes). Applies to the whole batch (one shared poll
+        loop) — module-parameter only, not settable in O(config_file). Has no effect on a device
+        whose effective O(wait_for_completion) is V(false) — the module parameter, unless
+        overridden to V(true) for that device in O(config_file), which still polls it.
+    type: int
     required: false
   verify_for_insync:
     description:
@@ -386,12 +407,12 @@ skipped_devices:
 not_connected_devices:
   description: >-
     C(schedule_upgrade) only — device names not scheduled because the device's portal
-    Connectivity Status is Down (C(ttConnCount) C(0) or missing): less than Impaired
-    (C(ttConnCount>=1)), so there's no tunnel-terminator connection to actually deliver the
-    upgrade over. Not attempted rather than sent and left to fail at the API; the rest of the
-    batch is still scheduled normally, but a non-empty list here fails the task (RV(msg) replaced
-    with a summary naming them, worded as "No devices were scheduled" instead of "Upgrade
-    scheduled, but ..." when this is the only reason C(changed) is false).
+    Connectivity Status is Down (C(ttConnCount) below V(1)/Impaired) and it has no schedule
+    already in progress (checked first — see RV(schedule_in_progress_devices)). Not attempted
+    rather than sent and left to fail at the API; the rest of the batch is still scheduled
+    normally, but a non-empty list here fails the task (RV(msg) replaced with a summary naming
+    them, worded as "No devices were scheduled" instead of "Upgrade scheduled, but ..." when this
+    is the only reason C(changed) is false).
   type: list
   elements: str
   returned: when applicable
@@ -451,7 +472,8 @@ in_progress_devices:
   description: >-
     For C(schedule_upgrade) / C(rollback), device names whose C(upgradeSummary.schedule.state)
     did not reach C(Success) or C(Failed) within the poll timeout — still in progress, not a
-    failure (downloads/installs can take minutes). Use
+    failure (downloads/installs can take minutes); noted in RV(msg) when it's the only reason the
+    task isn't fully done, without affecting C(changed) or failing the task. Use
     M(graphiant.naas.graphiant_device_lifecycle_info) in a follow-up task to keep watching these.
   type: list
   elements: str
@@ -530,6 +552,7 @@ def main():
             type="str", required=False, default=None, choices=["InstallActivate", "Install", "Activate"]
         ),
         ts=dict(type="dict", required=False, default=None),
+        schedule_completion_timeout=dict(type="int", required=False, default=None),
         verify_for_insync=dict(type="bool", required=False, default=None),
         wait_for_completion=dict(type="bool", required=False, default=None),
         state=dict(type="str", required=False, default="present", choices=["present"]),
@@ -656,6 +679,7 @@ def main():
                 ts=params.get("ts"),
                 wait_for_completion=params.get("wait_for_completion"),
                 verify_for_insync=params.get("verify_for_insync"),
+                schedule_completion_timeout=params.get("schedule_completion_timeout"),
                 success_msg=su_success_msg,
                 no_change_msg=su_no_change_msg,
             )
@@ -710,6 +734,24 @@ def main():
                     f"{lead} {'; '.join(problems)}{completed_note}{in_progress_note}"
                     f"{insync_note} (see configured_devices for what was actually applied){logs_suffix}"
                 )
+            elif in_progress_devices:
+                # Not a failure (the schedule itself succeeded) — worded to avoid implying success
+                # though: at this point the outcome for these devices is genuinely unknown (could
+                # still reach Success OR Failed after this task exits), so msg says so plainly,
+                # with a concrete next step, rather than sounding reassuring when it may not be.
+                # completed_note/insync_note mirror the branch above so a mixed-outcome batch
+                # (some devices already done, one still pending) doesn't read as if nothing
+                # finished.
+                marker = "\n\nDetailed logs:\n"
+                logs_suffix = msg[msg.index(marker) :] if marker in msg else ""  # noqa: E203
+                completed_note = f"; completed: {', '.join(completed_devices)}" if completed_devices else ""
+                insync_note = f"; reached Ready: {', '.join(insync_devices)}" if insync_devices else ""
+                msg = (
+                    f"Upgrade scheduled (action={upgrade_action_label}){completed_note}{insync_note}; "
+                    f"outcome not yet confirmed for {len(in_progress_devices)} device(s), still in "
+                    f"progress: {', '.join(in_progress_devices)} — re-check later via "
+                    f"graphiant_device_lifecycle_info{logs_suffix}"
+                )
             exit_payload = dict(
                 changed=result["changed"],
                 msg=msg,
@@ -747,6 +789,7 @@ def main():
                 ts=params.get("ts"),
                 wait_for_completion=params.get("wait_for_completion"),
                 verify_for_insync=params.get("verify_for_insync"),
+                schedule_completion_timeout=params.get("schedule_completion_timeout"),
                 success_msg=rb_success_msg,
                 no_change_msg=rb_no_change_msg,
             )
@@ -785,6 +828,24 @@ def main():
                 msg = (
                     f"Rollback scheduled, but {'; '.join(problems)}{completed_note}{in_progress_note}"
                     f"{insync_note} (see configured_devices for what was actually applied){logs_suffix}"
+                )
+            elif in_progress_devices:
+                # Not a failure (the rollback itself succeeded) — worded to avoid implying success
+                # though: at this point the outcome for these devices is genuinely unknown (could
+                # still reach Success OR Failed after this task exits), so msg says so plainly,
+                # with a concrete next step, rather than sounding reassuring when it may not be.
+                # completed_note/insync_note mirror the branch above so a mixed-outcome batch
+                # (some devices already done, one still pending) doesn't read as if nothing
+                # finished.
+                marker = "\n\nDetailed logs:\n"
+                logs_suffix = msg[msg.index(marker) :] if marker in msg else ""  # noqa: E203
+                completed_note = f"; completed: {', '.join(completed_devices)}" if completed_devices else ""
+                insync_note = f"; reached Ready: {', '.join(insync_devices)}" if insync_devices else ""
+                msg = (
+                    f"Rollback scheduled{completed_note}{insync_note}; outcome not yet confirmed "
+                    f"for {len(in_progress_devices)} device(s), still in progress: "
+                    f"{', '.join(in_progress_devices)} — re-check later via "
+                    f"graphiant_device_lifecycle_info{logs_suffix}"
                 )
             exit_payload = dict(
                 changed=result["changed"],
