@@ -27,6 +27,10 @@ vnet_name = "graphiant-vedge-vnet"
 # vnet_address_space: CIDR block for the virtual network
 vnet_address_space = "10.1.0.0/16"
 
+# vnet_address_space_v6: IPv6 range for the VNet, used by the LAN subnet only (index 3 /64, e.g. fd00:10:1:3::/64).
+# "" keeps the VNet IPv4-only.
+# vnet_address_space_v6 = "fd00:10:1::/48"
+
 # subnet_mgmt_prefix: CIDR for the mgmt subnet
 subnet_mgmt_prefix = "10.1.1.0/24"
 

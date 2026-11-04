@@ -44,12 +44,53 @@ locals {
     var.tags
   )
 
-  # Resolve subnet IDs — new VNet creates subnets, existing VNet uses provided IDs
-  subnet_cloud_init_id = local.new_vnet && local.is_devtest ? azurerm_subnet.cloud_init[0].id : var.subnet_cloud_init_id
-  subnet_mgmt_id       = local.new_vnet ? azurerm_subnet.mgmt[0].id : var.subnet_mgmt_id
-  subnet_wan_id        = local.new_vnet ? azurerm_subnet.wan[0].id : var.subnet_wan_id
-  subnet_lan_id        = local.new_vnet ? azurerm_subnet.lan[0].id : var.subnet_lan_id
+  # VNet name/RG to create subnets in — parsed from vnet_id: /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<name>
+  vnet_name_resolved = local.use_existing_vnet ? element(split("/", var.vnet_id), 8) : var.vnet_name
+  vnet_rg_resolved   = local.use_existing_vnet ? element(split("/", var.vnet_id), 4) : local.rg_name
 
+  # Each component is independent: reuse it when its *_id is set, else create it
+  create_subnet_cloud_init = local.is_create && local.is_devtest && var.subnet_cloud_init_id == ""
+  create_subnet_mgmt       = local.is_create && var.subnet_mgmt_id == ""
+  create_subnet_wan        = local.is_create && var.subnet_wan_id == ""
+  create_subnet_lan        = local.is_create && var.subnet_lan_id == ""
+
+  # A route table is only created when a new subnet needs it; existing subnets keep their association
+  create_rt_wan = local.is_create && var.route_table_wan_id == "" && (local.create_subnet_mgmt || local.create_subnet_wan)
+  create_rt_lan = local.is_create && var.route_table_lan_id == "" && local.create_subnet_lan
+
+  create_nsg_cloud_init = local.is_create && local.is_devtest && var.nsg_cloud_init_id == ""
+  create_nsg_mgmt       = local.is_create && var.nsg_mgmt_id == ""
+  create_nsg_wan        = local.is_create && var.nsg_wan_id == ""
+  create_nsg_lan        = local.is_create && var.nsg_lan_id == ""
+  create_nsg_test_vm    = local.is_create && var.deploy_test_vm && var.nsg_test_vm_id == ""
+
+  create_pip_mgmt = local.is_create && var.public_ip_mgmt_id == ""
+  create_pip_wan  = local.is_create && var.public_ip_wan_id == ""
+
+  subnet_cloud_init_id = local.create_subnet_cloud_init ? azurerm_subnet.cloud_init[0].id : var.subnet_cloud_init_id
+  subnet_mgmt_id       = local.create_subnet_mgmt ? azurerm_subnet.mgmt[0].id : var.subnet_mgmt_id
+  subnet_wan_id        = local.create_subnet_wan ? azurerm_subnet.wan[0].id : var.subnet_wan_id
+  subnet_lan_id        = local.create_subnet_lan ? azurerm_subnet.lan[0].id : var.subnet_lan_id
+
+  route_table_wan_id = local.create_rt_wan ? azurerm_route_table.wan[0].id : var.route_table_wan_id
+  route_table_lan_id = local.create_rt_lan ? azurerm_route_table.lan[0].id : var.route_table_lan_id
+
+  nsg_cloud_init_id = local.create_nsg_cloud_init ? azurerm_network_security_group.cloud_init[0].id : var.nsg_cloud_init_id
+  nsg_mgmt_id       = local.create_nsg_mgmt ? azurerm_network_security_group.mgmt[0].id : var.nsg_mgmt_id
+  nsg_wan_id        = local.create_nsg_wan ? azurerm_network_security_group.wan[0].id : var.nsg_wan_id
+  nsg_lan_id        = local.create_nsg_lan ? azurerm_network_security_group.lan[0].id : var.nsg_lan_id
+  nsg_test_vm_id    = local.create_nsg_test_vm ? azurerm_network_security_group.test_vm[0].id : var.nsg_test_vm_id
+
+  public_ip_mgmt_id = local.create_pip_mgmt ? azurerm_public_ip.mgmt[0].id : var.public_ip_mgmt_id
+  public_ip_wan_id  = local.create_pip_wan ? azurerm_public_ip.wan[0].id : var.public_ip_wan_id
+
+  # IPv6 is LAN-side only: VNet range, LAN subnet /64, vEdge LAN + test VM NICs, ::/0 route via vEdge.
+  # lan_ipv6 drives counts, so it uses only plan-time values (vars + existing VNet/subnet lookups).
+  vnet_ipv6_space          = local.new_vnet ? var.vnet_address_space_v6 : try([for p in data.azurerm_virtual_network.existing[0].address_space : p if can(regex(":", p))][0], "")
+  existing_lan_subnet_ipv6 = length([for p in try(data.azurerm_subnet.lan_existing[0].address_prefixes, []) : p if can(regex(":", p))]) > 0
+  lan_ipv6                 = local.is_create && (local.create_subnet_lan ? local.vnet_ipv6_space != "" : local.existing_lan_subnet_ipv6)
+  lan_subnet_ipv6_prefix   = local.create_subnet_lan && local.lan_ipv6 ? try(cidrsubnet(local.vnet_ipv6_space, 64 - tonumber(split("/", local.vnet_ipv6_space)[1]), var.subnet_lan_ipv6_netnum), null) : null
+  vedge_lan_ipv6           = local.lan_ipv6 ? try([for c in azurerm_network_interface.lan[0].ip_configuration : c.private_ip_address if c.private_ip_address_version == "IPv6"][0], null) : null
 
   # cloud-init user data
   cloud_init_production = <<-USERDATA
@@ -102,61 +143,80 @@ resource "azurerm_resource_group" "rg" {
 }
 
 # -----------------------------------------------------------------------------
-# Virtual Network & Subnets (new VNet only)
+# Virtual Network & Subnets — subnets are created in the new or existing VNet
 # -----------------------------------------------------------------------------
 resource "azurerm_virtual_network" "vnet" {
   count               = local.is_create && local.new_vnet ? 1 : 0
   name                = var.vnet_name
   resource_group_name = local.rg_name
   location            = local.rg_location
-  address_space       = [var.vnet_address_space]
+  address_space       = compact([var.vnet_address_space, var.vnet_address_space_v6])
 
   tags = local.tags
 }
 
 resource "azurerm_subnet" "cloud_init" {
-  count                = local.is_create && local.new_vnet && local.is_devtest ? 1 : 0
-  name                 = "cloud-init"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
+  count                = local.create_subnet_cloud_init ? 1 : 0
+  name                 = var.subnet_cloud_init_name
+  resource_group_name  = local.vnet_rg_resolved
+  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
   address_prefixes     = [var.subnet_cloud_init_prefix]
 }
 
 resource "azurerm_subnet" "mgmt" {
-  count                = local.is_create && local.new_vnet ? 1 : 0
-  name                 = "mgmt"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
+  count                = local.create_subnet_mgmt ? 1 : 0
+  name                 = var.subnet_mgmt_name
+  resource_group_name  = local.vnet_rg_resolved
+  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
   address_prefixes     = [var.subnet_mgmt_prefix]
 }
 
 resource "azurerm_subnet" "wan" {
-  count                = local.is_create && local.new_vnet ? 1 : 0
-  name                 = "wan"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
+  count                = local.create_subnet_wan ? 1 : 0
+  name                 = var.subnet_wan_name
+  resource_group_name  = local.vnet_rg_resolved
+  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
   address_prefixes     = [var.subnet_wan_prefix]
 }
 
 resource "azurerm_subnet" "lan" {
-  count                = local.is_create && local.new_vnet ? 1 : 0
-  name                 = "lan"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
-  address_prefixes     = [var.subnet_lan_prefix]
+  count                = local.create_subnet_lan ? 1 : 0
+  name                 = var.subnet_lan_name
+  resource_group_name  = local.vnet_rg_resolved
+  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
+  address_prefixes     = local.lan_ipv6 ? [var.subnet_lan_prefix, local.lan_subnet_ipv6_prefix] : [var.subnet_lan_prefix]
+
+  lifecycle {
+    precondition {
+      condition     = !local.lan_ipv6 || local.lan_subnet_ipv6_prefix != null
+      error_message = "subnet_lan_ipv6_netnum (${var.subnet_lan_ipv6_netnum}) has no /64 in the VNet IPv6 range ${local.vnet_ipv6_space}: use a shorter prefix or a smaller index."
+    }
+  }
+}
+
+# Existing VNet / LAN subnet — read only to detect an IPv6 range (LAN side stays IPv4-only without one)
+data "azurerm_virtual_network" "existing" {
+  count               = local.is_create && local.use_existing_vnet ? 1 : 0
+  name                = local.vnet_name_resolved
+  resource_group_name = local.vnet_rg_resolved
+}
+
+# Subnet ID: /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<name>
+data "azurerm_subnet" "lan_existing" {
+  count                = local.is_create && var.subnet_lan_id != "" ? 1 : 0
+  name                 = element(split("/", var.subnet_lan_id), 10)
+  virtual_network_name = element(split("/", var.subnet_lan_id), 8)
+  resource_group_name  = element(split("/", var.subnet_lan_id), 4)
 }
 
 # -----------------------------------------------------------------------------
-# Route Tables — create new or use existing from deploy_vnet
+# Route Tables — create new or use existing (e.g. from deploy_vnet).
+# Newly created subnets are associated with the new or existing route table.
 # -----------------------------------------------------------------------------
-locals {
-  create_rt_wan = var.route_table_wan_id == ""
-  create_rt_lan = var.route_table_lan_id == ""
-}
 
 # WAN route table — default route to Internet, BGP propagation disabled
 resource "azurerm_route_table" "wan" {
-  count                         = local.is_create && local.new_vnet && local.create_rt_wan ? 1 : 0
+  count                         = local.create_rt_wan ? 1 : 0
   name                          = "${var.vm_name}-wan-rt"
   location                      = local.rg_location
   resource_group_name           = local.rg_name
@@ -172,20 +232,20 @@ resource "azurerm_route_table" "wan" {
 }
 
 resource "azurerm_subnet_route_table_association" "mgmt" {
-  count          = local.is_create && local.new_vnet && local.create_rt_wan ? 1 : 0
+  count          = local.create_subnet_mgmt ? 1 : 0
   subnet_id      = azurerm_subnet.mgmt[0].id
-  route_table_id = azurerm_route_table.wan[0].id
+  route_table_id = local.route_table_wan_id
 }
 
 resource "azurerm_subnet_route_table_association" "wan" {
-  count          = local.is_create && local.new_vnet && local.create_rt_wan ? 1 : 0
+  count          = local.create_subnet_wan ? 1 : 0
   subnet_id      = azurerm_subnet.wan[0].id
-  route_table_id = azurerm_route_table.wan[0].id
+  route_table_id = local.route_table_wan_id
 }
 
 # LAN route table — default route via vEdge LAN IP (Virtual Appliance)
 resource "azurerm_route_table" "lan" {
-  count                         = local.is_create && local.new_vnet && local.create_rt_lan ? 1 : 0
+  count                         = local.create_rt_lan ? 1 : 0
   name                          = "${var.vm_name}-lan-rt"
   location                      = local.rg_location
   resource_group_name           = local.rg_name
@@ -198,24 +258,46 @@ resource "azurerm_route_table" "lan" {
     next_hop_in_ip_address = azurerm_network_interface.lan[0].private_ip_address
   }
 
+  dynamic "route" {
+    for_each = local.lan_ipv6 ? [1] : []
+    content {
+      name                   = "default-v6-via-vedge"
+      address_prefix         = "::/0"
+      next_hop_type          = "VirtualAppliance"
+      next_hop_in_ip_address = local.vedge_lan_ipv6
+    }
+  }
+
   tags = local.tags
 }
 
 resource "azurerm_subnet_route_table_association" "lan" {
-  count          = local.is_create && local.new_vnet && local.create_rt_lan ? 1 : 0
+  count          = local.create_subnet_lan ? 1 : 0
   subnet_id      = azurerm_subnet.lan[0].id
-  route_table_id = azurerm_route_table.lan[0].id
+  route_table_id = local.route_table_lan_id
 }
 
-# Add default route via vEdge LAN IP to an existing LAN route table (from deploy_vnet)
+# Add default route via vEdge LAN IP to an existing LAN route table (e.g. from deploy_vnet)
+# RG and name parsed from route_table_lan_id: /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/routeTables/<name>
 resource "azurerm_route" "default_via_vedge" {
-  count                  = local.is_create && !local.create_rt_lan ? 1 : 0
+  count                  = local.is_create && var.route_table_lan_id != "" ? 1 : 0
   name                   = "default-via-vedge"
-  resource_group_name    = local.rg_name
-  route_table_name       = element(split("/", var.route_table_lan_id), length(split("/", var.route_table_lan_id)) - 1)
+  resource_group_name    = element(split("/", var.route_table_lan_id), 4)
+  route_table_name       = element(split("/", var.route_table_lan_id), 8)
   address_prefix         = "0.0.0.0/0"
   next_hop_type          = "VirtualAppliance"
   next_hop_in_ip_address = azurerm_network_interface.lan[0].private_ip_address
+}
+
+# IPv6 counterpart of default_via_vedge (only when the LAN subnet has IPv6)
+resource "azurerm_route" "default_v6_via_vedge" {
+  count                  = local.lan_ipv6 && var.route_table_lan_id != "" ? 1 : 0
+  name                   = "default-v6-via-vedge"
+  resource_group_name    = element(split("/", var.route_table_lan_id), 4)
+  route_table_name       = element(split("/", var.route_table_lan_id), 8)
+  address_prefix         = "::/0"
+  next_hop_type          = "VirtualAppliance"
+  next_hop_in_ip_address = local.vedge_lan_ipv6
 }
 
 # -----------------------------------------------------------------------------
@@ -224,7 +306,7 @@ resource "azurerm_route" "default_via_vedge" {
 
 # Cloud-init NSG — devtest only: SSH inbound from allowed CIDRs
 resource "azurerm_network_security_group" "cloud_init" {
-  count               = local.is_create && local.is_devtest ? 1 : 0
+  count               = local.create_nsg_cloud_init ? 1 : 0
   name                = "${var.vm_name}-cloudinit-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -241,24 +323,12 @@ resource "azurerm_network_security_group" "cloud_init" {
     destination_address_prefix = "*"
   }
 
-  security_rule {
-    name                       = "AllowSSHIPv6"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = var.allowed_cidr_v6
-    destination_address_prefix = "*"
-  }
-
   tags = local.tags
 }
 
 # Mgmt NSG — HTTPS(443) denied inbound by default (customer modifies in portal to allow access)
 resource "azurerm_network_security_group" "mgmt" {
-  count               = local.is_create ? 1 : 0
+  count               = local.create_nsg_mgmt ? 1 : 0
   name                = "${var.vm_name}-mgmt-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -280,7 +350,7 @@ resource "azurerm_network_security_group" "mgmt" {
 
 # WAN NSG — outbound rules for Graphiant network services
 resource "azurerm_network_security_group" "wan" {
-  count               = local.is_create ? 1 : 0
+  count               = local.create_nsg_wan ? 1 : 0
   name                = "${var.vm_name}-wan-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -350,7 +420,7 @@ resource "azurerm_network_security_group" "wan" {
 
 # LAN NSG — allow all inbound and outbound traffic
 resource "azurerm_network_security_group" "lan" {
-  count               = local.is_create ? 1 : 0
+  count               = local.create_nsg_lan ? 1 : 0
   name                = "${var.vm_name}-lan-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -397,7 +467,7 @@ resource "azurerm_public_ip" "cloud_init" {
 }
 
 resource "azurerm_public_ip" "mgmt" {
-  count               = local.is_create ? 1 : 0
+  count               = local.create_pip_mgmt ? 1 : 0
   name                = "${var.vm_name}-mgmt-pip"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -408,7 +478,7 @@ resource "azurerm_public_ip" "mgmt" {
 }
 
 resource "azurerm_public_ip" "wan" {
-  count               = local.is_create ? 1 : 0
+  count               = local.create_pip_wan ? 1 : 0
   name                = "${var.vm_name}-wan-pip"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -416,6 +486,19 @@ resource "azurerm_public_ip" "wan" {
   sku                 = "Standard"
 
   tags = local.tags
+}
+
+# Existing public IPs (public_ip_*_id) — read for their address outputs; not deleted on destroy
+data "azurerm_public_ip" "mgmt" {
+  count               = local.is_create && !local.create_pip_mgmt ? 1 : 0
+  name                = element(split("/", var.public_ip_mgmt_id), 8)
+  resource_group_name = element(split("/", var.public_ip_mgmt_id), 4)
+}
+
+data "azurerm_public_ip" "wan" {
+  count               = local.is_create && !local.create_pip_wan ? 1 : 0
+  name                = element(split("/", var.public_ip_wan_id), 8)
+  resource_group_name = element(split("/", var.public_ip_wan_id), 4)
 }
 
 # -----------------------------------------------------------------------------
@@ -450,7 +533,7 @@ resource "azurerm_network_interface" "mgmt" {
     name                          = "ipconfig1"
     subnet_id                     = local.subnet_mgmt_id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.mgmt[0].id
+    public_ip_address_id          = local.public_ip_mgmt_id
     primary                       = true
   }
 
@@ -470,7 +553,7 @@ resource "azurerm_network_interface" "wan" {
     name                          = "ipconfig1"
     subnet_id                     = local.subnet_wan_id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.wan[0].id
+    public_ip_address_id          = local.public_ip_wan_id
     primary                       = true
   }
 
@@ -493,10 +576,32 @@ resource "azurerm_network_interface" "lan" {
     primary                       = true
   }
 
+  dynamic "ip_configuration" {
+    for_each = local.lan_ipv6 ? [1] : []
+    content {
+      name                          = "ipconfig-v6"
+      subnet_id                     = local.subnet_lan_id
+      private_ip_address_allocation = "Dynamic"
+      private_ip_address_version    = "IPv6"
+    }
+  }
+
   enable_accelerated_networking = true
   enable_ip_forwarding          = true
 
   tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = local.use_existing_vnet || alltrue([for id in [var.subnet_cloud_init_id, var.subnet_mgmt_id, var.subnet_wan_id, var.subnet_lan_id] : id == ""])
+      error_message = "Existing subnet IDs (subnet_*_id) require vnet_id of the VNet they belong to."
+    }
+    # An existing LAN subnet keeps its route table, so the default-via-vEdge route needs to know which one it is
+    precondition {
+      condition     = var.subnet_lan_id == "" || var.route_table_lan_id != ""
+      error_message = "route_table_lan_id is required when subnet_lan_id is provided (the default route via the vEdge LAN IP is added to it)."
+    }
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -505,25 +610,25 @@ resource "azurerm_network_interface" "lan" {
 resource "azurerm_network_interface_security_group_association" "cloud_init" {
   count                     = local.is_create && local.is_devtest ? 1 : 0
   network_interface_id      = azurerm_network_interface.cloud_init[0].id
-  network_security_group_id = azurerm_network_security_group.cloud_init[0].id
+  network_security_group_id = local.nsg_cloud_init_id
 }
 
 resource "azurerm_network_interface_security_group_association" "mgmt" {
   count                     = local.is_create ? 1 : 0
   network_interface_id      = azurerm_network_interface.mgmt[0].id
-  network_security_group_id = azurerm_network_security_group.mgmt[0].id
+  network_security_group_id = local.nsg_mgmt_id
 }
 
 resource "azurerm_network_interface_security_group_association" "wan" {
   count                     = local.is_create ? 1 : 0
   network_interface_id      = azurerm_network_interface.wan[0].id
-  network_security_group_id = azurerm_network_security_group.wan[0].id
+  network_security_group_id = local.nsg_wan_id
 }
 
 resource "azurerm_network_interface_security_group_association" "lan" {
   count                     = local.is_create ? 1 : 0
   network_interface_id      = azurerm_network_interface.lan[0].id
-  network_security_group_id = azurerm_network_security_group.lan[0].id
+  network_security_group_id = local.nsg_lan_id
 }
 
 # -----------------------------------------------------------------------------
@@ -609,7 +714,7 @@ resource "azurerm_linux_virtual_machine" "vedge" {
 # Test VM (optional) — attached to LAN subnet
 # -----------------------------------------------------------------------------
 resource "azurerm_network_security_group" "test_vm" {
-  count               = local.is_create && var.deploy_test_vm ? 1 : 0
+  count               = local.create_nsg_test_vm ? 1 : 0
   name                = "${var.test_vm_name}-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
@@ -654,13 +759,23 @@ resource "azurerm_network_interface" "test_vm" {
     primary                       = true
   }
 
+  dynamic "ip_configuration" {
+    for_each = local.lan_ipv6 ? [1] : []
+    content {
+      name                          = "ipconfig-v6"
+      subnet_id                     = local.subnet_lan_id
+      private_ip_address_allocation = "Dynamic"
+      private_ip_address_version    = "IPv6"
+    }
+  }
+
   tags = local.tags
 }
 
 resource "azurerm_network_interface_security_group_association" "test_vm" {
   count                     = local.is_create && var.deploy_test_vm ? 1 : 0
   network_interface_id      = azurerm_network_interface.test_vm[0].id
-  network_security_group_id = azurerm_network_security_group.test_vm[0].id
+  network_security_group_id = local.nsg_test_vm_id
 }
 
 resource "azurerm_linux_virtual_machine" "test_vm" {

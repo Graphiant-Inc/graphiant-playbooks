@@ -2,11 +2,15 @@
 
 # Pre-requisite:
 # ============================================================================
+# (Replace <aws_region> in the commands below with the aws_region you set in this file.)
+# 0. Tooling and access:
+#    - Terraform >= 1.3
+#    - AWS credentials with EC2/VPC permissions in the target account
 # 1. AWS regions and availability zones:
 #    To find the AWS region ID:
 #      https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html#available-regions
 #    To find available availability zones for your region:
-#      aws ec2 describe-availability-zones --region us-east-1
+#      aws ec2 describe-availability-zones --region <aws_region>
 
 # aws_region: AWS region to deploy resources into
 aws_region = "us-east-1"
@@ -20,7 +24,7 @@ project_name = "graphiant-vedge"
 # vpc_name: Name tag for the new VPC
 vpc_name = "graphiant-vedge-vpc"
 
-# vpc_address_range: CIDR block for the new VPC (IPv4). An Amazon-provided IPv6 block is associated automatically.
+# vpc_address_range: CIDR block for the new VPC (IPv4). An Amazon-provided IPv6 block is associated and used by the LAN subnet only.
 vpc_address_range = "10.0.0.0/16"
 
 # subnet_mgmt_prefix: CIDR for the mgmt subnet

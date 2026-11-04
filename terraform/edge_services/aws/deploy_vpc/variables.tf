@@ -22,7 +22,7 @@ variable "vpc_name" {
 }
 
 variable "vpc_address_range" {
-  description = "CIDR block for the VPC (IPv4). An Amazon-provided IPv6 block is associated automatically."
+  description = "CIDR block for the VPC (IPv4). An Amazon-provided IPv6 block is associated and used by the LAN subnet only."
   type        = string
   default     = "10.1.0.0/16"
 }
