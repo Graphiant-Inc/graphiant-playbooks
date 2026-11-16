@@ -367,14 +367,13 @@ def main():
             result_msg = result["result_msg"]
 
         else:
-            module.fail_json(
+            return module.fail_json(
                 msg=(
                     f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure, "
                     f"attach_to_lan_segments, detach_from_lan_segments."
                 ),
                 operation=operation,
             )
-            return
 
         if params.get("detailed_logs"):
             preview = result_msg if len(result_msg) <= 200 else (result_msg[:200] + "…")

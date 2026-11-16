@@ -401,12 +401,11 @@ def main():
 
         else:
             supported_operations = ["configure", "deconfigure", "detach_policies"]
-            module.fail_json(
+            return module.fail_json(
                 msg=f"Unsupported operation '{operation}'. "
                 f"Supported operations: {', '.join(supported_operations)}.",
                 operation=operation,
             )
-            return
 
         # Return success
         details = result.get("details") or {}

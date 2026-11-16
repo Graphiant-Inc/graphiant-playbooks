@@ -284,11 +284,10 @@ def main():
             changed = result["changed"]
             result_msg = result["result_msg"]
         else:
-            module.fail_json(
+            return module.fail_json(
                 msg=f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure.",
                 operation=operation,
             )
-            return
 
         if params.get("detailed_logs"):
             preview = result_msg if len(result_msg) <= 200 else (result_msg[:200] + "…")
