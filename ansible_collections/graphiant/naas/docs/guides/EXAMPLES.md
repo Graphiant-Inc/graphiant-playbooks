@@ -1190,10 +1190,12 @@ dhcp_relay_config:
 
 #### Configure LAG interfaces and subinterfaces
 
-Not idempotent: `configure` does not compare a LAG's existing config first, so it always pushes and reports `changed: true` for every LAG in the file. `add_lag_members`/`remove_lag_members`/`update_lacp_configs`/`delete_lag_subinterfaces` (below) do compare and skip no-ops.
+Field-level idempotent: `configure` reads each LAG's live state via `gsdk.get_device_info` and pushes only LAGs that are absent or drifted (a merge PUT); unchanged LAGs and devices are skipped (`skipped_lags` / `skipped_devices`) and `changed` stays `false`. The desired-vs-current comparison covers `segment` (device GET `lan`), `adminStatus`, `mtu`, `ipv4` / `ipv6` (static address vs DHCP-disabled — an omitted LAG address means `dhcpClient: false`, not DHCP on), LACP `mode` / `timer` (case-insensitive), `members`, and `subinterfaces`; it is biased toward pushing, so any field that cannot be read back from the device is treated as changed and a real change is never silently dropped. `add_lag_members` / `remove_lag_members` / `update_lacp_configs` / `delete_lag_subinterfaces` (below) likewise compare and skip no-ops.
+
+Check mode (`--check`) and diff mode (`--diff`) are supported across all operations: `--check` pushes nothing (would-be payloads logged under `[check_mode]`), and `--diff` shows a per-device `before` / `after` keyed by LAG name (branch `edge`, also returned in `details.diff_plan`).
 
 ```bash
-ansible-playbook playbooks/lag_interface_management.yml --tag configure --check
+ansible-playbook playbooks/lag_interface_management.yml --tag configure --check --diff
 ansible-playbook playbooks/lag_interface_management.yml --tag configure
 ```
 
@@ -1217,10 +1219,11 @@ ansible-playbook playbooks/lag_interface_management.yml --tag configure
 
 #### Add LAG members
 
+Idempotent: skips members already present in the LAG.
+
 ```bash
-ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check --diff
 ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members
-ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check
 ```
 
 ```yaml
@@ -1242,11 +1245,11 @@ ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --
 
 #### Remove LAG members
 
+Idempotent: skips members already removed from the LAG.
+
 ```bash
-ansible-playbook playbooks/lag_interface_management.yml --tag add_lag_members --check
-ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members --check
+ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members --check --diff
 ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members
-ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members --check
 ```
 
 ```yaml
@@ -1268,10 +1271,11 @@ ansible-playbook playbooks/lag_interface_management.yml --tag remove_lag_members
 
 #### Update LACP configuration on LAG interfaces
 
+Idempotent: skips if LACP mode/timer already match desired state (case-insensitive).
+
 ```bash
-ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs --check
+ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs --check --diff
 ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs
-ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_configs --check
 ```
 
 ```yaml
@@ -1296,11 +1300,8 @@ ansible-playbook playbooks/lag_interface_management.yml --tag update_lacp_config
 Idempotent: skips if LAG or subinterface does not exist.
 
 ```bash
-ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
+ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check --diff
 ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces
-ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
-ansible-playbook playbooks/lag_interface_management.yml --tag configure
-ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinterfaces --check
 ```
 
 ```yaml
@@ -1322,10 +1323,11 @@ ansible-playbook playbooks/lag_interface_management.yml --tag delete_lag_subinte
 
 #### Deconfigure LAG interfaces (delete subinterfaces, then delete LAG)
 
+Idempotent: skips LAGs that don't exist. `--diff` shows the whole LAG being removed (`interface: present` -> `null`) keyed by LAG name.
+
 ```bash
-ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure --check
+ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure --check --diff
 ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure
-ansible-playbook playbooks/lag_interface_management.yml --tag deconfigure --check
 ```
 
 ```yaml

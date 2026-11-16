@@ -137,8 +137,7 @@ def main():
     interface = (params.get("interface") or "").strip() or None
 
     if not device:
-        module.fail_json(msg="device is required.")
-        return
+        return module.fail_json(msg="device is required.")
 
     try:
         connection = get_graphiant_connection(params, check_mode=module.check_mode)

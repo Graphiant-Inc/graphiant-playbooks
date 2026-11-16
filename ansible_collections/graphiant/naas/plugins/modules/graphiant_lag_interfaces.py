@@ -26,18 +26,18 @@ description:
     Gateway devices.
   - Supports configuring and deconfiguring LAGs, adding/removing LAG members,
     updating LACP settings, and managing LAG subinterfaces (VLANs).
-  - All operations use Jinja2 templates for consistent configuration
-    deployment.
   - Configuration files support Jinja2 templating for dynamic generation.
-  - "All operations except V(configure) are idempotent; V(configure) is not - see Idempotency Details below."
+  - "All operations are idempotent - see Idempotency Details below."
 version_added: "26.1.0"
 notes:
   - "Check mode (C(--check)): No config is pushed; payloads that would be pushed are logged with C([check_mode])."
+  - "Diff mode (C(--diff)): Shows per-device before/after for each LAG that changes."
   - "LAG Operations:"
   - >
     - configure: Configure LAG on physical interfaces (and optionally
-      subinterfaces). Creates new LAGs or updates existing ones. Not idempotent - always
-      pushes and reports changed=true.
+      subinterfaces). Creates new LAGs or updates existing ones. Idempotent -
+      compares each LAG's desired config against live state and pushes only
+      LAGs that are absent or drifted; unchanged LAGs are skipped.
   - >
     - deconfigure: Delete ALL subinterfaces (if present) and then delete the
       main LAG interface. This is a complete cleanup operation that removes
@@ -61,10 +61,12 @@ notes:
   - "The module automatically resolves device names to IDs."
   - "Idempotency Details:"
   - >
-    V(configure) only reads existing aliases, to avoid a duplicate-alias API error - not for
-    idempotency. The other operations (see above) do check existing state before pushing.
-    For deconfigure, all existing subinterfaces are automatically detected and deleted before
-    removing the main LAG.
+    V(configure) reads live LAG state (segment, alias, adminStatus, mtu, ipv4/ipv6, LACP,
+    members, subinterfaces) and pushes only LAGs that are absent or drifted; the comparison
+    is biased toward pushing, so any field that cannot be read back is treated as changed and
+    a real change is never silently dropped. The other operations (see above) likewise check
+    existing state before pushing. For deconfigure, all existing subinterfaces are
+    automatically detected and deleted before removing the main LAG.
   - >
     Member interfaces must exist on the device; interface names in the config
     are resolved to interface IDs via device info.
@@ -242,6 +244,9 @@ from ansible_collections.graphiant.naas.plugins.module_utils import (  # noqa: E
     graphiant_utils,
     logging_decorator,
 )
+from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_config_common import (  # noqa: E402
+    apply_module_diff,
+)
 
 
 @logging_decorator.capture_library_logs
@@ -411,7 +416,18 @@ def main():
             )
 
         # Return success
-        module.exit_json(changed=changed, msg=result_msg, operation=operation, lag_config_file=lag_config_file)
+        details = result.get("details") or {}
+        exit_payload = dict(
+            changed=changed,
+            msg=result_msg,
+            operation=operation,
+            lag_config_file=lag_config_file,
+            configured_devices=details.get("configured_devices", []),
+            skipped_devices=details.get("skipped_devices", []),
+            details=details,
+        )
+        apply_module_diff(module, exit_payload, details)
+        module.exit_json(**exit_payload)
 
     except Exception as e:
         error_msg = graphiant_utils.handle_graphiant_exception(e, operation)

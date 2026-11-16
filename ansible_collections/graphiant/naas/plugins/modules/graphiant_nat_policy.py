@@ -541,11 +541,10 @@ def main():
         operation = "configure" if state == "present" else "deconfigure"
 
     if not cfg_file and not device:
-        module.fail_json(
+        return module.fail_json(
             msg="Provide nat_policy_config_file and/or device (portal device name).",
             operation=operation,
         )
-        return
 
     module_params = {"device": device}
     for key in ("natRulesets", "segments"):
@@ -602,14 +601,13 @@ def main():
                 no_change_msg="LAN segment NAT ruleset references already cleared",
             )
         else:
-            module.fail_json(
+            return module.fail_json(
                 msg=(
                     f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure, "
                     f"attach_to_lan_segments, detach_from_lan_segments."
                 ),
                 operation=operation,
             )
-            return
 
         if params.get("detailed_logs"):
             preview = result["result_msg"]

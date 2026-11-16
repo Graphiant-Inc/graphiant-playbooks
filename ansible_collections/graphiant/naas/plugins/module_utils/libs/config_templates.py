@@ -56,7 +56,6 @@ class ConfigTemplates:
     # Template mapping for different configuration types
     TEMPLATE_MAPPING = {
         "backbone_interface": "backbone_interface_template.yaml",
-        "lag_interfaces": "lag_interfaces_template.yaml",
         "global_prefix_set": "global_prefix_set_template.yaml",
         "global_bgp_filter": "global_bgp_routing_policies_template.yaml",
         "global_graphiant_filter": "global_graphiant_routing_policies_template.yaml",
@@ -167,10 +166,6 @@ class ConfigTemplates:
     def render_backbone_interface(self, **kwargs) -> Dict[str, Any]:
         """Render backbone (Core device) interface template."""
         return self.render_by_type("backbone_interface", **kwargs)
-
-    def render_lag_interfaces(self, **kwargs) -> Dict[str, Any]:
-        """Render LAG interfaces template."""
-        return self.render_by_type("lag_interfaces", **kwargs)
 
     def render_global_prefix_set(self, **kwargs) -> Dict[str, Any]:
         """Render global prefix set template."""

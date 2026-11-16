@@ -15,6 +15,14 @@ lagInterfaces:
       lacpTimer: FAST
       lagMembers:
         - GigabitEthernet6/0/0
+      # Note: "subinterfaces" and "sub_interfaces" (underscore) are both accepted.
+      sub_interfaces:
+        - vlan: 1
+          segment: lag-test-1
+          alias: LAG1-1
+          description: Segment lag-test-1 interface
+          ipv4: 10.1.1.1/24
+          ipv6: 2001:10:1:1::1/64
     - name: LAG2
       alias: LAG2
       segment: lag-test-2
@@ -38,6 +46,7 @@ lagInterfaces:
       lagMembers:
         - GigabitEthernet6/0/0
         - GigabitEthernet7/0/0
+      # Note: "subinterfaces" and "sub_interfaces" (underscore) are both accepted.
       subinterfaces:
         - vlan: 101
           segment: lag-test-101
