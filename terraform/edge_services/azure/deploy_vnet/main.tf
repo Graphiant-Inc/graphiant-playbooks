@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.80.0"
+      version = "~> 3.117.0"
     }
   }
 }
@@ -64,27 +64,45 @@ resource "azurerm_virtual_network" "vnet" {
 }
 
 resource "azurerm_subnet" "mgmt" {
-  count                = local.is_create ? 1 : 0
-  name                 = "mgmt"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
-  address_prefixes     = [var.subnet_mgmt_prefix]
+  count                           = local.is_create ? 1 : 0
+  name                            = "mgmt"
+  resource_group_name             = local.rg_name
+  virtual_network_name            = azurerm_virtual_network.vnet[0].name
+  address_prefixes                = [var.subnet_mgmt_prefix]
+  default_outbound_access_enabled = false
+
+  # ForceNew attribute: ignore it after create so subnets deployed before it was set are not replaced
+  lifecycle {
+    ignore_changes = [default_outbound_access_enabled]
+  }
 }
 
 resource "azurerm_subnet" "wan" {
-  count                = local.is_create ? 1 : 0
-  name                 = "wan"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
-  address_prefixes     = [var.subnet_wan_prefix]
+  count                           = local.is_create ? 1 : 0
+  name                            = "wan"
+  resource_group_name             = local.rg_name
+  virtual_network_name            = azurerm_virtual_network.vnet[0].name
+  address_prefixes                = [var.subnet_wan_prefix]
+  default_outbound_access_enabled = false
+
+  # ForceNew attribute: ignore it after create so subnets deployed before it was set are not replaced
+  lifecycle {
+    ignore_changes = [default_outbound_access_enabled]
+  }
 }
 
 resource "azurerm_subnet" "lan" {
-  count                = local.is_create ? 1 : 0
-  name                 = "lan"
-  resource_group_name  = local.rg_name
-  virtual_network_name = azurerm_virtual_network.vnet[0].name
-  address_prefixes     = local.lan_ipv6 ? [var.subnet_lan_prefix, cidrsubnet(var.vnet_address_space_v6, 64 - tonumber(split("/", var.vnet_address_space_v6)[1]), 3)] : [var.subnet_lan_prefix]
+  count                           = local.is_create ? 1 : 0
+  name                            = "lan"
+  resource_group_name             = local.rg_name
+  virtual_network_name            = azurerm_virtual_network.vnet[0].name
+  address_prefixes                = local.lan_ipv6 ? [var.subnet_lan_prefix, cidrsubnet(var.vnet_address_space_v6, 64 - tonumber(split("/", var.vnet_address_space_v6)[1]), 3)] : [var.subnet_lan_prefix]
+  default_outbound_access_enabled = false
+
+  # ForceNew attribute: ignore it after create so subnets deployed before it was set are not replaced
+  lifecycle {
+    ignore_changes = [default_outbound_access_enabled]
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -93,10 +111,11 @@ resource "azurerm_subnet" "lan" {
 
 # WAN route table — default route to Internet, BGP propagation disabled
 resource "azurerm_route_table" "wan" {
-  count                         = local.is_create ? 1 : 0
-  name                          = "${var.project_name}-wan-rt"
-  location                      = local.rg_location
-  resource_group_name           = local.rg_name
+  count               = local.is_create ? 1 : 0
+  name                = "${var.project_name}-wan-rt"
+  location            = local.rg_location
+  resource_group_name = local.rg_name
+  # azurerm 3.x ignores bgp_route_propagation_enabled on create; the deprecated attribute is honoured
   disable_bgp_route_propagation = true
 
   route {

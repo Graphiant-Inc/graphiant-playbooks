@@ -92,6 +92,22 @@ output "test_vm_ipv6_address" {
   value       = var.deploy_test_vm && local.lan_ipv6 ? try([for c in azurerm_network_interface.test_vm[0].ip_configuration : c.private_ip_address if c.private_ip_address_version == "IPv6"][0], null) : null
 }
 
+# Mgmt VM outputs
+output "mgmt_vm_public_ip" {
+  description = "Public IP of the mgmt VM for RDP (only available when deploy_mgmt_vm is true)"
+  value       = var.deploy_mgmt_vm ? try(azurerm_public_ip.mgmt_vm[0].ip_address, null) : null
+}
+
+output "mgmt_vm_private_ip" {
+  description = "Private IP of the mgmt VM on the mgmt subnet (only available when deploy_mgmt_vm is true)"
+  value       = var.deploy_mgmt_vm ? try(azurerm_network_interface.mgmt_vm[0].private_ip_address, null) : null
+}
+
+output "vedge_local_web_server_url" {
+  description = "vEdge local web server URL, opened from the mgmt VM browser (only available when deploy_mgmt_vm is true)"
+  value       = var.deploy_mgmt_vm ? try("https://${azurerm_network_interface.mgmt[0].private_ip_address}", null) : null
+}
+
 output "resource_group_deleted" {
   description = "Confirmation that resource group deletion was requested (only available when action is 'delete')"
   value       = var.action == "delete" && var.delete_resource_group ? "Resource group deletion requested" : null

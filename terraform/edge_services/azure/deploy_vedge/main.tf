@@ -4,7 +4,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.80.0"
+      version = "~> 3.117.0"
     }
   }
 }
@@ -24,6 +24,7 @@ provider "azurerm" {
 locals {
   is_create      = var.action == "create"
   admin_username = "gradmin"
+  deploy_mgmt_vm = local.is_create && var.deploy_mgmt_vm
 
   # Derive flags from whether IDs are provided
   use_existing_rg   = var.resource_group_id != ""
@@ -87,12 +88,23 @@ locals {
   lan_subnet_ipv6_prefix   = local.create_subnet_lan && local.lan_ipv6 ? try(cidrsubnet(local.vnet_ipv6_space, 64 - tonumber(split("/", local.vnet_ipv6_space)[1]), var.subnet_lan_ipv6_netnum), null) : null
   vedge_lan_ipv6           = local.lan_ipv6 ? try([for c in azurerm_network_interface.lan[0].ip_configuration : c.private_ip_address if c.private_ip_address_version == "IPv6"][0], null) : null
 
-  # cloud-init user data
+  # LAN NSG / test VM NSG: protocols allowed to/from the LAN subnet's IPv4 and IPv6 prefixes
+  lan_protocols          = ["Tcp", "Udp", "Icmp"]
+  subnet_lan_prefixes    = local.create_subnet_lan ? [var.subnet_lan_prefix] : [for p in try(data.azurerm_subnet.lan_existing[0].address_prefixes, []) : p if !can(regex(":", p))]
+  subnet_lan_prefixes_v6 = local.create_subnet_lan ? (local.lan_subnet_ipv6_prefix == null ? [] : [local.lan_subnet_ipv6_prefix]) : [for p in try(data.azurerm_subnet.lan_existing[0].address_prefixes, []) : p if can(regex(":", p))]
+  # One rule per protocol and address family: an NSG rule cannot mix IPv4 and IPv6 prefixes
+  lan_rules = concat(
+    [for i, p in local.lan_protocols : { name = p, protocol = p, priority = 100 + i, prefixes = local.subnet_lan_prefixes }],
+    [for i, p in local.lan_protocols : { name = "${p}V6", protocol = p, priority = 110 + i, prefixes = local.subnet_lan_prefixes_v6 } if length(local.subnet_lan_prefixes_v6) > 0],
+  )
+
+  # cloud-init user data (token is optional; only included if configured)
+  cloud_init_token = var.token != "" ? "\n  token: ${var.token}" : ""
+
   custom_data = base64encode(<<-USERDATA
     #cloud-config
 
-    graphnos:
-      token: ${var.token}
+    graphnos:${local.cloud_init_token}
   USERDATA
   )
 
@@ -131,29 +143,45 @@ resource "azurerm_virtual_network" "vnet" {
 }
 
 resource "azurerm_subnet" "mgmt" {
-  count                = local.create_subnet_mgmt ? 1 : 0
-  name                 = var.subnet_mgmt_name
-  resource_group_name  = local.vnet_rg_resolved
-  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
-  address_prefixes     = [var.subnet_mgmt_prefix]
+  count                           = local.create_subnet_mgmt ? 1 : 0
+  name                            = var.subnet_mgmt_name
+  resource_group_name             = local.vnet_rg_resolved
+  virtual_network_name            = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
+  address_prefixes                = [var.subnet_mgmt_prefix]
+  default_outbound_access_enabled = false
+
+  # ForceNew attribute: ignore it after create so subnets deployed before it was set are not replaced
+  lifecycle {
+    ignore_changes = [default_outbound_access_enabled]
+  }
 }
 
 resource "azurerm_subnet" "wan" {
-  count                = local.create_subnet_wan ? 1 : 0
-  name                 = var.subnet_wan_name
-  resource_group_name  = local.vnet_rg_resolved
-  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
-  address_prefixes     = [var.subnet_wan_prefix]
+  count                           = local.create_subnet_wan ? 1 : 0
+  name                            = var.subnet_wan_name
+  resource_group_name             = local.vnet_rg_resolved
+  virtual_network_name            = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
+  address_prefixes                = [var.subnet_wan_prefix]
+  default_outbound_access_enabled = false
+
+  # ForceNew attribute: ignore it after create so subnets deployed before it was set are not replaced
+  lifecycle {
+    ignore_changes = [default_outbound_access_enabled]
+  }
 }
 
 resource "azurerm_subnet" "lan" {
-  count                = local.create_subnet_lan ? 1 : 0
-  name                 = var.subnet_lan_name
-  resource_group_name  = local.vnet_rg_resolved
-  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
-  address_prefixes     = local.lan_ipv6 ? [var.subnet_lan_prefix, local.lan_subnet_ipv6_prefix] : [var.subnet_lan_prefix]
+  count                           = local.create_subnet_lan ? 1 : 0
+  name                            = var.subnet_lan_name
+  resource_group_name             = local.vnet_rg_resolved
+  virtual_network_name            = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
+  address_prefixes                = local.lan_ipv6 ? [var.subnet_lan_prefix, local.lan_subnet_ipv6_prefix] : [var.subnet_lan_prefix]
+  default_outbound_access_enabled = false
 
+  # ForceNew attribute: ignore it after create so subnets deployed before it was set are not replaced
   lifecycle {
+    ignore_changes = [default_outbound_access_enabled]
+
     precondition {
       condition     = !local.lan_ipv6 || local.lan_subnet_ipv6_prefix != null
       error_message = "subnet_lan_ipv6_netnum (${var.subnet_lan_ipv6_netnum}) has no /64 in the VNet IPv6 range ${local.vnet_ipv6_space}: use a shorter prefix or a smaller index."
@@ -183,10 +211,11 @@ data "azurerm_subnet" "lan_existing" {
 
 # WAN route table — default route to Internet, BGP propagation disabled
 resource "azurerm_route_table" "wan" {
-  count                         = local.create_rt_wan ? 1 : 0
-  name                          = "${var.vm_name}-wan-rt"
-  location                      = local.rg_location
-  resource_group_name           = local.rg_name
+  count               = local.create_rt_wan ? 1 : 0
+  name                = "${var.vm_name}-wan-rt"
+  location            = local.rg_location
+  resource_group_name = local.rg_name
+  # azurerm 3.x ignores bgp_route_propagation_enabled on create; the deprecated attribute is honoured
   disable_bgp_route_propagation = true
 
   route {
@@ -278,6 +307,22 @@ resource "azurerm_network_security_group" "mgmt" {
   location            = local.rg_location
   resource_group_name = local.rg_name
 
+  # Let the mgmt VM reach the vEdge local web server; takes precedence over DenyHTTPS
+  dynamic "security_rule" {
+    for_each = local.deploy_mgmt_vm ? [1] : []
+    content {
+      name                       = "AllowHTTPSFromMgmtVm"
+      priority                   = 100
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = "Tcp"
+      source_port_range          = "*"
+      destination_port_range     = "443"
+      source_address_prefix      = azurerm_network_interface.mgmt_vm[0].private_ip_address
+      destination_address_prefix = "*"
+    }
+  }
+
   security_rule {
     name                       = "DenyHTTPS"
     priority                   = 101
@@ -363,35 +408,43 @@ resource "azurerm_network_security_group" "wan" {
   tags = local.tags
 }
 
-# LAN NSG — allow all inbound and outbound traffic
+# LAN NSG — allow only TCP/UDP/ICMP between the LAN subnet (IPv4 and IPv6) and anywhere.
+# The vEdge LAN NIC forwards LAN traffic: from LAN hosts it arrives Inbound, to LAN hosts it leaves Outbound.
 resource "azurerm_network_security_group" "lan" {
   count               = local.create_nsg_lan ? 1 : 0
   name                = "${var.vm_name}-lan-nsg"
   location            = local.rg_location
   resource_group_name = local.rg_name
 
-  security_rule {
-    name                       = "AllowAllInbound"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  # Allow TCP/UDP/ICMP between the LAN subnet and anywhere; other traffic falls to Azure's default rules
+  dynamic "security_rule" {
+    for_each = local.lan_rules
+    content {
+      name                       = "Allow${security_rule.value.name}FromLan"
+      priority                   = security_rule.value.priority
+      direction                  = "Inbound"
+      access                     = "Allow"
+      protocol                   = security_rule.value.protocol
+      source_port_range          = "*"
+      destination_port_range     = "*"
+      source_address_prefixes    = security_rule.value.prefixes
+      destination_address_prefix = "*"
+    }
   }
 
-  security_rule {
-    name                       = "AllowAllOutbound"
-    priority                   = 100
-    direction                  = "Outbound"
-    access                     = "Allow"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  dynamic "security_rule" {
+    for_each = local.lan_rules
+    content {
+      name                         = "Allow${security_rule.value.name}ToLan"
+      priority                     = security_rule.value.priority
+      direction                    = "Outbound"
+      access                       = "Allow"
+      protocol                     = security_rule.value.protocol
+      source_port_range            = "*"
+      destination_port_range       = "*"
+      source_address_prefix        = "*"
+      destination_address_prefixes = security_rule.value.prefixes
+    }
   }
 
   tags = local.tags
@@ -453,8 +506,8 @@ resource "azurerm_network_interface" "mgmt" {
     primary                       = true
   }
 
-  enable_accelerated_networking = true
-  enable_ip_forwarding          = true
+  accelerated_networking_enabled = true
+  ip_forwarding_enabled          = true
 
   tags = local.tags
 }
@@ -473,8 +526,8 @@ resource "azurerm_network_interface" "wan" {
     primary                       = true
   }
 
-  enable_accelerated_networking = true
-  enable_ip_forwarding          = true
+  accelerated_networking_enabled = true
+  ip_forwarding_enabled          = true
 
   tags = local.tags
 }
@@ -502,8 +555,8 @@ resource "azurerm_network_interface" "lan" {
     }
   }
 
-  enable_accelerated_networking = true
-  enable_ip_forwarding          = true
+  accelerated_networking_enabled = true
+  ip_forwarding_enabled          = true
 
   tags = local.tags
 
@@ -605,6 +658,11 @@ resource "azurerm_linux_virtual_machine" "vedge" {
   # Boot diagnostics with managed storage account (enables Serial Console)
   boot_diagnostics {}
 
+  # Azure sets this per image/security type; ignore it to avoid a perpetual in-place diff (azurerm defaults it to false)
+  lifecycle {
+    ignore_changes = [vm_agent_platform_updates_enabled]
+  }
+
   tags = local.tags
 
   depends_on = [
@@ -623,28 +681,35 @@ resource "azurerm_network_security_group" "test_vm" {
   location            = local.rg_location
   resource_group_name = local.rg_name
 
-  security_rule {
-    name                       = "AllowAllInbound"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  # Allow TCP/UDP/ICMP between the LAN subnet and anywhere; other traffic falls to Azure's default rules
+  dynamic "security_rule" {
+    for_each = local.lan_rules
+    content {
+      name                       = "Allow${security_rule.value.name}FromLan"
+      priority                   = security_rule.value.priority
+      direction                  = "Outbound"
+      access                     = "Allow"
+      protocol                   = security_rule.value.protocol
+      source_port_range          = "*"
+      destination_port_range     = "*"
+      source_address_prefixes    = security_rule.value.prefixes
+      destination_address_prefix = "*"
+    }
   }
 
-  security_rule {
-    name                       = "AllowAllOutbound"
-    priority                   = 100
-    direction                  = "Outbound"
-    access                     = "Allow"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
+  dynamic "security_rule" {
+    for_each = local.lan_rules
+    content {
+      name                         = "Allow${security_rule.value.name}ToLan"
+      priority                     = security_rule.value.priority
+      direction                    = "Inbound"
+      access                       = "Allow"
+      protocol                     = security_rule.value.protocol
+      source_port_range            = "*"
+      destination_port_range       = "*"
+      source_address_prefix        = "*"
+      destination_address_prefixes = security_rule.value.prefixes
+    }
   }
 
   tags = local.tags
@@ -717,15 +782,151 @@ resource "azurerm_linux_virtual_machine" "test_vm" {
 
   os_disk {
     caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
+    storage_account_type = "StandardSSD_LRS" # Standard HDD (Standard_LRS) OS disks are being retired
   }
 
   boot_diagnostics {}
+
+  # Azure sets this per image/security type; ignore it to avoid a perpetual in-place diff (azurerm defaults it to false)
+  lifecycle {
+    ignore_changes = [vm_agent_platform_updates_enabled]
+  }
 
   tags = local.tags
 
   depends_on = [
     azurerm_network_interface_security_group_association.test_vm,
+  ]
+}
+
+# -----------------------------------------------------------------------------
+# Mgmt VM (optional) — desktop VM on the mgmt subnet to reach the vEdge local web server
+# -----------------------------------------------------------------------------
+resource "azurerm_network_security_group" "mgmt_vm" {
+  count               = local.deploy_mgmt_vm ? 1 : 0
+  name                = "${var.mgmt_vm_name}-nsg"
+  location            = local.rg_location
+  resource_group_name = local.rg_name
+
+  security_rule {
+    name                       = "AllowRDP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3389"
+    source_address_prefix      = var.allowed_cidr
+    destination_address_prefix = "*"
+  }
+
+  tags = local.tags
+}
+
+# Public IP for RDP access and outbound package installs (the mgmt subnet has no default outbound access)
+resource "azurerm_public_ip" "mgmt_vm" {
+  count               = local.deploy_mgmt_vm ? 1 : 0
+  name                = "${var.mgmt_vm_name}-pip"
+  location            = local.rg_location
+  resource_group_name = local.rg_name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+
+  tags = local.tags
+}
+
+resource "azurerm_network_interface" "mgmt_vm" {
+  count               = local.deploy_mgmt_vm ? 1 : 0
+  name                = "${var.mgmt_vm_name}-nic"
+  location            = local.rg_location
+  resource_group_name = local.rg_name
+
+  ip_configuration {
+    name                          = "ipconfig1"
+    subnet_id                     = local.subnet_mgmt_id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.mgmt_vm[0].id
+    primary                       = true
+  }
+
+  tags = local.tags
+}
+
+resource "azurerm_network_interface_security_group_association" "mgmt_vm" {
+  count                     = local.deploy_mgmt_vm ? 1 : 0
+  network_interface_id      = azurerm_network_interface.mgmt_vm[0].id
+  network_security_group_id = azurerm_network_security_group.mgmt_vm[0].id
+}
+
+resource "azurerm_linux_virtual_machine" "mgmt_vm" {
+  count               = local.deploy_mgmt_vm ? 1 : 0
+  name                = var.mgmt_vm_name
+  computer_name       = replace(var.mgmt_vm_name, "_", "-")
+  resource_group_name = local.rg_name
+  location            = local.rg_location
+  size                = var.mgmt_vm_size
+  admin_username      = var.mgmt_vm_admin_username
+
+  network_interface_ids = [
+    azurerm_network_interface.mgmt_vm[0].id,
+  ]
+
+  admin_password                  = var.mgmt_vm_admin_password
+  disable_password_authentication = false
+
+  # Lightweight desktop + RDP server + browser for the vEdge local web server
+  custom_data = base64encode(<<-USERDATA
+    #cloud-config
+
+    package_update: true
+    packages:
+      - xfce4
+      - xfce4-goodies
+      - xrdp
+      - dbus-x11
+      - firefox-esr
+    runcmd:
+      - echo xfce4-session > /home/${var.mgmt_vm_admin_username}/.xsession
+      - chown ${var.mgmt_vm_admin_username}:${var.mgmt_vm_admin_username} /home/${var.mgmt_vm_admin_username}/.xsession
+      - adduser xrdp ssl-cert
+      - systemctl enable --now xrdp
+      - systemctl restart xrdp
+  USERDATA
+  )
+
+  source_image_reference {
+    publisher = "Debian"
+    offer     = "debian-12"
+    sku       = "12-gen2"
+    version   = "latest"
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "StandardSSD_LRS"
+  }
+
+  boot_diagnostics {}
+
+  # Azure sets this per image/security type; ignore it to avoid a perpetual in-place diff (azurerm defaults it to false)
+  lifecycle {
+    ignore_changes = [vm_agent_platform_updates_enabled]
+
+    # Fail at plan time: the mgmt VM uses password RDP, so it must not be reachable from anywhere
+    precondition {
+      condition     = var.mgmt_vm_admin_password != ""
+      error_message = "mgmt_vm_admin_password is required when deploy_mgmt_vm = true."
+    }
+    precondition {
+      condition     = can(cidrhost(var.allowed_cidr, 0)) && !contains(["0.0.0.0/0", "127.0.0.1/32"], var.allowed_cidr)
+      error_message = "allowed_cidr must be your public IPv4 CIDR (e.g. 203.0.113.45/32) when deploy_mgmt_vm = true; 0.0.0.0/0 and the 127.0.0.1/32 default are not allowed."
+    }
+  }
+
+  tags = local.tags
+
+  depends_on = [
+    azurerm_network_interface_security_group_association.mgmt_vm,
   ]
 }
 

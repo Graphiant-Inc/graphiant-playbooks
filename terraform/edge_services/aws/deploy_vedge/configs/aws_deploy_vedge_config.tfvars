@@ -59,6 +59,7 @@ marketplace_product_id = "prod-tjdlkbawxqsyg"
 marketplace_version    = "latest"
 
 # token: Edge Authentication token for Onboarding the vEdge into a specific Enterprise within Graphiant Portal
+# If token is left empty, the vEdge falls back to URL/QR code based onboarding.
 token = ""
 
 # ================================================================

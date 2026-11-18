@@ -253,7 +253,7 @@ Everything (VPC, IGW, subnets, route tables, SGs, NICs, EIPs, EC2 instance) is c
    - **AMI** — set exactly one of:
      - `image_id` — explicit AMI ID, or
      - `marketplace_product_id` (+ optional `marketplace_version`, default `"latest"`) — resolves the AMI via the AWS Marketplace SSM public parameter `/aws/service/marketplace/<product_id>/<version>`. Requires your account to be subscribed to the Graphiant Marketplace listing.
-   - `token` — Graphiant Portal onboarding token
+   - `token` — Graphiant Portal onboarding token (optional: if left empty, the vEdge falls back to URL/QR code based onboarding)
    - `vpc_name` / `vpc_address_range` — VPC name + CIDR for the new VPC
    - `subnet_mgmt_prefix`, `subnet_wan_prefix`, `subnet_lan_prefix` — subnet CIDRs within the VPC
    - **Test VM (optional)** — `deploy_test_vm`, `test_vm_name`, `test_vm_instance_type`, `test_vm_key_name`, `test_vm_ami`, `test_vm_ingress_allowed_subnets`, `test_vm_enable_ssh_public_ip`, `test_vm_ssh_allowed_subnets` (see [Optional: Test VM on LAN subnet](#optional-test-vm-on-lan-subnet))
@@ -289,7 +289,7 @@ terraform output    # capture vpc_id, subnet_*_id, route_table_*_id
    - `vm_name` — Name tag for the vEdge EC2 instance
    - `instance_type` — EC2 instance type (see allowed values in `variables.tf`)
    - **AMI** — set exactly one of `image_id` or `marketplace_product_id` (+ optional `marketplace_version`) — same as Option A
-   - `token` — Graphiant Portal onboarding token
+   - `token` — Graphiant Portal onboarding token (optional: if left empty, the vEdge falls back to URL/QR code based onboarding)
    - `vpc_id` — existing VPC ID
    - `subnet_mgmt_id`, `subnet_wan_id`, `subnet_lan_id` — existing subnet IDs, or leave empty and set `subnet_*_prefix` to create new subnets. New subnets are IPv4 only, except the LAN subnet: it gets an IPv6 /64 (`subnet_lan_ipv6_netnum`, default 3) when the VPC has an IPv6 block, and the vEdge LAN and test VM interfaces get an IPv6 address. Plan fails if a subnet with the exact same CIDR already exists in the VPC (the error names its ID to set as `subnet_*_id`); partially overlapping CIDRs are only rejected by AWS at apply
    - `route_table_lan_id` — existing LAN route table; a `0.0.0.0/0` route via the vEdge LAN ENI will be added to it. **Required** when `subnet_lan_id` is set; when empty, a new LAN route table is created and associated with the new LAN subnet
@@ -377,6 +377,8 @@ The vEdge VM is deployed with 3 NICs (mgmt, wan, lan) from the Marketplace image
 
 IPv6 is LAN-side only, as on AWS: the VNet gets an IPv6 range (`vnet_address_space_v6`, default `fd00:10:1::/48`; `""` keeps it IPv4-only), a new LAN subnet gets a /64 from it (`subnet_lan_ipv6_netnum`, default 3), and the vEdge LAN and test VM NICs get an IPv6 address with a `::/0` route via the vEdge LAN. In an existing VNet the VNet's own IPv6 range is used; an existing LAN subnet is used for IPv6 only if it already has an IPv6 prefix. mgmt and WAN are always IPv4-only.
 
+> `terraform plan`/`apply` shows a deprecation warning for `disable_bgp_route_propagation`. This is expected: azurerm 3.x only honours this attribute when creating a route table, so it is used instead of `bgp_route_propagation_enabled`.
+
 ### Prerequisites
 
 Install and authenticate the Azure CLI:
@@ -403,10 +405,10 @@ Everything (RG, VNet, subnets, route tables, NSGs, VM) is created in one step.
    - `resource_group_name` — name for the new Azure resource group
    - `azure_region` — Azure region to deploy into (e.g. `eastus`)
    - `vm_name` — name for the vEdge virtual machine
-   - `vm_size` — VM size (`Standard_DS3_v2`, `Standard_DS4_v2`, `Standard_F8s_v2`)
+   - `vm_size` — VM size (`Standard_D8s_v4` (default), `Standard_DS3_v2`, `Standard_DS4_v2`, `Standard_F8s_v2`)
    - `image_version` — Marketplace image version (or `source_image_id` for Shared Image Gallery)
    - `ssh_public_key` — SSH public key (required by Azure)
-   - `token` — Graphiant Portal onboarding token
+   - `token` — Graphiant Portal onboarding token (optional: if left empty, the vEdge falls back to URL/QR code based onboarding, shown on the [serial console](#serial-console))
    - `vnet_name` — name for the new virtual network
    - `vnet_address_space` — VNet CIDR block (e.g. `10.1.0.0/16`)
    - `subnet_mgmt_prefix`, `subnet_wan_prefix`, `subnet_lan_prefix` — subnet CIDRs within the VNet
@@ -427,10 +429,10 @@ Use this when you already have a VNet and some or all of its networking — eith
 1. Edit `edge_services/azure/deploy_vedge/configs/azure_deploy_vedge_config.tfvars`:
    - `resource_group_id` — existing resource group ID from Azure Portal
    - `vm_name` — name for the vEdge virtual machine
-   - `vm_size` — VM size (`Standard_DS3_v2`, `Standard_DS4_v2`, `Standard_F8s_v2`)
+   - `vm_size` — VM size (`Standard_D8s_v4` (default), `Standard_DS3_v2`, `Standard_DS4_v2`, `Standard_F8s_v2`)
    - `image_version` — Marketplace image version (or `source_image_id` for Shared Image Gallery)
    - `ssh_public_key` — SSH public key (required by Azure)
-   - `token` — Graphiant Portal onboarding token
+   - `token` — Graphiant Portal onboarding token (optional: if left empty, the vEdge falls back to URL/QR code based onboarding, shown on the [serial console](#serial-console))
    - `vnet_id` — existing VNet ID
    - `subnet_mgmt_id` / `subnet_wan_id` / `subnet_lan_id` — existing subnet IDs (or `subnet_*_prefix` to create new)
    - `route_table_wan_id` — existing WAN route table ID (optional)
@@ -444,6 +446,12 @@ terraform init
 terraform plan -var-file="configs/azure_deploy_vedge_config.tfvars" -out=tfplan
 terraform apply tfplan
 ```
+
+### Serial console
+
+Use the vEdge serial console to get the onboarding URL/QR code when `token` is empty, or to troubleshoot onboarding:
+- Azure Portal → VM → **Help** → **Serial console**, then press **Enter** (the console only shows new output)
+- or `az serial-console connect -g <resource_group> -n <vm_name>` (exit with `Ctrl+]`, then `q`)
 
 ### Post-deployment: Configure the vEdge in Graphiant Portal
 
@@ -463,10 +471,32 @@ A Debian 12 test VM can be deployed on the LAN subnet to verify connectivity. It
 ```hcl
 deploy_test_vm         = true
 test_vm_name           = "graphiant-vedge-test-vm"
-test_vm_size           = "Standard_B1s"
+test_vm_size           = "Standard_B2ts_v2"
 test_vm_admin_username = "azureuser"
 test_vm_admin_password = "<password>"  # 12-123 chars, must meet 3 of 4: lowercase, uppercase, digit, special char
 ```
+
+### Optional: Mgmt VM to access the vEdge local web server
+
+A Debian 12 desktop VM (XFCE + xrdp + Firefox) can be deployed on the mgmt subnet to reach the vEdge [local web server](https://docs.graphiant.com/docs/troubleshooting-using-the-local-web-server) for troubleshooting. It gets a public IP for RDP (allowed only from `allowed_cidr`), and the vEdge mgmt NSG allows HTTPS from the mgmt VM only.
+
+```hcl
+deploy_mgmt_vm         = true
+mgmt_vm_name           = "graphiant-vedge-mgmt-vm"
+mgmt_vm_size           = "Standard_B2s_v2"
+mgmt_vm_admin_username = "azureuser"
+mgmt_vm_admin_password = "<password>"           # 12-123 chars, must meet 3 of 4: lowercase, uppercase, digit, special char
+allowed_cidr           = "YOUR_LAPTOP_IP/32"    # source allowed to RDP
+```
+
+1. Wait a few minutes after apply for cloud-init to install the desktop.
+2. RDP to `terraform output mgmt_vm_public_ip` and log in with the admin username/password.
+3. In Firefox, open `terraform output vedge_local_web_server_url` and accept the self-signed certificate warning.
+
+> `mgmt_vm_admin_password` and a specific `allowed_cidr` are required; `0.0.0.0/0` is rejected at plan time.
+> With an existing mgmt NSG (`nsg_mgmt_id`), the module does not modify it: add an inbound rule allowing HTTPS (443) from the mgmt VM private IP (`terraform output mgmt_vm_private_ip`) to the vEdge mgmt IP, otherwise the local web server is not reachable.
+
+> **Upgrading an existing deployment:** subnets created before this release keep default outbound access (only new subnets are created private), so they are not replaced. An existing test VM is recreated with a `StandardSSD_LRS` OS disk and size `Standard_B2ts_v2`; its NIC and IPs are kept, but data on the old OS disk is lost. The vEdge default size is now `Standard_D8s_v4` (Dv2 sizes can land on ConnectX-3 hosts where onboarding fails); an existing vEdge is resized in place (stopped and restarted, possibly on a new host) unless `vm_size` is set to its current size.
 
 ### Destroy
 
