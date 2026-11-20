@@ -327,14 +327,13 @@ def main():
                 no_change_msg="Zone pair security ruleset references already cleared",
             )
         else:
-            module.fail_json(
+            return module.fail_json(
                 msg=(
                     f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure, "
                     f"attach_to_zone_pairs, detach_from_zone_pairs."
                 ),
                 operation=operation,
             )
-            return
 
         details = result.get("details") or {}
         exit_payload = dict(

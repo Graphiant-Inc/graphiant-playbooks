@@ -284,10 +284,8 @@ def main():
             # filter or no filter can never produce one, since the reported names are built from
             # what was actually found in that case. A named target you asked about not existing
             # is a real failure, not just informational.
-            module.fail_json(**result_payload)
-            return
-        module.exit_json(**result_payload)
-        return
+            return module.fail_json(**result_payload)
+        return module.exit_json(**result_payload)
 
     except Exception as e:
         error_msg = handle_graphiant_exception(e, "get_status")

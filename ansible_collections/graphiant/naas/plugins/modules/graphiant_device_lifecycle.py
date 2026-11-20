@@ -572,11 +572,10 @@ def main():
     device = (params.get("device") or "").strip()
 
     if not cfg_file and not device:
-        module.fail_json(
+        return module.fail_json(
             msg="Provide config_file and/or device (portal device name).",
             operation=operation,
         )
-        return
 
     try:
         connection = get_graphiant_connection(params, check_mode=module.check_mode)
@@ -584,14 +583,13 @@ def main():
         manager = graphiant_config.device_lifecycle
 
         if operation not in ("change_state", "schedule_upgrade", "rollback"):
-            module.fail_json(
+            return module.fail_json(
                 msg=(
                     f"Provide operation (module param); got {operation!r}. Choices: "
                     "change_state, schedule_upgrade, rollback."
                 ),
                 operation=operation,
             )
-            return
 
         module_params: Dict[str, Any] = {"device": device or None}
         if operation == "change_state":
@@ -617,13 +615,12 @@ def main():
             )
             details = result.get("details") or {}
             if details.get("no_input"):
-                module.exit_json(
+                return module.exit_json(
                     changed=False,
                     msg="No device_lifecycle entries in YAML; nothing to do.",
                     operation=operation,
                     details=details,
                 )
-                return
             not_insync_devices = details.get("not_insync_devices", [])
             insync_devices = details.get("insync_devices", [])
             msg = result["result_msg"]
@@ -656,10 +653,8 @@ def main():
             )
             apply_module_diff(module, exit_payload, details)
             if not_insync_devices:
-                module.fail_json(**exit_payload)
-                return
-            module.exit_json(**exit_payload)
-            return
+                return module.fail_json(**exit_payload)
+            return module.exit_json(**exit_payload)
 
         if operation == "schedule_upgrade":
             upgrade_action_label = params.get("upgrade_action") or "InstallActivate (default)"
@@ -686,13 +681,12 @@ def main():
             )
             details = result.get("details") or {}
             if details.get("no_input"):
-                module.exit_json(
+                return module.exit_json(
                     changed=False,
                     msg="No device_lifecycle entries in YAML; nothing to do.",
                     operation=operation,
                     details=details,
                 )
-                return
             failed_devices = details.get("failed_devices", [])
             completed_devices = details.get("completed_devices", [])
             in_progress_devices = details.get("in_progress_devices", [])
@@ -770,10 +764,8 @@ def main():
             )
             apply_module_diff(module, exit_payload, details)
             if failed_devices or not_insync_devices or not_connected_devices:
-                module.fail_json(**exit_payload)
-                return
-            module.exit_json(**exit_payload)
-            return
+                return module.fail_json(**exit_payload)
+            return module.exit_json(**exit_payload)
 
         if operation == "rollback":
             if module.check_mode:
@@ -796,13 +788,12 @@ def main():
             )
             details = result.get("details") or {}
             if details.get("no_input"):
-                module.exit_json(
+                return module.exit_json(
                     changed=False,
                     msg="No device_lifecycle entries in YAML; nothing to do.",
                     operation=operation,
                     details=details,
                 )
-                return
             failed_devices = details.get("failed_devices", [])
             completed_devices = details.get("completed_devices", [])
             in_progress_devices = details.get("in_progress_devices", [])
@@ -864,13 +855,10 @@ def main():
             )
             apply_module_diff(module, exit_payload, details)
             if failed_devices or not_insync_devices:
-                module.fail_json(**exit_payload)
-                return
-            module.exit_json(**exit_payload)
-            return
+                return module.fail_json(**exit_payload)
+            return module.exit_json(**exit_payload)
 
-        module.fail_json(msg=f"Unsupported operation: {operation}", operation=operation)
-        return
+        return module.fail_json(msg=f"Unsupported operation: {operation}", operation=operation)
 
     except Exception as e:
         error_msg = handle_graphiant_exception(e, operation)

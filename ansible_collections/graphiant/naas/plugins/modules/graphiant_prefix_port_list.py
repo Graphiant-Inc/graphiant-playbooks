@@ -415,11 +415,10 @@ def main():
                 "create_prefix_port_lists, delete_prefix_port_lists, create_prefix_lists, "
                 "delete_prefix_lists, create_port_lists, delete_port_lists"
             )
-            module.fail_json(
+            return module.fail_json(
                 msg=f"Unsupported operation '{operation}'. Supported operations: {supported_ops}.",
                 operation=operation,
             )
-            return
 
         if params.get("detailed_logs"):
             preview = result_msg if len(result_msg) <= 200 else (result_msg[:200] + "…")

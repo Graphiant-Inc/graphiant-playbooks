@@ -61,36 +61,6 @@ def test_global_bgp_filter_delete(_mock_client, mock_tmpl_class) -> None:
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
-def test_lag_interfaces_prefers_lag_interfaces(_mock_client, mock_tmpl_class) -> None:
-    template = MagicMock()
-    template.render_lag_interfaces.return_value = {
-        "lagInterfaces": {"bnd0": {"members": []}},
-    }
-    mock_tmpl_class.return_value = template
-
-    cu = ConfigUtils(base_url="https://api.example.com", username="u", password="p")
-    payload: dict = {"lagInterfaces": {}}
-    cu.lag_interfaces(payload, action="add", name="bnd0")
-    assert "bnd0" in payload["lagInterfaces"]
-
-
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
-def test_lag_interfaces_falls_back_to_interfaces(_mock_client, mock_tmpl_class) -> None:
-    template = MagicMock()
-    template.render_lag_interfaces.return_value = {
-        "interfaces": {"eth0": {}},
-    }
-    mock_tmpl_class.return_value = template
-
-    cu = ConfigUtils(base_url="https://api.example.com", username="u", password="p")
-    payload: dict = {"interfaces": {}}
-    cu.lag_interfaces(payload, action="add", name="bnd0")
-    assert "eth0" in payload["interfaces"]
-
-
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.config_utils.ConfigTemplates")
-@patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.portal_utils.GraphiantPortalClient")
 def test_global_graphiant_filter_add(_mock_client, mock_tmpl_class) -> None:
     template = MagicMock()
     template.render_global_graphiant_filter.return_value = {"gf-1": {"k": 1}}

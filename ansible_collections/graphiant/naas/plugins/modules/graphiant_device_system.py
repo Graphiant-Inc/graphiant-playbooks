@@ -295,23 +295,20 @@ def main():
     device = (params.get("device") or "").strip()
 
     if state != "present":
-        module.fail_json(msg="Only state=present is supported.", operation=operation)
-        return
+        return module.fail_json(msg="Only state=present is supported.", operation=operation)
 
     if not cfg_file and not device:
-        module.fail_json(
+        return module.fail_json(
             msg="Provide system_config_file and/or device (portal device name).",
             operation=operation,
         )
-        return
 
     if not cfg_file:
         if not any(params.get(k) is not None for k in ("name", "regionName", "site")):
-            module.fail_json(
+            return module.fail_json(
                 msg="When system_config_file is omitted, at least one of name, regionName, site is required.",
                 operation=operation,
             )
-            return
 
     module_params: Dict[str, Any] = {
         "device": device or None,
@@ -337,13 +334,12 @@ def main():
             )
             details = result.get("details") or {}
             if details.get("no_input"):
-                module.exit_json(
+                return module.exit_json(
                     changed=False,
                     msg="No device_system entries in YAML; nothing to do.",
                     operation=operation,
                     details=details,
                 )
-                return
 
             sns = details.get("skipped_no_site") or []
             if sns:
@@ -368,8 +364,7 @@ def main():
                 }
                 if cfg_file:
                     fail_json_kwargs["system_config_file"] = cfg_file
-                module.fail_json(**fail_json_kwargs)
-                return
+                return module.fail_json(**fail_json_kwargs)
 
             msg = result["result_msg"]
             exit_payload = dict(
@@ -383,8 +378,7 @@ def main():
             if cfg_file:
                 exit_payload["system_config_file"] = cfg_file
             apply_module_diff(module, exit_payload, details)
-            module.exit_json(**exit_payload)
-            return
+            return module.exit_json(**exit_payload)
 
         module.fail_json(msg=f"Unsupported operation: {operation}", operation=operation)
 
