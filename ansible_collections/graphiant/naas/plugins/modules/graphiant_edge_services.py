@@ -418,15 +418,13 @@ def main():
     module_params = _module_params_from_ansible(params)
 
     if state != "present":
-        module.fail_json(msg="Only state=present is supported.", operation=operation)
-        return
+        return module.fail_json(msg="Only state=present is supported.", operation=operation)
 
     if not cfg_file and not device:
-        module.fail_json(
+        return module.fail_json(
             msg="Provide edge_services_config_file and/or device (portal device name).",
             operation=operation,
         )
-        return
 
     vault_lws = params.get("vault_devices_lws_password") or {}
     if not isinstance(vault_lws, dict):
@@ -435,7 +433,7 @@ def main():
     if not cfg_file and not _has_service_params(module_params):
         vault_pwd = (vault_lws.get(device) or "").strip() if device else ""
         if not vault_pwd:
-            module.fail_json(
+            return module.fail_json(
                 msg=(
                     "When edge_services_config_file is omitted, at least one of localWebServerPassword, "
                     "dns, lldp, dhcpSubnets, or dpiApplications is required, or vault_devices_lws_password "
@@ -443,7 +441,6 @@ def main():
                 ),
                 operation=operation,
             )
-            return
 
     try:
         connection = get_graphiant_connection(params, check_mode=module.check_mode)
@@ -461,13 +458,12 @@ def main():
             )
             details = result.get("details") or {}
             if details.get("no_input"):
-                module.exit_json(
+                return module.exit_json(
                     changed=False,
                     msg="No edge_services entries in YAML; nothing to do.",
                     operation=operation,
                     details=details,
                 )
-                return
 
             msg = result["result_msg"]
             exit_payload = dict(
@@ -481,8 +477,7 @@ def main():
             if cfg_file:
                 exit_payload["edge_services_config_file"] = cfg_file
             apply_module_diff(module, exit_payload, details)
-            module.exit_json(**exit_payload)
-            return
+            return module.exit_json(**exit_payload)
 
         module.fail_json(msg=f"Unsupported operation: {operation}", operation=operation)
 

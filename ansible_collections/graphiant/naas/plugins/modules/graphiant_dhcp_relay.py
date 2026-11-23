@@ -392,19 +392,17 @@ def main():
         operation = "configure" if state == "present" else "deconfigure"
 
     if not dhcp_relay_config_file and not device:
-        module.fail_json(
+        return module.fail_json(
             msg="Provide dhcp_relay_config_file and/or device (portal device name).",
             operation=operation,
         )
-        return
 
     if not dhcp_relay_config_file and device:
         if not params.get("name") and not params.get("interfaces"):
-            module.fail_json(
+            return module.fail_json(
                 msg="When dhcp_relay_config_file is omitted, provide name (interface name) or interfaces list.",
                 operation=operation,
             )
-            return
 
     module_params = {"device": device or None}
     for key in ("name", "vlan", "dhcpRelayIpv4", "dhcpRelayIpv6", "interfaces"):

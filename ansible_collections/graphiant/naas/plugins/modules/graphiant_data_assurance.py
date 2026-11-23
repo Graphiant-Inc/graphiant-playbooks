@@ -604,11 +604,10 @@ def main():
                 no_change_msg="Data Assurance policies already absent; no changes needed",
             )
         else:
-            module.fail_json(
+            return module.fail_json(
                 msg=f"Unsupported operation '{operation}'. Supported operations: configure, deconfigure.",
                 operation=operation,
             )
-            return
 
         changed = result["changed"]
         result_msg = result["result_msg"]

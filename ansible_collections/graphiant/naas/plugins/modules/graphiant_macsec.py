@@ -327,26 +327,23 @@ def main():
     module_params = _module_params_from_ansible(params)
 
     if state != "present":
-        module.fail_json(msg="Only state=present is supported.", operation=operation)
-        return
+        return module.fail_json(msg="Only state=present is supported.", operation=operation)
 
     if not cfg_file and not device:
-        module.fail_json(
+        return module.fail_json(
             msg="Provide macsec_config_file and/or device (portal device name).",
             operation=operation,
         )
-        return
 
     vault_psk = params.get("vault_devices_macsec_psk") or {}
     if not isinstance(vault_psk, dict):
         vault_psk = {}
 
     if not cfg_file and not _has_macsec_params(module_params):
-        module.fail_json(
+        return module.fail_json(
             msg="When macsec_config_file is omitted, interfaces is required for the target device.",
             operation=operation,
         )
-        return
 
     try:
         connection = get_graphiant_connection(params, check_mode=module.check_mode)
@@ -364,13 +361,12 @@ def main():
             )
             details = result.get("details") or {}
             if details.get("no_input"):
-                module.exit_json(
+                return module.exit_json(
                     changed=False,
                     msg="No macsec entries in YAML; nothing to do.",
                     operation=operation,
                     details=details,
                 )
-                return
 
             exit_payload = dict(
                 changed=result["changed"],
@@ -383,8 +379,7 @@ def main():
             if cfg_file:
                 exit_payload["macsec_config_file"] = cfg_file
             apply_module_diff(module, exit_payload, details)
-            module.exit_json(**exit_payload)
-            return
+            return module.exit_json(**exit_payload)
 
         module.fail_json(msg=f"Unsupported operation: {operation}", operation=operation)
 

@@ -27,7 +27,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: configure
-        lag_config_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "{{ lag_config_file | default('sample_lag_interface_config.yaml') }}"
         detailed_logs: true
         state: present
       register: configure_result
@@ -43,7 +43,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: add_lag_members
-        lag_config_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "{{ lag_config_file | default('sample_lag_interface_config.yaml') }}"
         detailed_logs: true
       register: add_members_result
       tags: ['add_lag_members']
@@ -58,7 +58,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: remove_lag_members
-        lag_config_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "{{ lag_config_file | default('sample_lag_interface_config.yaml') }}"
         detailed_logs: true
       register: remove_members_result
       tags: ['remove_lag_members']
@@ -73,7 +73,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: update_lacp_configs
-        lag_config_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "{{ lag_config_file | default('sample_lag_interface_config.yaml') }}"
         detailed_logs: true
       register: update_lacp_result
       tags: ['update_lacp_configs']
@@ -89,7 +89,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: delete_lag_subinterfaces
-        lag_config_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "{{ lag_config_file | default('sample_lag_interface_config.yaml') }}"
         detailed_logs: true
       register: delete_subif_result
       tags: ['delete_lag_subinterfaces']
@@ -104,7 +104,7 @@
       graphiant.naas.graphiant_lag_interfaces:
         <<: *graphiant_client_params
         operation: deconfigure
-        lag_config_file: "sample_lag_interface_config.yaml"
+        lag_config_file: "{{ lag_config_file | default('sample_lag_interface_config.yaml') }}"
         detailed_logs: true
         state: absent
       register: deconfigure_result
