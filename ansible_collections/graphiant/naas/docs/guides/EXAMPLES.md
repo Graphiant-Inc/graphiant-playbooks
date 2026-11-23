@@ -3574,6 +3574,8 @@ Defaults to 15 minutes, since most upgrades complete within that window. Max 40,
 
 **Unknown devices:** a `device`/`config_file` entry naming a device not found via the portal fails the task before any `PUT` is sent — every unresolved device in the batch is collected and named together in one failure, not just the first one hit, so a config file with several bad names surfaces all of them in a single run.
 
+**Unavailable release:** a `schedule_upgrade` `release` with no build in the enterprise's release catalog (typically `Custom` with no custom image enabled) fails the task before any `PUT` is sent, including under `--check` — every affected device is named together with the available releases. If the catalog can't be fetched, a `Custom` request fails (it can't be verified); the other releases are not checked.
+
 **Whole-run settings vs. per-device settings:**
 - `operation`, `upgrade_action`, `ts`, `schedule_completion_timeout` apply to the entire call (one `PUT` batches every device under a single action/time, and one poll loop waits for all of them) — module parameters only, not settable in the config file.
 - `verify_for_insync` and `wait_for_completion` default from the module parameter (`true` unless set) but can be overridden per device in that device's own `device_lifecycle` entry — see `edge-2-sdktest` below.

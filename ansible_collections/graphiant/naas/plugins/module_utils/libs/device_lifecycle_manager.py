@@ -23,8 +23,10 @@ after a previous one simply targets whichever build the device just came from, s
 to pin ``schedule_upgrade``/``rollback`` to an arbitrary exact build string — ``release``
 (``Stable``/``Recommended``/``Latest``/``Custom``) is the only target either accepts, matching the
 portal's own "Change Release" dropdown exactly (``Custom`` only actually resolves to anything for
-an enterprise that has a custom image enabled; offered here unconditionally and left for the API
-to reject otherwise).
+an enterprise that has a custom image enabled; offered here unconditionally). A
+``schedule_upgrade`` ``release`` with no build in the enterprise's release catalog fails the task
+before any mutating call, with every affected device named together; ``Custom`` also fails when
+the catalog can't be fetched, since its availability can't be verified (the other releases always exist).
 Both ``schedule_upgrade`` and ``rollback`` also skip (``schedule_in_progress_devices``) a device
 whose existing ``upgradeSummary.schedule.state`` hasn't reached ``Success``/``Failed`` yet,
 including ``Idle`` — submitting a new schedule while one is still in progress can race the
@@ -158,12 +160,15 @@ class DeviceLifecycleManager(BaseManager):
         caller's actual operation.
         """
         try:
-            summaries = self.gsdk.get_software_releases_summary()
+            return self._fetch_release_catalog()
         except Exception as e:  # noqa: BLE001 - enrichment only, must never fail the run
             LOG.warning("%s Failed to fetch software releases summary for Release column: %s", _LOG_PREFIX, e)
             return {}
+
+    def _fetch_release_catalog(self) -> Dict[str, Dict[str, Optional[str]]]:
+        """``_release_catalog`` without the error swallowing, for callers that must tell a failed fetch apart."""
         catalog: Dict[str, Dict[str, Optional[str]]] = {}
-        for summary in summaries or []:
+        for summary in self.gsdk.get_software_releases_summary() or []:
             key = getattr(summary, "key", None)
             version = getattr(key, "version", None) if key else None
             if version:
@@ -766,7 +771,23 @@ class DeviceLifecycleManager(BaseManager):
         check_mode = getattr(self.gsdk, "check_mode", False)
         enterprise = self.gsdk.enterprise_info["company_name"]
 
-        release_catalog = self._release_catalog()
+        catalog_error: Optional[Exception] = None
+        try:
+            release_catalog = self._fetch_release_catalog()
+        except Exception as e:  # noqa: BLE001 - only Custom needs the catalog, see below
+            LOG.warning("%s Failed to fetch software releases summary: %s", _LOG_PREFIX, e)
+            release_catalog, catalog_error = {}, e
+        available_releases = {r for r in (entry.get("release") for entry in release_catalog.values()) if r}
+        if not available_releases:
+            # Latest/Recommended/Stable always exist, but Custom may not, and scheduling a missing
+            # release wedges the device — so it can't be allowed through unverified.
+            unverifiable = [name for name, cfg in by_name.items() if cfg["release"] == "Custom"]
+            if unverifiable:
+                reason = f"unavailable ({catalog_error})" if catalog_error else "empty"
+                raise APIError(
+                    f"Cannot verify that a Custom release is available in enterprise '{enterprise}' "
+                    f"({', '.join(unverifiable)}): the release catalog is {reason}. Retry."
+                )
         by_hostname = _index_by_hostname(self.gsdk.get_edges_summary_with_upgrade())
         device_versions: List[Dict[str, Any]] = []
         configured: List[str] = []
@@ -778,6 +799,7 @@ class DeviceLifecycleManager(BaseManager):
         verify_for_insync_by_name: Dict[str, bool] = {}
         matched_edges = []
         missing_devices: List[str] = []
+        unavailable_release: Dict[str, str] = {}
 
         for device_name, cfg in by_name.items():
             edge = by_hostname.get(device_name)
@@ -785,6 +807,12 @@ class DeviceLifecycleManager(BaseManager):
                 missing_devices.append(device_name)
                 continue
             matched_edges.append(edge)
+
+            # The API accepts a release with no build (e.g. Custom without a custom image) and
+            # the device then retries its download forever, so reject it up front.
+            if available_releases and cfg["release"] not in available_releases:
+                unavailable_release[device_name] = cfg["release"]
+                continue
 
             # A prior schedule that hasn't reached Success/Failed yet — submitting a new one now
             # can race the backend's own dedup guard, see _schedule_in_progress_state. Checked
@@ -865,6 +893,13 @@ class DeviceLifecycleManager(BaseManager):
             # names surfaces all of them here in one run rather than one fix-and-retry cycle
             # per name.
             raise DeviceNotFoundError(missing_devices_message(missing_devices, enterprise))
+
+        if unavailable_release:
+            requested = ", ".join(f"{name} ({release})" for name, release in unavailable_release.items())
+            raise ConfigurationError(
+                f"No build is available in enterprise '{enterprise}' for the requested release: {requested}. "
+                f"Available releases: {', '.join(sorted(available_releases))}."
+            )
 
         _log_release_catalog_table(release_catalog, self.gsdk.enterprise_info)
         _log_edges_table(

@@ -651,6 +651,68 @@ def test_schedule_upgrade_diff_plan_falls_back_to_release_only_when_unresolvable
     ]
 
 
+def test_schedule_upgrade_rejects_release_missing_from_catalog_without_calling_api() -> None:
+    """
+    A release channel with no build in the enterprise's catalog (e.g. Custom with no custom
+    image) fails up front, naming every affected device and the available releases — no PUT.
+    """
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file = MagicMock(
+        return_value={
+            "device_lifecycle": [
+                {"edge-1": {"release": "Custom"}},
+                {"edge-2": {"release": "Latest"}},
+                {"edge-3": {"release": "Custom"}},
+            ],
+        }
+    )
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [
+        _edge(hostname="edge-1", device_id=100),
+        _edge(hostname="edge-2", device_id=200),
+        _edge(hostname="edge-3", device_id=300),
+    ]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2611.1", "Latest", "26.11.1"),
+        _release_summary("2609.1", "Recommended", "26.9.2"),
+        _release_summary("2606.1", "Stable", "26.6.4"),
+    ]
+
+    with pytest.raises(ConfigurationError) as exc:
+        mgr.schedule_upgrade("sample.yaml", None)
+
+    message = str(exc.value)
+    assert "edge-1 (Custom)" in message
+    assert "edge-3 (Custom)" in message
+    assert "edge-2" not in message
+    assert "Available releases: Latest, Recommended, Stable" in message
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_schedule_upgrade_custom_fails_when_catalog_unavailable() -> None:
+    """Custom can't be verified without the catalog, so it fails instead of risking a stuck device."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.side_effect = Exception("boom")
+
+    with pytest.raises(APIError, match="Cannot verify that a Custom release is available.*boom"):
+        mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Custom"})
+
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_schedule_upgrade_other_releases_proceed_when_catalog_unavailable() -> None:
+    """Latest/Recommended/Stable always exist, so a failed catalog fetch must not block them."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.side_effect = Exception("boom")
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Latest"})
+
+    assert r["configured_devices"] == ["edge-1"]
+    mgr.gsdk.put_devices_upgrade_schedule.assert_called_once()
+
+
 def test_schedule_upgrade_polls_and_reports_completed_devices() -> None:
     mgr = _make_manager()
     mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
