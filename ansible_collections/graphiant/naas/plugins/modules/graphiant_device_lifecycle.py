@@ -29,7 +29,7 @@ description:
     O(operation=schedule_upgrade) schedules a software update to a release channel
     (O(release): V(Stable)/V(Recommended)/V(Latest)/V(Custom) — matches the portal's own
     "Change Release" dropdown exactly; V(Custom) only resolves to anything for an enterprise
-    that has a custom image enabled, and is otherwise rejected by the API) via O(upgrade_action)
+    that has a custom image enabled, and is otherwise rejected, see notes) via O(upgrade_action)
     (V(InstallActivate)/V(Install)/V(Activate), optional O(ts) to run later); O(operation=rollback)
     schedules C(action=Activate) back to each device's C(upgradeSummary.lastRunningVersion) — the
     only target either operation supports; neither can be pinned to an arbitrary exact build
@@ -112,6 +112,11 @@ notes:
     device is collected and named together in one failure, not just the first one encountered,
     so a config file with several bad names surfaces all of them in a single run.
   - >-
+    An O(operation=schedule_upgrade) O(release) with no build in the enterprise's release catalog
+    (typically V(Custom) with no custom image enabled) fails the task before any C(PUT) is sent,
+    including under check mode, naming every affected device and the available releases. If the
+    catalog can't be fetched, a V(Custom) request fails (it can't be verified); the other releases are not checked.
+  - >-
     O(operation=schedule_upgrade) / O(operation=rollback) skip (RV(schedule_in_progress_devices))
     a device whose existing C(upgradeSummary.schedule.state) hasn't reached C(Success)/C(Failed)
     yet, including C(Idle) — submitting a new schedule while a prior one is still in progress can
@@ -176,7 +181,7 @@ options:
         Target software release channel (O(operation=schedule_upgrade) with O(device)) —
         matches the portal's own "Change Release" dropdown exactly. V(Custom) only resolves to
         anything for an enterprise that has a custom image enabled; offered here unconditionally
-        and otherwise rejected by the API. There is no way to target an arbitrary exact build
+        and otherwise rejected (see notes). There is no way to target an arbitrary exact build
         string instead of a channel, matching what the portal UI itself allows.
       - Ignored for O(operation=rollback) (the rollback target is always the device's own
         C(upgradeSummary.lastRunningVersion) — there is no override).
