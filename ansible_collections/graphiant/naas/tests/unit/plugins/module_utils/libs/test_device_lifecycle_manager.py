@@ -10,6 +10,7 @@ import pytest
 
 from ansible_collections.graphiant.naas.plugins.module_utils.libs.device_lifecycle_manager import (
     DeviceLifecycleManager,
+    _resolve_release,
 )
 from ansible_collections.graphiant.naas.plugins.module_utils.libs.exceptions import (
     APIError,
@@ -711,6 +712,255 @@ def test_schedule_upgrade_other_releases_proceed_when_catalog_unavailable() -> N
 
     assert r["configured_devices"] == ["edge-1"]
     mgr.gsdk.put_devices_upgrade_schedule.assert_called_once()
+
+
+@pytest.mark.parametrize("release", ["Latest", "Recommended", "Stable"])
+def test_schedule_upgrade_accepts_releases_sharing_a_build(release: str) -> None:
+    """Latest and Recommended can point at the same build; neither may be rejected as unavailable."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2611.1", "Latest", "26.11.1"),
+        _release_summary("2611.1", "Recommended", "26.11.1"),
+        _release_summary("2606.1", "Stable", "26.6.6"),
+    ]
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": release})
+
+    assert r["configured_devices"] == ["edge-1"]
+
+
+@pytest.mark.parametrize("release", ["Latest", "Recommended"])
+def test_schedule_upgrade_skips_device_already_on_a_shared_build(release: str) -> None:
+    """Whichever of the releases sharing a build is requested, a device already on it is a no-op."""
+    mgr = _make_manager()
+    edge = _edge(hostname="edge-1", device_id=100)
+    edge.sw_version = "2611.1"
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [edge]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2611.1", "Latest", "26.11.1"),
+        _release_summary("2611.1", "Recommended", "26.11.1"),
+        _release_summary("2606.1", "Stable", "26.6.6"),
+    ]
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": release})
+
+    assert r["skipped_devices"] == ["edge-1"]
+    assert r["configured_devices"] == []
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_catalog_from_summaries_lists_every_release_sharing_a_build() -> None:
+    catalog = DeviceLifecycleManager._catalog_from_summaries(
+        [
+            _release_summary("2611.1", "Recommended", "26.11.1"),
+            _release_summary("2611.1", "Latest", "26.11.1"),
+            _release_summary("2611.1", "Latest", "26.11.1"),
+            _release_summary("2606.1", "Stable", "26.6.6"),
+        ]
+    )
+
+    # Sorted and de-duplicated, whatever order the API returns them in.
+    assert catalog == {
+        "2611.1": {"release": "Latest, Recommended", "name": "26.11.1"},
+        "2606.1": {"release": "Stable", "name": "26.6.6"},
+    }
+
+
+def _versionless_summary(release):
+    summary = MagicMock()
+    summary.key = None
+    summary.release = release
+    summary.name = None
+    return summary
+
+
+def test_schedule_upgrade_rejects_release_listed_without_a_build() -> None:
+    """A summary row with no build version doesn't make its release available."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _versionless_summary("Custom"),
+        _release_summary("2611.1", "Latest", "26.11.1"),
+    ]
+
+    with pytest.raises(ConfigurationError, match=r"edge-1 \(Custom\)"):
+        mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Custom"})
+
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_schedule_upgrade_versionless_row_does_not_hide_the_build() -> None:
+    mgr = _make_manager()
+    edge = _edge(hostname="edge-1", device_id=100)
+    edge.sw_version = "2611.1"
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [edge]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _versionless_summary("Recommended"),
+        _release_summary("2611.1", "Recommended", "26.11.1"),
+    ]
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Recommended"})
+
+    assert r["skipped_devices"] == ["edge-1"]
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+@pytest.mark.parametrize("sw_version", ["2606.1", "2606.2", "2605.9"])
+def test_schedule_upgrade_release_with_several_builds_is_never_skipped(sw_version: str) -> None:
+    """With no single target build, a device that may be behind is scheduled rather than silently skipped."""
+    mgr = _make_manager()
+    edge = _edge(hostname="edge-1", device_id=100)
+    edge.sw_version = sw_version
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [edge]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2606.1", "Stable", "26.6.1"),
+        _release_summary("2606.2", "Stable", "26.6.2"),
+    ]
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Stable", "wait_for_completion": False})
+
+    assert r["configured_devices"] == ["edge-1"]
+    assert r["skipped_devices"] == []
+    assert r["diff_plan"][0]["after"] == {"release": "Stable"}
+
+
+def test_schedule_upgrade_unverifiable_custom_fails_whole_batch_without_per_device_decisions(caplog) -> None:
+    """Custom can't be verified: no device in the batch is scheduled, or logged as if it had been handled."""
+    import logging as _logging
+
+    mgr = _make_manager()
+    mgr.config_utils.render_config_file = MagicMock(
+        return_value={
+            "device_lifecycle": [
+                {"edge-1": {"release": "Custom"}},
+                {"edge-2": {"release": "Stable"}},
+                {"edge-3": {"release": "Latest"}},
+            ],
+        }
+    )
+    on_stable = _edge(hostname="edge-2", device_id=200)
+    on_stable.sw_version = "2606.1"
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [
+        _edge(hostname="edge-1", device_id=100),
+        on_stable,
+        _edge(hostname="edge-3", device_id=300, tt_conn_count=0),
+    ]
+    mgr.gsdk.get_software_releases_summary.side_effect = Exception("boom")
+
+    with caplog.at_level(_logging.INFO, logger="Graphiant_playbook"), pytest.raises(APIError, match="edge-1"):
+        mgr.schedule_upgrade("sample.yaml", None)
+
+    assert "Failed to fetch software releases summary" in caplog.text  # proves the log is captured
+    assert "No change needed" not in caplog.text
+    assert "no portal connectivity" not in caplog.text
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_schedule_upgrade_custom_on_own_build_sharing_recommendeds_name_is_scheduled() -> None:
+    """Live case: Custom and Recommended both named 26.9.4 on different builds; builds decide, not names."""
+    mgr = _make_manager()
+    edge = _edge(hostname="edge-3", device_id=300)
+    edge.sw_version = "2609.202611122119"
+    edge.sw_name = "26.9.4"
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [edge]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2609.202611122119", "Recommended", "26.9.4"),
+        _release_summary("2609.202611220208", "Custom", "26.9.4"),
+        _release_summary("2611.202611211638", "Latest", "26.11.1"),
+    ]
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+
+    custom = mgr.schedule_upgrade(None, {"device": "edge-3", "release": "Custom", "wait_for_completion": False})
+    recommended = mgr.schedule_upgrade(None, {"device": "edge-3", "release": "Recommended"})
+
+    assert custom["configured_devices"] == ["edge-3"]
+    assert custom["diff_plan"][0]["after"] == {"release": "Custom", "version": "2609.202611220208"}
+    assert recommended["skipped_devices"] == ["edge-3"]
+
+
+def test_schedule_upgrade_other_releases_proceed_when_catalog_empty() -> None:
+    """An empty catalog only blocks Custom; the other releases always exist."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.return_value = []
+    mgr.gsdk.put_devices_upgrade_schedule.return_value = True
+
+    r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Latest", "wait_for_completion": False})
+
+    assert r["configured_devices"] == ["edge-1"]
+    mgr.gsdk.put_devices_upgrade_schedule.assert_called_once()
+
+
+def test_schedule_upgrade_logs_one_catalog_row_per_build(caplog) -> None:
+    """Live case: Custom and Latest on one build share a row, labelled in sorted order."""
+    import logging as _logging
+
+    mgr = _make_manager()
+    edge = _edge(hostname="edge-1", device_id=100)
+    edge.sw_version = "2611.202611211638"
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [edge]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2611.202611211638", "Latest", "26.11.1"),
+        _release_summary("2609.202611122119", "Recommended", "26.9.4"),
+        _release_summary("2611.202611211638", "Custom", "26.11.1"),
+    ]
+
+    with caplog.at_level(_logging.INFO, logger="Graphiant_playbook"):
+        r = mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Custom"})
+
+    table = next(rec.message for rec in caplog.records if "Release catalog" in rec.message)
+    assert "| Custom, Latest | 2611.202611211638 |" in table
+    assert table.count("2611.202611211638") == 1
+    assert r["skipped_devices"] == ["edge-1"]
+
+
+def test_catalog_from_summaries_takes_name_from_any_row_of_a_shared_build() -> None:
+    nameless = _release_summary("2611.1", "Latest", None)
+    catalog = DeviceLifecycleManager._catalog_from_summaries(
+        [nameless, _release_summary("2611.1", "Recommended", "26.11.1")]
+    )
+
+    assert catalog["2611.1"]["name"] == "26.11.1"
+
+
+@pytest.mark.parametrize(
+    "running_release, expected",
+    [("Recommended", "Recommended"), (None, "Latest, Recommended"), ("Stable", "Latest, Recommended")],
+)
+def test_resolve_release_names_the_devices_release_on_a_shared_build(running_release, expected) -> None:
+    edge = _edge(hostname="edge-1", device_id=100)
+    edge.sw_version = "2611.1"
+    edge.upgrade_summary = MagicMock()
+    edge.upgrade_summary.running_version.release = running_release
+    catalog = {"2611.1": {"release": "Latest, Recommended", "name": "26.11.1"}}
+
+    assert _resolve_release(edge, catalog) == expected
+
+
+def test_schedule_upgrade_custom_with_empty_catalog_is_a_config_error_not_retryable() -> None:
+    """A catalog that fetched fine but is empty won't change on retry, so no "Retry." advice."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.return_value = []
+
+    with pytest.raises(ConfigurationError, match="release catalog lists no release with a build") as exc:
+        mgr.schedule_upgrade(None, {"device": "edge-1", "release": "Custom"})
+
+    assert "Retry" not in str(exc.value)
+    mgr.gsdk.put_devices_upgrade_schedule.assert_not_called()
+
+
+def test_schedule_upgrade_unknown_device_reported_before_unverifiable_custom() -> None:
+    """With the catalog down, a misspelled hostname must still surface as not-found, not 'cannot verify'."""
+    mgr = _make_manager()
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [_edge(hostname="edge-1", device_id=100)]
+    mgr.gsdk.get_software_releases_summary.side_effect = Exception("boom")
+
+    with pytest.raises(DeviceNotFoundError, match="ghost"):
+        mgr.schedule_upgrade(None, {"device": "ghost", "release": "Custom"})
 
 
 def test_schedule_upgrade_polls_and_reports_completed_devices() -> None:
@@ -1813,6 +2063,35 @@ def test_get_status_table_release_from_catalog_and_release_name_from_sw_name(cap
     assert "Recommended" in table_message
     assert "26.6.3" in table_message
     assert "2606.202608261524" in table_message
+
+
+@pytest.mark.parametrize(
+    "running_release, expected",
+    [("Latest", "Latest"), (None, "Custom, Latest")],
+)
+def test_get_status_table_release_on_a_shared_build(caplog, running_release, expected) -> None:
+    import logging as _logging
+
+    mgr = _make_manager()
+    edge = _edge(hostname="edge-1", device_id=100)
+    edge.sw_version = "2611.202611211638"
+    edge.sw_name = "26.11.1"
+    edge.upgrade_summary = MagicMock()
+    edge.upgrade_summary.running_version = _sw_version(running_release, "2611.202611211638", "26.11.1")
+    mgr.gsdk.get_edges_summary_with_upgrade.return_value = [edge]
+    mgr.gsdk.get_software_releases_summary.return_value = [
+        _release_summary("2611.202611211638", "Custom", "26.11.1"),
+        _release_summary("2611.202611211638", "Latest", "26.11.1"),
+    ]
+
+    with caplog.at_level(_logging.INFO, logger="Graphiant_playbook"):
+        mgr.get_status(None, {"device": None})
+
+    table_message = next(r.message for r in caplog.records if "Reported devices" in r.message)
+    header = next(line for line in table_message.splitlines() if "Host Name" in line)
+    row = next(line for line in table_message.splitlines() if "edge-1" in line)
+    cells = dict(zip((c.strip() for c in header.split("|")), (c.strip() for c in row.split("|"))))
+    assert cells["Release"] == expected
 
 
 def test_get_status_table_release_name_falls_back_to_catalog_when_sw_name_empty(caplog) -> None:
