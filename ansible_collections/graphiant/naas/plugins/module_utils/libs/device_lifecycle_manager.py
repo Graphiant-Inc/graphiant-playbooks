@@ -14,7 +14,7 @@ that differ; ``decommissioned`` is only accepted when the device is currently ``
 (matches the portal UI). ``schedule_upgrade``/``rollback`` are actions, not fully declarative
 state, so a device that does need the change always reports ``changed`` — each has one
 idempotency-style skip instead: ``schedule_upgrade`` skips a device already resolved (via
-``_resolve_schedule_target_version``/``_release_catalog``) to be running the requested
+``_resolve_schedule_target_version``, from the release summaries) to be running the requested
 ``release`` channel's current build; ``rollback`` skips a device with no
 ``upgradeSummary.lastRunningVersion`` — its only skip, since ``lastRunningVersion`` always differs
 from what's currently running (no "already there" case to detect); a repeat ``rollback`` right
@@ -26,7 +26,8 @@ portal's own "Change Release" dropdown exactly (``Custom`` only actually resolve
 an enterprise that has a custom image enabled; offered here unconditionally). A
 ``schedule_upgrade`` ``release`` with no build in the enterprise's release catalog fails the task
 before any mutating call, with every affected device named together; ``Custom`` also fails when
-the catalog can't be fetched, since its availability can't be verified (the other releases always exist).
+the catalog can't be fetched or is empty, since its availability can't be verified (the other releases
+always exist).
 Both ``schedule_upgrade`` and ``rollback`` also skip (``schedule_in_progress_devices``) a device
 whose existing ``upgradeSummary.schedule.state`` hasn't reached ``Success``/``Failed`` yet,
 including ``Idle`` — submitting a new schedule while one is still in progress can race the
@@ -73,7 +74,7 @@ it again afterward (real runs only) to show a before/after snapshot, and logs ea
 actual transition line by line.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 try:
     from tabulate import tabulate
@@ -160,44 +161,67 @@ class DeviceLifecycleManager(BaseManager):
         caller's actual operation.
         """
         try:
-            return self._fetch_release_catalog()
+            return self._catalog_from_summaries(self._fetch_release_summaries())
         except Exception as e:  # noqa: BLE001 - enrichment only, must never fail the run
             LOG.warning("%s Failed to fetch software releases summary for Release column: %s", _LOG_PREFIX, e)
             return {}
 
-    def _fetch_release_catalog(self) -> Dict[str, Dict[str, Optional[str]]]:
-        """``_release_catalog`` without the error swallowing, for callers that must tell a failed fetch apart."""
+    def _fetch_release_summaries(self) -> List[Any]:
+        """The release summaries from ``GET /v1/software/releases/summary``; errors are not swallowed."""
+        return list(self.gsdk.get_software_releases_summary() or [])
+
+    @staticmethod
+    def _catalog_from_summaries(summaries: List[Any]) -> Dict[str, Dict[str, Optional[str]]]:
+        """
+        Keyed by build version, for display. Releases sharing one build (e.g. Latest and
+        Recommended on the same build) share one entry whose ``release`` names all of them,
+        sorted ("Latest, Recommended"), so don't compare it against a single release name — use the
+        summaries themselves for that (see ``_release_builds``).
+        """
         catalog: Dict[str, Dict[str, Optional[str]]] = {}
-        for summary in self.gsdk.get_software_releases_summary() or []:
-            key = getattr(summary, "key", None)
-            version = getattr(key, "version", None) if key else None
-            if version:
-                catalog[version] = {
-                    "release": getattr(summary, "release", None),
-                    "name": getattr(summary, "name", None),
-                }
+        for summary in summaries:
+            version = _summary_version(summary)
+            if not version:
+                continue
+            release = getattr(summary, "release", None)
+            entry = catalog.setdefault(version, {"release": None, "name": None})
+            entry["name"] = entry["name"] or getattr(summary, "name", None)
+            if release:
+                # Sorted: the API returns releases in no fixed order, and the label should be stable.
+                entry["release"] = ", ".join(sorted({*filter(None, (entry["release"] or "").split(", ")), release}))
         return catalog
 
     @staticmethod
-    def _resolve_schedule_target_version(
-        cfg: Dict[str, Any], release_catalog: Dict[str, Dict[str, Optional[str]]]
-    ) -> Optional[str]:
+    def _release_builds(summaries: List[Any]) -> Dict[str, Set[str]]:
+        """
+        ``{release: {build versions}}`` from the release summaries. A summary without a build
+        version is ignored: a release is only available if it has a build to install.
+        """
+        builds: Dict[str, Set[str]] = {}
+        for summary in summaries:
+            release, version = getattr(summary, "release", None), _summary_version(summary)
+            if release and version:
+                builds.setdefault(release, set()).add(version)
+        return builds
+
+    @staticmethod
+    def _resolve_schedule_target_version(cfg: Dict[str, Any], release_builds: Dict[str, Set[str]]) -> Optional[str]:
         """
         Resolve the exact target ``swVersion`` for a ``schedule_upgrade`` entry's release
         *channel*, for idempotency comparison against the device's current ``swVersion`` —
-        reverse-looked-up in ``release_catalog`` (keyed by version, not channel name) to
-        whatever build that channel currently points to. Returns ``None`` when unresolvable
-        (channel not in the catalog, or the catalog fetch failed) — callers must treat that as
-        "can't tell, don't skip", not assume a match, since a channel can point to a different
-        build over time.
+        whatever build that channel currently points to (see ``_release_builds``). Returns
+        ``None`` when unresolvable (channel has no build, or the fetch failed) — callers must treat
+        that as "can't tell, don't skip", not assume a match, since a channel can point to a
+        different build over time.
+
+        Also ``None`` if a release ever lists several builds. The backend keeps one current build
+        per (enterprise, model, release), keeps only the most specific enterprise's rows, and
+        always reports model 0, so today there's one; per-model builds couldn't be matched to a
+        device anyway (an edge's ``model`` is a name, the key's is a number). Skipping a device
+        that's actually behind would be silent, so with no single target it gets scheduled.
         """
-        release = cfg.get("release")
-        if not release:
-            return None
-        for version, entry in release_catalog.items():
-            if entry.get("release") == release:
-                return version
-        return None
+        builds = release_builds.get(cfg.get("release") or "", set())
+        return next(iter(builds)) if len(builds) == 1 else None
 
     def _schedule_in_progress_state(self, edge: Any) -> Optional[str]:
         """
@@ -773,21 +797,19 @@ class DeviceLifecycleManager(BaseManager):
 
         catalog_error: Optional[Exception] = None
         try:
-            release_catalog = self._fetch_release_catalog()
+            release_summaries = self._fetch_release_summaries()
         except Exception as e:  # noqa: BLE001 - only Custom needs the catalog, see below
             LOG.warning("%s Failed to fetch software releases summary: %s", _LOG_PREFIX, e)
-            release_catalog, catalog_error = {}, e
-        available_releases = {r for r in (entry.get("release") for entry in release_catalog.values()) if r}
-        if not available_releases:
-            # Latest/Recommended/Stable always exist, but Custom may not, and scheduling a missing
-            # release wedges the device — so it can't be allowed through unverified.
-            unverifiable = [name for name, cfg in by_name.items() if cfg["release"] == "Custom"]
-            if unverifiable:
-                reason = f"unavailable ({catalog_error})" if catalog_error else "empty"
-                raise APIError(
-                    f"Cannot verify that a Custom release is available in enterprise '{enterprise}' "
-                    f"({', '.join(unverifiable)}): the release catalog is {reason}. Retry."
-                )
+            release_summaries, catalog_error = [], e
+        release_catalog = self._catalog_from_summaries(release_summaries)
+        # Not from release_catalog: it's keyed by build, so releases sharing a build share an entry.
+        release_builds = self._release_builds(release_summaries)
+        available_releases = set(release_builds)
+        # Latest/Recommended/Stable always exist, but Custom may not, and scheduling a missing release
+        # wedges the device — so with no catalog to check against, Custom can't be allowed through.
+        unverifiable = (
+            [name for name, cfg in by_name.items() if cfg["release"] == "Custom"] if not available_releases else []
+        )
         by_hostname = _index_by_hostname(self.gsdk.get_edges_summary_with_upgrade())
         device_versions: List[Dict[str, Any]] = []
         configured: List[str] = []
@@ -807,6 +829,10 @@ class DeviceLifecycleManager(BaseManager):
                 missing_devices.append(device_name)
                 continue
             matched_edges.append(edge)
+            if unverifiable:
+                # The run fails below, once every unknown device name has been reported; logging
+                # per-device decisions first would read as if some devices had been handled.
+                continue
 
             # The API accepts a release with no build (e.g. Custom without a custom image) and
             # the device then retries its download forever, so reject it up front.
@@ -850,14 +876,14 @@ class DeviceLifecycleManager(BaseManager):
                 continue
 
             version = {"release": cfg["release"]}
-            target_version = self._resolve_schedule_target_version(cfg, release_catalog)
+            target_version = self._resolve_schedule_target_version(cfg, release_builds)
             current_version = getattr(edge, "sw_version", None)
             if target_version and current_version and target_version == current_version:
-                # Resolvable target (the release channel's current build found in
-                # release_catalog) already matches what the device is running — a genuine
+                # Resolvable target (the release channel's current build found in the
+                # release summaries) already matches what the device is running — a genuine
                 # no-op, not just "we couldn't tell". An unresolvable channel (catalog fetch
-                # failed, or the channel name isn't in it) always falls through to scheduling
-                # rather than guessing it's already current.
+                # failed, the channel name isn't in it, or it lists several builds) always falls
+                # through to scheduling rather than guessing it's already current.
                 LOG.info(
                     "%s ✓ No change needed for %s, already running %s",
                     _LOG_PREFIX,
@@ -893,6 +919,18 @@ class DeviceLifecycleManager(BaseManager):
             # names surfaces all of them here in one run rather than one fix-and-retry cycle
             # per name.
             raise DeviceNotFoundError(missing_devices_message(missing_devices, enterprise))
+
+        if unverifiable:
+            where = f"enterprise '{enterprise}' ({', '.join(unverifiable)})"
+            if catalog_error:
+                raise APIError(
+                    f"Cannot verify that a Custom release is available in {where}: "
+                    f"the release catalog is unavailable ({catalog_error}). Retry."
+                )
+            raise ConfigurationError(
+                f"Cannot verify that a Custom release is available in {where}: "
+                "the release catalog lists no release with a build."
+            )
 
         if unavailable_release:
             requested = ", ".join(f"{name} ({release})" for name, release in unavailable_release.items())
@@ -1237,6 +1275,12 @@ def _catalog_entry(
     return release_catalog.get(sw_version) or {}
 
 
+def _summary_version(summary: Any) -> Optional[str]:
+    """A release summary's build version (``key.version``), or ``None``."""
+    key = getattr(summary, "key", None)
+    return getattr(key, "version", None) if key else None
+
+
 def _resolve_release(edge: Any, release_catalog: Optional[Dict[str, Dict[str, Optional[str]]]]) -> Optional[str]:
     """
     Resolve the release channel (Stable/Recommended/Latest/Custom) for ``edge``.
@@ -1245,13 +1289,18 @@ def _resolve_release(edge: Any, release_catalog: Optional[Dict[str, Dict[str, Op
     ``DeviceLifecycleManager._release_catalog``) matched against the device's own ``swVersion``
     — that catalog is authoritative for currently-named releases. Falls back to
     ``upgradeSummary.runningVersion.release`` (reliably present, including V(Custom)) for a build
-    no longer tracked in that catalog (e.g. an old superseded version).
+    no longer tracked in that catalog (e.g. an old superseded version), and narrows a build shared
+    by several releases down to the one the device is running, when that's one of them. Otherwise
+    a shared build shows every release currently pointing at it ("Latest, Recommended"): the
+    device's own ``runningVersion.release`` is then stale (that release has since moved on).
     """
     release = _catalog_entry(edge, release_catalog).get("release")
-    if release:
-        return release
     running_version = getattr(getattr(edge, "upgrade_summary", None), "running_version", None)
-    return getattr(running_version, "release", None)
+    running_release = getattr(running_version, "release", None)
+    if release and running_release and running_release in release.split(", "):
+        # The build is shared by several releases ("Latest, Recommended"); name the one the device is on.
+        return running_release
+    return release or running_release
 
 
 def _resolve_release_name(edge: Any, release_catalog: Optional[Dict[str, Dict[str, Optional[str]]]]) -> Optional[str]:
@@ -1282,7 +1331,8 @@ def _log_release_catalog_table(
     Log the release channel -> current build table (``GET /v1/software/releases/summary``, see
     ``DeviceLifecycleManager._release_catalog``), so ``schedule_upgrade``'s skip-vs-schedule
     decision (``_resolve_schedule_target_version`` comparing a device's own ``swVersion`` against
-    this table's ``Version`` column for its target ``Release``) is auditable directly from
+    this table's ``Version`` column for its target ``Release``; one row per build, so releases
+    sharing a build appear together, e.g. "Latest, Recommended") is auditable directly from
     ``detailed_logs`` instead of needing a separate manual query.
     """
     if not HAS_TABULATE or not release_catalog:

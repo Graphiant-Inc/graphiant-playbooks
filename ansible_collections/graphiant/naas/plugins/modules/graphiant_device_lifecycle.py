@@ -115,7 +115,8 @@ notes:
     An O(operation=schedule_upgrade) O(release) with no build in the enterprise's release catalog
     (typically V(Custom) with no custom image enabled) fails the task before any C(PUT) is sent,
     including under check mode, naming every affected device and the available releases. If the
-    catalog can't be fetched, a V(Custom) request fails (it can't be verified); the other releases are not checked.
+    catalog can't be fetched or is empty, a V(Custom) request fails (it can't be verified); the other
+    releases are not checked.
   - >-
     O(operation=schedule_upgrade) / O(operation=rollback) skip (RV(schedule_in_progress_devices))
     a device whose existing C(upgradeSummary.schedule.state) hasn't reached C(Success)/C(Failed)
