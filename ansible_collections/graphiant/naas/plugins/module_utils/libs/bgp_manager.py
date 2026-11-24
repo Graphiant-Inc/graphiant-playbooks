@@ -68,6 +68,19 @@ class BGPManager(BaseManager):
         "summary_only": "summaryOnly",
     }
 
+    # Defaults applied only when a neighbor is NEW. For an existing neighbor we send
+    # only the keys the user wrote, so a partial update never resets unspecified
+    # fields (BFD, timers, communities, ...) back to these values (QA-13707).
+    _NEIGHBOR_DEFAULTS = {
+        "holdTimer": 90,
+        "keepaliveTimer": 30,
+        "ebgpMultiHop": 1,
+        "bfd": False,
+        "sendCommunity": True,
+        "asOverride": False,
+        "remotePrivateAs": False,
+    }
+
     @staticmethod
     def _camelize(entry):
         """
@@ -84,7 +97,7 @@ class BGPManager(BaseManager):
                 del out[snake]
         return out
 
-    def _build_device_payload(self, config, action, device_name=None, vault_md5_passwords=None):
+    def _build_device_payload(self, config, action, device_name=None, vault_md5_passwords=None, device_dict=None):
         """
         Build the ``edge`` BGP payload for a single device from its config entry.
 
@@ -94,6 +107,8 @@ class BGPManager(BaseManager):
                 "detach" (detach policies).
             device_name (str, optional): Owning device, used for the vault MD5 lookup.
             vault_md5_passwords (dict, optional): ``{device: {remoteAddress: md5}}`` from Ansible Vault.
+            device_dict (dict, optional): The device GET response, used to decide new-vs-existing
+                neighbors so an existing neighbor gets a sparse (merge-only) payload.
 
         Returns:
             dict: The device BGP payload (``routePolicies`` and ``segments``).
@@ -129,6 +144,7 @@ class BGPManager(BaseManager):
                 global_ids=global_ids,
                 device_name=device_name,
                 vault_md5_passwords=vault_md5_passwords,
+                device_dict=device_dict,
             )
         except ConfigurationError:
             raise
@@ -166,7 +182,7 @@ class BGPManager(BaseManager):
         return {"policy": value}
 
     @staticmethod
-    def _build_bgp_neighbor(neighbor, action, device_name=None, vault_md5_passwords=None):
+    def _build_bgp_neighbor(neighbor, action, device_name=None, vault_md5_passwords=None, is_new=True):
         """
         Build the payload for a single BGP neighbor.
 
@@ -176,6 +192,10 @@ class BGPManager(BaseManager):
             device_name (str, optional): Owning device, used for the vault MD5 lookup.
             vault_md5_passwords (dict, optional): ``{device: {remoteAddress: md5}}`` from Ansible
                 Vault. Fills a neighbor's MD5 password only when the YAML leaves it null/absent.
+            is_new (bool): True when the neighbor does not yet exist on the device. Only then
+                are the per-field defaults and the create-time scaffolding (``enabled``, ``state``,
+                ``bgpType``, ``maxPrefixValue``) sent. For an existing neighbor the payload carries
+                only the keys the user wrote, so a merge PUT leaves unspecified fields alone (QA-13707).
 
         Returns:
             dict: The neighbor payload ({"neighbor": None} when deleting).
@@ -187,6 +207,11 @@ class BGPManager(BaseManager):
         neighbor = BGPManager._camelize(neighbor)
         if action == "delete" or (action == "add" and BGPManager._is_absent(neighbor)):
             return {"neighbor": None}
+
+        # A new neighbor gets the full set of defaults; an existing one keeps only
+        # the keys the user supplied (sparse merge).
+        if is_new:
+            neighbor = {**BGPManager._NEIGHBOR_DEFAULTS, **neighbor}
 
         # Address-family policies: attach by name, detach with `absent` (or the
         # detach action), or leave unchanged when the field is omitted.
@@ -206,12 +231,6 @@ class BGPManager(BaseManager):
         if ipv6_outbound is not None:
             ipv6_family["outboundPolicy"] = ipv6_outbound
 
-        bfd = {"enabled": bool(neighbor.get("bfd", False))}
-        if neighbor.get("minimumInterval"):
-            bfd["minimumInterval"] = neighbor["minimumInterval"]
-        if neighbor.get("localMultiplier"):
-            bfd["localMultiplier"] = neighbor["localMultiplier"]
-
         # MD5 password: YAML wins if non-null; otherwise fill from vault (device -> remoteAddress).
         md5_password = neighbor.get("md5Password")
         if md5_password is None and vault_md5_passwords and device_name:
@@ -225,24 +244,57 @@ class BGPManager(BaseManager):
 
         payload = {
             "remoteAddress": neighbor["remoteIpv4Address"],
-            "enabled": True,
-            "state": "UnknownBGPNeighborState",
-            "holdTimerValue": {"timer": neighbor.get("holdTimer", 90)},
-            "keepaliveTimerValue": {"timer": neighbor.get("keepaliveTimer", 30)},
-            "ebgpMultihopTtl": {"multiHop": neighbor.get("ebgpMultiHop", 1)},
-            "maxPrefixValue": {},
-            "bfd": {"bfd": bfd},
-            "md5Password": {"md5Password": md5_password},
             "addressFamilies": {
                 "ipv4": {"family": ipv4_family},
                 "ipv6": {"family": ipv6_family},
             },
-            "bgpType": "EBGP",
-            "sendCommunity": bool(neighbor.get("sendCommunity", True)),
-            "asOverride": bool(neighbor.get("asOverride", False)),
-            "removePrivateAs": bool(neighbor.get("remotePrivateAs", False)),
-            "allowAsIn": {"count": neighbor.get("allowAsIn")},
         }
+        # Create-time scaffolding the device needs only when first adding the neighbor.
+        if is_new:
+            payload.update(
+                {
+                    "enabled": True,
+                    "state": "UnknownBGPNeighborState",
+                    "bgpType": "EBGP",
+                    "maxPrefixValue": {},
+                }
+            )
+
+        # Scalar fields: emit only the ones the user wrote (or the defaults merged in above).
+        if "holdTimer" in neighbor:
+            payload["holdTimerValue"] = {"timer": neighbor["holdTimer"]}
+        if "keepaliveTimer" in neighbor:
+            payload["keepaliveTimerValue"] = {"timer": neighbor["keepaliveTimer"]}
+        if "ebgpMultiHop" in neighbor:
+            payload["ebgpMultihopTtl"] = {"multiHop": neighbor["ebgpMultiHop"]}
+        if "sendCommunity" in neighbor:
+            payload["sendCommunity"] = bool(neighbor["sendCommunity"])
+        if "asOverride" in neighbor:
+            payload["asOverride"] = bool(neighbor["asOverride"])
+        if "remotePrivateAs" in neighbor:
+            payload["removePrivateAs"] = bool(neighbor["remotePrivateAs"])
+        if "allowAsIn" in neighbor:
+            payload["allowAsIn"] = {"count": neighbor["allowAsIn"]}
+
+        # BFD: send only the sub-fields present so a partial update doesn't reset the rest. This
+        # matches the portal UI payload exactly -- e.g. changing just the interval sends
+        # ``bfd: {bfd: {minimumInterval: N}}`` with no ``enabled``, which the API merges without
+        # turning BFD off (QA-13707).
+        if any(k in neighbor for k in ("bfd", "minimumInterval", "localMultiplier")):
+            bfd = {}
+            if "bfd" in neighbor:
+                bfd["enabled"] = bool(neighbor["bfd"])
+            if neighbor.get("minimumInterval") is not None:
+                bfd["minimumInterval"] = neighbor["minimumInterval"]
+            if neighbor.get("localMultiplier") is not None:
+                bfd["localMultiplier"] = neighbor["localMultiplier"]
+            payload["bfd"] = {"bfd": bfd}
+
+        # MD5 is write-only: send it only when we actually have a value, so a configure
+        # without a password never overwrites an existing one with null (QA-13707/QA-13700).
+        if md5_password is not None:
+            payload["md5Password"] = {"md5Password": md5_password}
+
         if neighbor.get("peerAs"):
             payload["peerAsn"] = neighbor["peerAs"]
         if neighbor.get("localInterface"):
@@ -271,13 +323,16 @@ class BGPManager(BaseManager):
         return {"config": {"enabled": enabled}}
 
     @staticmethod
-    def _build_bgp_aggregation(aggregation, action):
+    def _build_bgp_aggregation(aggregation, action, is_new=True):
         """
         Build the payload for a single BGP route aggregation.
 
         Args:
             aggregation (dict): Aggregation configuration from the config file.
             action (str): One of "add", "delete", or "detach".
+            is_new (bool): True when the aggregation does not yet exist on the device. Only then
+                are ``asSet``/``summaryOnly`` defaulted; for an existing aggregation only the flags
+                the user set are sent, so a partial update doesn't reset the other (QA-13707).
 
         Returns:
             dict: The aggregation payload ({"config": None} when deleting).
@@ -290,17 +345,22 @@ class BGPManager(BaseManager):
         if action == "delete" or (action == "add" and BGPManager._is_absent(aggregation)):
             return {"config": None}
 
-        return {
-            "config": {
-                "prefix": aggregation["prefix"],
-                "asSet": bool(aggregation.get("asSet", False)),
-                "summaryOnly": bool(aggregation.get("summaryOnly", False)),
-                "id": aggregation["prefix"],
-            }
-        }
+        # prefix/id identify the aggregation and are always sent.
+        config = {"prefix": aggregation["prefix"], "id": aggregation["prefix"]}
+        if is_new:
+            config["asSet"] = bool(aggregation.get("asSet", False))
+            config["summaryOnly"] = bool(aggregation.get("summaryOnly", False))
+        else:
+            if "asSet" in aggregation:
+                config["asSet"] = bool(aggregation["asSet"])
+            if "summaryOnly" in aggregation:
+                config["summaryOnly"] = bool(aggregation["summaryOnly"])
+        return {"config": config}
 
     @staticmethod
-    def _build_bgp_peering(action, segments, route_policies, global_ids, device_name=None, vault_md5_passwords=None):
+    def _build_bgp_peering(
+        action, segments, route_policies, global_ids, device_name=None, vault_md5_passwords=None, device_dict=None
+    ):
         """
         Build the full BGP peering payload for a device.
 
@@ -311,6 +371,9 @@ class BGPManager(BaseManager):
             global_ids (dict): Mapping of routing policy name to resolved global ID.
             device_name (str, optional): Owning device, used for the vault MD5 lookup.
             vault_md5_passwords (dict, optional): ``{device: {remoteAddress: md5}}`` from Ansible Vault.
+            device_dict (dict, optional): The device GET response. Used to decide whether each
+                neighbor is new (full defaults) or existing (sparse merge). When omitted, every
+                neighbor is treated as new.
 
         Returns:
             dict: The device BGP peering payload.
@@ -334,18 +397,30 @@ class BGPManager(BaseManager):
             entry = BGPManager._camelize(entry)
             segment = {}
             if entry.get("neighbors"):
+                existing_neighbors = BGPManager._index_by(
+                    BGPManager._get_existing_vrf(device_dict or {}, entry["lanSegment"]).get("bgpNeighbors"),
+                    "remoteAddress",
+                )
                 bgp_neighbors = {}
                 for neighbor in entry["neighbors"]:
                     neighbor = BGPManager._camelize(neighbor)
-                    bgp_neighbors[neighbor["remoteIpv4Address"]] = BGPManager._build_bgp_neighbor(
-                        neighbor, action, device_name, vault_md5_passwords
+                    address = neighbor["remoteIpv4Address"]
+                    bgp_neighbors[address] = BGPManager._build_bgp_neighbor(
+                        neighbor, action, device_name, vault_md5_passwords, is_new=address not in existing_neighbors
                     )
                 segment["bgpNeighbors"] = bgp_neighbors
             if entry.get("bgpAggregations"):
+                existing_aggregations = BGPManager._index_by(
+                    BGPManager._get_existing_vrf(device_dict or {}, entry["lanSegment"]).get("bgpAggregations"),
+                    "prefix",
+                )
                 bgp_aggregations = {}
                 for aggregation in entry["bgpAggregations"]:
                     aggregation = BGPManager._camelize(aggregation)
-                    bgp_aggregations[aggregation["prefix"]] = BGPManager._build_bgp_aggregation(aggregation, action)
+                    prefix = aggregation["prefix"]
+                    bgp_aggregations[prefix] = BGPManager._build_bgp_aggregation(
+                        aggregation, action, is_new=prefix not in existing_aggregations
+                    )
                 segment["bgpAggregations"] = bgp_aggregations
             # Segment-level eBGP multipath (configure/deconfigure only; detach leaves it alone).
             if entry.get("ebgpMultipath") is not None and action in ("add", "delete"):
@@ -416,16 +491,25 @@ class BGPManager(BaseManager):
 
     @staticmethod
     def _normalized_neighbor_from_desired(neighbor: Dict[str, Any]) -> Dict[str, Any]:
-        """Reduce a desired PUT neighbor payload (the dict under ``neighbor``) to normalized form."""
-        normalized: Dict[str, Any] = {
-            "holdTimer": neighbor["holdTimerValue"]["timer"],
-            "keepaliveTimer": neighbor["keepaliveTimerValue"]["timer"],
-            "multiHop": neighbor["ebgpMultihopTtl"]["multiHop"],
-            "sendCommunity": bool(neighbor.get("sendCommunity")),
-            "asOverride": bool(neighbor.get("asOverride")),
-            "removePrivateAs": bool(neighbor.get("removePrivateAs")),
-            "bfdEnabled": bool(neighbor["bfd"]["bfd"].get("enabled")),
-        }
+        """
+        Reduce a desired PUT neighbor payload (the dict under ``neighbor``) to normalized form.
+
+        Only the keys actually present in the payload are emitted. For an existing neighbor the
+        payload is sparse, so the diff compares just the fields the user wrote (QA-13707).
+        """
+        normalized: Dict[str, Any] = {}
+        if "holdTimerValue" in neighbor:
+            normalized["holdTimer"] = neighbor["holdTimerValue"]["timer"]
+        if "keepaliveTimerValue" in neighbor:
+            normalized["keepaliveTimer"] = neighbor["keepaliveTimerValue"]["timer"]
+        if "ebgpMultihopTtl" in neighbor:
+            normalized["multiHop"] = neighbor["ebgpMultihopTtl"]["multiHop"]
+        if "sendCommunity" in neighbor:
+            normalized["sendCommunity"] = bool(neighbor["sendCommunity"])
+        if "asOverride" in neighbor:
+            normalized["asOverride"] = bool(neighbor["asOverride"])
+        if "removePrivateAs" in neighbor:
+            normalized["removePrivateAs"] = bool(neighbor["removePrivateAs"])
         if "peerAsn" in neighbor:
             normalized["peerAsn"] = neighbor["peerAsn"]
         if "localInterface" in neighbor:
@@ -434,8 +518,12 @@ class BGPManager(BaseManager):
         if allow:
             normalized["allowAsIn"] = allow
 
-        bfd = neighbor["bfd"]["bfd"]
-        if bfd.get("enabled"):
+        if "bfd" in neighbor:
+            bfd = neighbor["bfd"]["bfd"]
+            if "enabled" in bfd:
+                normalized["bfdEnabled"] = bool(bfd.get("enabled"))
+            # Emit the sub-fields whenever the config set them, regardless of ``enabled`` -- a partial
+            # update (e.g. only minimumInterval, no bfd key) must still be compared and pushed (QA-13707).
             if "minimumInterval" in bfd:
                 normalized["bfdMinimumInterval"] = bfd["minimumInterval"]
             if "localMultiplier" in bfd:
@@ -474,12 +562,13 @@ class BGPManager(BaseManager):
         if allow:
             normalized["allowAsIn"] = allow
 
+        # Emit the sub-fields independently of ``enabled`` so they compare symmetrically with the
+        # desired side when the config asserts only a BFD sub-field (QA-13707).
         bfd = neighbor.get("bfd") or {}
-        if bfd.get("enabled"):
-            if bfd.get("minimumInterval") is not None:
-                normalized["bfdMinimumInterval"] = bfd["minimumInterval"]
-            if bfd.get("multiplier") is not None:
-                normalized["bfdMultiplier"] = bfd["multiplier"]
+        if bfd.get("minimumInterval") is not None:
+            normalized["bfdMinimumInterval"] = bfd["minimumInterval"]
+        if bfd.get("multiplier") is not None:
+            normalized["bfdMultiplier"] = bfd["multiplier"]
 
         for family in neighbor.get("addressFamilies") or []:
             if not isinstance(family, dict):
@@ -494,10 +583,14 @@ class BGPManager(BaseManager):
 
     @staticmethod
     def _normalized_aggregation_from_desired(config: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "asSet": bool(config.get("asSet")),
-            "summaryOnly": bool(config.get("summaryOnly")),
-        }
+        # Only the flags present in the (possibly sparse) payload, so the diff compares just
+        # what the config asserts for an existing aggregation (QA-13707).
+        normalized: Dict[str, Any] = {}
+        if "asSet" in config:
+            normalized["asSet"] = bool(config.get("asSet"))
+        if "summaryOnly" in config:
+            normalized["summaryOnly"] = bool(config.get("summaryOnly"))
+        return normalized
 
     @staticmethod
     def _normalized_aggregation_from_get(aggregation: Dict[str, Any]) -> Dict[str, Any]:
@@ -600,7 +693,16 @@ class BGPManager(BaseManager):
                     else:
                         desired_normalized = self._normalized_neighbor_from_desired(entry["neighbor"])
                         existing_normalized = self._normalized_neighbor_from_get(existing) if existing else {}
-                        before_n[address] = existing_normalized
+                        # Show "before" only for the fields this run asserts. For an existing neighbor
+                        # the desired payload is sparse (a merge PUT), so fields the config omits are
+                        # left unchanged on the device -- restricting the diff to the asserted keys keeps
+                        # those untouched fields from rendering as deletions (QA-13707 display).
+                        # New neighbor -> empty "before" (it doesn't exist). Existing neighbor ->
+                        # only the asserted keys, so a partial update's merge-preserved fields aren't
+                        # rendered as deletions (QA-13707 display).
+                        before_n[address] = (
+                            {key: existing_normalized.get(key) for key in desired_normalized} if existing else {}
+                        )
                         after_n[address] = desired_normalized
                         if existing is None or self._sparse_differs(desired_normalized, existing_normalized):
                             changed = True
@@ -623,9 +725,14 @@ class BGPManager(BaseManager):
                     else:
                         desired_normalized = self._normalized_aggregation_from_desired(entry["config"])
                         existing_normalized = self._normalized_aggregation_from_get(existing) if existing else {}
-                        before_a[prefix] = existing_normalized
+                        # Show "before" only for the flags this run asserts (sparse merge), so an
+                        # omitted flag isn't rendered as a deletion (QA-13707 display).
+                        # New aggregation -> empty "before"; existing -> only the asserted flags.
+                        before_a[prefix] = (
+                            {key: existing_normalized.get(key) for key in desired_normalized} if existing else {}
+                        )
                         after_a[prefix] = desired_normalized
-                        if existing is None or desired_normalized != existing_normalized:
+                        if existing is None or self._sparse_differs(desired_normalized, existing_normalized):
                             changed = True
                 before_seg["bgpAggregations"] = before_a
                 after_seg["bgpAggregations"] = after_a
@@ -685,7 +792,9 @@ class BGPManager(BaseManager):
                     try:
                         device_id, device_dict = fetch_device_by_name(self.gsdk, device_name, enterprise)
 
-                        config_payload = self._build_device_payload(config, action, device_name, vault_md5)
+                        config_payload = self._build_device_payload(
+                            config, action, device_name, vault_md5, device_dict=device_dict
+                        )
                         # Drop delete markers for neighbors/aggregations not present on the device;
                         # deleting a non-existent object is a no-op the API rejects (500).
                         config_payload = self._prune_absent_noops(config_payload, device_dict)
