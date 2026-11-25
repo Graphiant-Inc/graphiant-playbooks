@@ -1,4 +1,4 @@
-# Azure Deploy vEdge Configuration - Production
+# Azure Deploy vEdge Configuration
 
 # Pre-requisite:
 # ============================================================================
@@ -8,9 +8,6 @@
 
 # action: Terraform action to perform ('create' or 'delete')
 action = "create"
-
-# mode: Deployment mode ('production' or 'devtest'(Internal Use Only))
-mode = "production"
 
 # ================================================================
 # Resource Group: provide resource_group_id to use existing, or resource_group_name to create new
@@ -53,7 +50,7 @@ token = ""
 # VNet: provide vnet_id to use existing, or vnet_name + vnet_address_space to create new
 # Each subnet / route table / NSG / public IP below is independent: set its *_id to reuse it,
 # or leave it empty to create it (new subnets can be created in an existing VNet; existing subnets require vnet_id).
-# Subnet names default to cloud-init/mgmt/wan/lan; set subnet_*_name when creating a subnet in a VNet that already has one with that name.
+# Subnet names default to mgmt/wan/lan; set subnet_*_name when creating a subnet in a VNet that already has one with that name.
 # ================================================================
 # vnet_id = "/subscriptions/xxxx/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet"
 vnet_name = "graphiant-vedge-vnet"
@@ -75,7 +72,7 @@ subnet_wan_prefix = "10.1.2.0/24"
 subnet_lan_prefix = "10.1.3.0/24"
 # IPv6 is LAN-side only: a new LAN subnet gets a /64 (index subnet_lan_ipv6_netnum of the VNet IPv6 range)
 # and the vEdge LAN + test VM interfaces get an IPv6 address, with a ::/0 route via the vEdge LAN.
-# An existing LAN subnet that already has an IPv6 prefix is used as-is. mgmt/wan/cloud-init are always IPv4-only.
+# An existing LAN subnet that already has an IPv6 prefix is used as-is. mgmt/wan are always IPv4-only.
 # With the default fd00:10:1::/48 and index 3, the LAN subnet gets fd00:10:1:3::/64.
 # subnet_lan_ipv6_netnum = 3
 

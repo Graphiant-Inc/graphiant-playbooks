@@ -44,7 +44,6 @@ data "aws_ami" "debian_13" {
 }
 
 locals {
-  is_devtest       = var.mode == "devtest"
   use_existing_vpc = var.vpc_id != ""
   new_vpc          = !local.use_existing_vpc
 
@@ -55,20 +54,18 @@ locals {
   test_vm_ami_resolved = var.test_vm_ami != "" ? var.test_vm_ami : try(data.aws_ami.debian_13[0].id, "")
 
   # Per-resource rule: an ID provided -> use it; empty -> create it.
-  create_subnet_cloud_init = local.is_devtest && var.subnet_cloud_init_id == ""
-  create_subnet_mgmt       = var.subnet_mgmt_id == ""
-  create_subnet_wan        = var.subnet_wan_id == ""
-  create_subnet_lan        = var.subnet_lan_id == ""
+  create_subnet_mgmt = var.subnet_mgmt_id == ""
+  create_subnet_wan  = var.subnet_wan_id == ""
+  create_subnet_lan  = var.subnet_lan_id == ""
 
-  # WAN RT is only needed to give newly created mgmt/wan/cloud-init subnets an IGW route.
-  create_rt_wan = var.route_table_wan_id == "" && (local.create_subnet_cloud_init || local.create_subnet_mgmt || local.create_subnet_wan)
+  # WAN RT is only needed to give newly created mgmt/wan subnets an IGW route.
+  create_rt_wan = var.route_table_wan_id == "" && (local.create_subnet_mgmt || local.create_subnet_wan)
   create_rt_lan = var.route_table_lan_id == ""
 
-  create_sg_cloud_init = local.is_devtest && var.security_group_cloud_init_id == ""
-  create_sg_mgmt       = var.security_group_mgmt_id == ""
-  create_sg_wan        = var.security_group_wan_id == ""
-  create_sg_lan        = var.security_group_lan_id == ""
-  create_sg_test_vm    = var.deploy_test_vm && var.security_group_test_vm_id == ""
+  create_sg_mgmt    = var.security_group_mgmt_id == ""
+  create_sg_wan     = var.security_group_wan_id == ""
+  create_sg_lan     = var.security_group_lan_id == ""
+  create_sg_test_vm = var.deploy_test_vm && var.security_group_test_vm_id == ""
 
   # IGW: internet_gateway_id provided -> use it; else create_internet_gateway decides:
   # null (auto) -> create for a new VPC, use the IGW already attached to an existing VPC;
@@ -94,10 +91,9 @@ locals {
   # CIDRs of subnets to be created in an existing VPC — checked against subnets already there.
   new_subnet_cidrs_in_existing_vpc = local.new_vpc ? {} : {
     for k, v in {
-      cloud_init = local.create_subnet_cloud_init ? var.subnet_cloud_init_prefix : ""
-      mgmt       = local.create_subnet_mgmt ? var.subnet_mgmt_prefix : ""
-      wan        = local.create_subnet_wan ? var.subnet_wan_prefix : ""
-      lan        = local.create_subnet_lan ? var.subnet_lan_prefix : ""
+      mgmt = local.create_subnet_mgmt ? var.subnet_mgmt_prefix : ""
+      wan  = local.create_subnet_wan ? var.subnet_wan_prefix : ""
+      lan  = local.create_subnet_lan ? var.subnet_lan_prefix : ""
     } : k => v if v != ""
   }
 
@@ -114,19 +110,17 @@ locals {
 
   igw_id_resolved = local.create_igw ? aws_internet_gateway.this[0].id : local.lookup_igw ? data.aws_internet_gateway.attached[0].id : var.internet_gateway_id
 
-  subnet_cloud_init_id_resolved = local.create_subnet_cloud_init ? aws_subnet.cloud_init[0].id : var.subnet_cloud_init_id
-  subnet_mgmt_id_resolved       = local.create_subnet_mgmt ? aws_subnet.mgmt[0].id : var.subnet_mgmt_id
-  subnet_wan_id_resolved        = local.create_subnet_wan ? aws_subnet.wan[0].id : var.subnet_wan_id
-  subnet_lan_id_resolved        = local.create_subnet_lan ? aws_subnet.lan[0].id : var.subnet_lan_id
+  subnet_mgmt_id_resolved = local.create_subnet_mgmt ? aws_subnet.mgmt[0].id : var.subnet_mgmt_id
+  subnet_wan_id_resolved  = local.create_subnet_wan ? aws_subnet.wan[0].id : var.subnet_wan_id
+  subnet_lan_id_resolved  = local.create_subnet_lan ? aws_subnet.lan[0].id : var.subnet_lan_id
 
   route_table_wan_id_resolved = local.create_rt_wan ? aws_route_table.wan[0].id : var.route_table_wan_id
   route_table_lan_id_resolved = local.create_rt_lan ? aws_route_table.lan[0].id : var.route_table_lan_id
 
-  sg_cloud_init_id_resolved = local.create_sg_cloud_init ? aws_security_group.cloud_init[0].id : var.security_group_cloud_init_id
-  sg_mgmt_id_resolved       = local.create_sg_mgmt ? aws_security_group.mgmt[0].id : var.security_group_mgmt_id
-  sg_wan_id_resolved        = local.create_sg_wan ? aws_security_group.wan[0].id : var.security_group_wan_id
-  sg_lan_id_resolved        = local.create_sg_lan ? aws_security_group.lan[0].id : var.security_group_lan_id
-  sg_test_vm_id_resolved    = local.create_sg_test_vm ? aws_security_group.test_vm[0].id : var.security_group_test_vm_id
+  sg_mgmt_id_resolved    = local.create_sg_mgmt ? aws_security_group.mgmt[0].id : var.security_group_mgmt_id
+  sg_wan_id_resolved     = local.create_sg_wan ? aws_security_group.wan[0].id : var.security_group_wan_id
+  sg_lan_id_resolved     = local.create_sg_lan ? aws_security_group.lan[0].id : var.security_group_lan_id
+  sg_test_vm_id_resolved = local.create_sg_test_vm ? aws_security_group.test_vm[0].id : var.security_group_test_vm_id
 
   eip_mgmt_allocation_id_resolved = local.create_eip_mgmt ? aws_eip.mgmt[0].id : var.eip_mgmt_allocation_id
   eip_wan_allocation_id_resolved  = local.create_eip_wan ? aws_eip.wan[0].id : var.eip_wan_allocation_id
@@ -136,38 +130,16 @@ locals {
   tags = merge(
     {
       Vendor      = "Graphiant"
-      Environment = var.mode
+      Environment = "production"
     },
     var.tags,
   )
 
   # Cloud-init user-data (token is optional; only included if configured)
-  cloud_init_production = concat(
+  user_data = join("\n", concat(
     ["#cloud-config\n\ngraphnos:"],
     var.token != "" ? ["  token: ${var.token}"] : []
-  )
-
-  cloud_init_devtest = concat(
-    [
-      "#cloud-config\n\ngraphnos:",
-      "  onboarding-gw: ${var.onboarding_gateway}",
-      "  onboarding-auth-url: ${var.onboarding_auth_url}",
-    ],
-    var.token != "" ? ["  token: ${var.token}"] : [],
-    [
-      "\nusers:",
-      "  - name: ${var.cloud_init_username}",
-      "    plain_text_passwd: '${var.cloud_init_password}'",
-      "    sudo: [\"ALL=(ALL) NOPASSWD:ALL\"]",
-      "    lock_passwd: false",
-      "    groups: sudo",
-      "    shell: /bin/bash",
-      "    ssh-authorized-keys:",
-      "      - ${var.ssh_public_key}",
-    ]
-  )
-
-  user_data = join("\n", local.is_devtest ? local.cloud_init_devtest : local.cloud_init_production)
+  ))
 }
 
 # -----------------------------------------------------------------------------
@@ -244,24 +216,7 @@ data "aws_subnets" "own_cidr" {
 
   filter {
     name   = "tag:Name"
-    values = ["${var.project_name}-${replace(each.key, "_", "")}"]
-  }
-}
-
-# Cloud-init subnet — devtest only
-resource "aws_subnet" "cloud_init" {
-  count             = local.create_subnet_cloud_init ? 1 : 0
-  vpc_id            = local.vpc_id_resolved
-  availability_zone = var.availability_zone
-  cidr_block        = var.subnet_cloud_init_prefix
-
-  tags = merge(local.tags, { Name = "${var.project_name}-cloudinit" })
-
-  lifecycle {
-    precondition {
-      condition     = length(try(local.subnet_cidr_conflicts["cloud_init"], [])) == 0
-      error_message = "Subnet ${try(local.subnet_cidr_conflicts["cloud_init"][0], "")} already uses ${var.subnet_cloud_init_prefix} in ${var.vpc_id}: set subnet_cloud_init_id = \"${try(local.subnet_cidr_conflicts["cloud_init"][0], "")}\" to reuse it, or choose a different subnet_cloud_init_prefix."
-    }
+    values = ["${var.project_name}-${each.key}"]
   }
 }
 
@@ -336,12 +291,6 @@ resource "aws_route_table" "wan" {
   tags = merge(local.tags, { Name = "${var.vm_name}-wan-rt" })
 }
 
-resource "aws_route_table_association" "cloud_init" {
-  count          = local.create_subnet_cloud_init ? 1 : 0
-  subnet_id      = aws_subnet.cloud_init[0].id
-  route_table_id = local.route_table_wan_id_resolved
-}
-
 resource "aws_route_table_association" "mgmt" {
   count          = local.create_subnet_mgmt ? 1 : 0
   subnet_id      = aws_subnet.mgmt[0].id
@@ -413,40 +362,8 @@ resource "aws_route" "lan_ssh_via_igw" {
 
 # -----------------------------------------------------------------------------
 # Security Groups — reuse security_group_*_id when provided (must be in the same
-# VPC), else create. Cloud-init SG is devtest only.
+# VPC), else create.
 # -----------------------------------------------------------------------------
-
-# Cloud-init SG — devtest only
-resource "aws_security_group" "cloud_init" {
-  count       = local.create_sg_cloud_init ? 1 : 0
-  name        = "${var.vm_name}-cloudinit-sg"
-  description = "Graphiant vEdge cloud-init interface"
-  vpc_id      = local.vpc_id_resolved
-
-  ingress {
-    description = "SSH from allowed CIDRs"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_cidr]
-  }
-
-  egress {
-    description = "IMDS HTTP endpoint"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["169.254.169.254/32"]
-  }
-
-  tags = merge(local.tags, { Name = "${var.vm_name}-cloudinit-sg" })
-
-  # Renaming vm_name replaces the SG; create the new one first so the in-use ENI
-  # can be switched to it before the old SG is deleted (else DependencyViolation).
-  lifecycle {
-    create_before_destroy = true
-  }
-}
 
 # Mgmt SG
 resource "aws_security_group" "mgmt" {
@@ -455,22 +372,13 @@ resource "aws_security_group" "mgmt" {
   description = "Graphiant Device Management Interface"
   vpc_id      = local.vpc_id_resolved
 
-  # Devtest: HTTPS from allowed CIDRs. Production: no ingress (operator
-  # must open the local web UI explicitly after onboarding if needed).
-  dynamic "ingress" {
-    for_each = local.is_devtest ? [443] : []
-    content {
-      description = "Inbound TCP/${ingress.value} from allowed CIDRs (devtest)"
-      from_port   = ingress.value
-      to_port     = ingress.value
-      protocol    = "tcp"
-      cidr_blocks = [var.allowed_cidr]
-    }
-  }
+  # No ingress by default; operator must open the local web UI explicitly
+  # after onboarding if needed.
 
   tags = merge(local.tags, { Name = "${var.vm_name}-mgmt-sg" })
 
-  # See aws_security_group.cloud_init.
+  # Renaming vm_name replaces the SG; create the new one first so the in-use ENI
+  # can be switched to it before the old SG is deleted (else DependencyViolation).
   lifecycle {
     create_before_destroy = true
   }
@@ -533,7 +441,7 @@ resource "aws_security_group" "wan" {
 
   tags = merge(local.tags, { Name = "${var.vm_name}-wan-sg" })
 
-  # See aws_security_group.cloud_init.
+  # See aws_security_group.mgmt.
   lifecycle {
     create_before_destroy = true
   }
@@ -566,7 +474,7 @@ resource "aws_security_group" "lan" {
 
   tags = merge(local.tags, { Name = "${var.vm_name}-lan-sg" })
 
-  # See aws_security_group.cloud_init.
+  # See aws_security_group.mgmt.
   lifecycle {
     create_before_destroy = true
   }
@@ -575,15 +483,6 @@ resource "aws_security_group" "lan" {
 # -----------------------------------------------------------------------------
 # Network Interfaces
 # -----------------------------------------------------------------------------
-resource "aws_network_interface" "cloud_init" {
-  count           = local.is_devtest ? 1 : 0
-  subnet_id       = local.subnet_cloud_init_id_resolved
-  security_groups = [local.sg_cloud_init_id_resolved]
-  description     = "Graphiant cloud-init"
-
-  tags = merge(local.tags, { Name = "CloudInit" })
-}
-
 resource "aws_network_interface" "mgmt" {
   subnet_id       = local.subnet_mgmt_id_resolved
   security_groups = [local.sg_mgmt_id_resolved]
@@ -617,19 +516,6 @@ resource "aws_network_interface" "lan" {
 # eip_*_allocation_id when provided, else allocate. A provided EIP is only disassociated
 # on destroy, never released.
 # -----------------------------------------------------------------------------
-resource "aws_eip" "cloud_init" {
-  count  = local.is_devtest && local.use_igw ? 1 : 0
-  domain = "vpc"
-
-  tags = merge(local.tags, { Name = "${var.vm_name}-cloudinit-eip" })
-}
-
-resource "aws_eip_association" "cloud_init" {
-  count                = local.is_devtest && local.use_igw ? 1 : 0
-  allocation_id        = aws_eip.cloud_init[0].id
-  network_interface_id = aws_network_interface.cloud_init[0].id
-}
-
 resource "aws_eip" "mgmt" {
   count  = local.create_eip_mgmt ? 1 : 0
   domain = "vpc"
@@ -668,22 +554,20 @@ resource "aws_eip_association" "wan" {
 
 # -----------------------------------------------------------------------------
 # vEdge EC2 instance
-# NIC ordering:
-#   Production : mgmt=0, wan=1, lan=2
-#   Devtest    : cloud-init=0, mgmt=1, wan=2, lan=3
+# NIC ordering: mgmt=0, wan=1, lan=2
 # -----------------------------------------------------------------------------
 resource "aws_instance" "vedge" {
   ami           = local.resolved_image_id
   instance_type = var.instance_type
   user_data     = local.user_data
   # Cloud-init only runs on first boot; force re-create when user_data changes
-  # so token / onboarding params / SSH key / password updates actually take effect.
+  # so token updates actually take effect.
   user_data_replace_on_change = true
 
-  # Primary NIC (device_index 0): cloud-init in devtest, mgmt in production.
+  # Primary NIC (device_index 0): mgmt.
   # Additional NICs are attached below via aws_network_interface_attachment.
   primary_network_interface {
-    network_interface_id = local.is_devtest ? aws_network_interface.cloud_init[0].id : aws_network_interface.mgmt.id
+    network_interface_id = aws_network_interface.mgmt.id
   }
 
   metadata_options {
@@ -708,9 +592,9 @@ resource "aws_instance" "vedge" {
     precondition {
       condition = !local.new_vpc || alltrue([
         for id in [
-          var.subnet_cloud_init_id, var.subnet_mgmt_id, var.subnet_wan_id, var.subnet_lan_id,
+          var.subnet_mgmt_id, var.subnet_wan_id, var.subnet_lan_id,
           var.route_table_wan_id, var.route_table_lan_id,
-          var.security_group_cloud_init_id, var.security_group_mgmt_id, var.security_group_wan_id, var.security_group_lan_id, var.security_group_test_vm_id,
+          var.security_group_mgmt_id, var.security_group_wan_id, var.security_group_lan_id, var.security_group_test_vm_id,
           var.internet_gateway_id,
         ] : id == ""
       ])
@@ -735,25 +619,17 @@ resource "aws_instance" "vedge" {
   }
 }
 
-# Additional NIC attachments (device_index >= 1).
-# Devtest: mgmt=1, wan=2, lan=3. Production: wan=1, lan=2 (mgmt is the primary NIC).
-resource "aws_network_interface_attachment" "mgmt" {
-  count                = local.is_devtest ? 1 : 0
-  instance_id          = aws_instance.vedge.id
-  network_interface_id = aws_network_interface.mgmt.id
-  device_index         = 1
-}
-
+# Additional NIC attachments (device_index >= 1): wan=1, lan=2 (mgmt is the primary NIC).
 resource "aws_network_interface_attachment" "wan" {
   instance_id          = aws_instance.vedge.id
   network_interface_id = aws_network_interface.wan.id
-  device_index         = local.is_devtest ? 2 : 1
+  device_index         = 1
 }
 
 resource "aws_network_interface_attachment" "lan" {
   instance_id          = aws_instance.vedge.id
   network_interface_id = aws_network_interface.lan.id
-  device_index         = local.is_devtest ? 3 : 2
+  device_index         = 2
 }
 
 # -----------------------------------------------------------------------------
@@ -798,7 +674,7 @@ resource "aws_security_group" "test_vm" {
 
   tags = merge(local.tags, { Name = "${var.test_vm_name}-sg" })
 
-  # Renaming test_vm_name replaces the SG; see aws_security_group.cloud_init.
+  # Renaming test_vm_name replaces the SG; see aws_security_group.mgmt.
   lifecycle {
     create_before_destroy = true
   }

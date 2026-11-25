@@ -9,17 +9,6 @@ variable "action" {
   }
 }
 
-variable "mode" {
-  description = "Deployment mode: 'production' for customer-facing, 'devtest' for internal use with SSH access"
-  type        = string
-  default     = "production"
-
-  validation {
-    condition     = contains(["production", "devtest"], var.mode)
-    error_message = "Mode must be either 'production' or 'devtest'."
-  }
-}
-
 variable "resource_group_id" {
   description = "Existing resource group ID. When set, uses existing RG. When empty, creates a new RG using resource_group_name."
   type        = string
@@ -92,7 +81,7 @@ variable "image_version" {
 }
 
 variable "ssh_public_key" {
-  description = "SSH public key for the VM (required by Azure; used for interactive SSH access in devtest mode)"
+  description = "SSH public key for the VM admin user (required by Azure)"
   type        = string
 }
 
@@ -100,37 +89,6 @@ variable "token" {
   description = "Graphiant vEdge onboarding authentication token"
   type        = string
   sensitive   = true
-}
-
-variable "cloud_init_username" {
-  description = "Username for the cloud-init user created in devtest mode"
-  type        = string
-  default     = "gnos"
-}
-
-variable "cloud_init_password" {
-  description = "Password for the cloud-init user created in devtest mode"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "onboarding_gateway" {
-  description = "Graphiant onboarding gateway address & port"
-  type        = string
-  default     = "onboarding-gateway.graphiant.com:16000"
-}
-
-variable "onboarding_auth_url" {
-  description = "Graphiant onboarding authentication URL"
-  type        = string
-  default     = "https://api.graphiant.com/v1/devices/oauth"
-}
-
-variable "allowed_cidr" {
-  description = "Public IPv4 (/32) allowed to connect to the devtest management ports"
-  type        = string
-  default     = "127.0.0.1/32"
 }
 
 # --- VNet configuration ---
@@ -169,12 +127,6 @@ variable "vnet_address_space_v6" {
   }
 }
 
-variable "subnet_cloud_init_prefix" {
-  description = "CIDR for the cloud-init subnet when subnet_cloud_init_id is empty (devtest only)"
-  type        = string
-  default     = "10.1.0.0/24"
-}
-
 variable "subnet_mgmt_prefix" {
   description = "CIDR for the mgmt subnet when subnet_mgmt_id is empty"
   type        = string
@@ -200,12 +152,6 @@ variable "subnet_lan_ipv6_netnum" {
 }
 
 # Subnet names — must be unique within the VNet (set them when creating subnets in a VNet that already has these names)
-variable "subnet_cloud_init_name" {
-  description = "Name of the new cloud-init subnet (devtest only)"
-  type        = string
-  default     = "cloud-init"
-}
-
 variable "subnet_mgmt_name" {
   description = "Name of the new mgmt subnet"
   type        = string
@@ -225,12 +171,6 @@ variable "subnet_lan_name" {
 }
 
 # --- Existing component references (each independent: set to reuse, leave empty to create) ---
-
-variable "subnet_cloud_init_id" {
-  description = "Existing cloud-init subnet ID (devtest only; requires vnet_id). When empty, a new subnet is created from subnet_cloud_init_prefix."
-  type        = string
-  default     = ""
-}
 
 variable "subnet_mgmt_id" {
   description = "Existing mgmt subnet ID (requires vnet_id). When empty, a new subnet is created from subnet_mgmt_prefix."
@@ -270,12 +210,6 @@ variable "route_table_lan_id" {
     condition     = var.route_table_lan_id == "" || can(regex("(?i)^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft.Network/routeTables/[^/]+$", var.route_table_lan_id))
     error_message = "route_table_lan_id must be a full ARM ID: /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Network/routeTables/<name>."
   }
-}
-
-variable "nsg_cloud_init_id" {
-  description = "Existing NSG ID for the cloud-init NIC (devtest only). When empty, a new NSG is created."
-  type        = string
-  default     = ""
 }
 
 variable "nsg_mgmt_id" {

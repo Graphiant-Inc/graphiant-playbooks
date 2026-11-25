@@ -1,4 +1,4 @@
-# AWS Deploy vEdge Configuration - Production
+# AWS Deploy vEdge Configuration
 
 # Pre-requisite:
 # ============================================================================
@@ -34,9 +34,6 @@
 #        --query 'sort_by(Images, &CreationDate)[-1].ImageId' --output text
 #    If test_vm_ami is not set, Terraform will automatically discover the latest
 #    Debian 13 AMI for your region.
-
-# mode: Deployment mode
-mode = "production"
 
 # aws_region: AWS region to deploy resources into
 aws_region = "us-east-1"

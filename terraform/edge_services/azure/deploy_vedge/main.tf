@@ -23,8 +23,7 @@ provider "azurerm" {
 # -----------------------------------------------------------------------------
 locals {
   is_create      = var.action == "create"
-  is_devtest     = var.mode == "devtest"
-  admin_username = local.is_devtest ? "gnos" : "gradmin"
+  admin_username = "gradmin"
 
   # Derive flags from whether IDs are provided
   use_existing_rg   = var.resource_group_id != ""
@@ -38,7 +37,7 @@ locals {
 
   tags = merge(
     {
-      Environment = var.mode
+      Environment = "production"
       Vendor      = "Graphiant"
     },
     var.tags
@@ -49,37 +48,33 @@ locals {
   vnet_rg_resolved   = local.use_existing_vnet ? element(split("/", var.vnet_id), 4) : local.rg_name
 
   # Each component is independent: reuse it when its *_id is set, else create it
-  create_subnet_cloud_init = local.is_create && local.is_devtest && var.subnet_cloud_init_id == ""
-  create_subnet_mgmt       = local.is_create && var.subnet_mgmt_id == ""
-  create_subnet_wan        = local.is_create && var.subnet_wan_id == ""
-  create_subnet_lan        = local.is_create && var.subnet_lan_id == ""
+  create_subnet_mgmt = local.is_create && var.subnet_mgmt_id == ""
+  create_subnet_wan  = local.is_create && var.subnet_wan_id == ""
+  create_subnet_lan  = local.is_create && var.subnet_lan_id == ""
 
   # A route table is only created when a new subnet needs it; existing subnets keep their association
   create_rt_wan = local.is_create && var.route_table_wan_id == "" && (local.create_subnet_mgmt || local.create_subnet_wan)
   create_rt_lan = local.is_create && var.route_table_lan_id == "" && local.create_subnet_lan
 
-  create_nsg_cloud_init = local.is_create && local.is_devtest && var.nsg_cloud_init_id == ""
-  create_nsg_mgmt       = local.is_create && var.nsg_mgmt_id == ""
-  create_nsg_wan        = local.is_create && var.nsg_wan_id == ""
-  create_nsg_lan        = local.is_create && var.nsg_lan_id == ""
-  create_nsg_test_vm    = local.is_create && var.deploy_test_vm && var.nsg_test_vm_id == ""
+  create_nsg_mgmt    = local.is_create && var.nsg_mgmt_id == ""
+  create_nsg_wan     = local.is_create && var.nsg_wan_id == ""
+  create_nsg_lan     = local.is_create && var.nsg_lan_id == ""
+  create_nsg_test_vm = local.is_create && var.deploy_test_vm && var.nsg_test_vm_id == ""
 
   create_pip_mgmt = local.is_create && var.public_ip_mgmt_id == ""
   create_pip_wan  = local.is_create && var.public_ip_wan_id == ""
 
-  subnet_cloud_init_id = local.create_subnet_cloud_init ? azurerm_subnet.cloud_init[0].id : var.subnet_cloud_init_id
-  subnet_mgmt_id       = local.create_subnet_mgmt ? azurerm_subnet.mgmt[0].id : var.subnet_mgmt_id
-  subnet_wan_id        = local.create_subnet_wan ? azurerm_subnet.wan[0].id : var.subnet_wan_id
-  subnet_lan_id        = local.create_subnet_lan ? azurerm_subnet.lan[0].id : var.subnet_lan_id
+  subnet_mgmt_id = local.create_subnet_mgmt ? azurerm_subnet.mgmt[0].id : var.subnet_mgmt_id
+  subnet_wan_id  = local.create_subnet_wan ? azurerm_subnet.wan[0].id : var.subnet_wan_id
+  subnet_lan_id  = local.create_subnet_lan ? azurerm_subnet.lan[0].id : var.subnet_lan_id
 
   route_table_wan_id = local.create_rt_wan ? azurerm_route_table.wan[0].id : var.route_table_wan_id
   route_table_lan_id = local.create_rt_lan ? azurerm_route_table.lan[0].id : var.route_table_lan_id
 
-  nsg_cloud_init_id = local.create_nsg_cloud_init ? azurerm_network_security_group.cloud_init[0].id : var.nsg_cloud_init_id
-  nsg_mgmt_id       = local.create_nsg_mgmt ? azurerm_network_security_group.mgmt[0].id : var.nsg_mgmt_id
-  nsg_wan_id        = local.create_nsg_wan ? azurerm_network_security_group.wan[0].id : var.nsg_wan_id
-  nsg_lan_id        = local.create_nsg_lan ? azurerm_network_security_group.lan[0].id : var.nsg_lan_id
-  nsg_test_vm_id    = local.create_nsg_test_vm ? azurerm_network_security_group.test_vm[0].id : var.nsg_test_vm_id
+  nsg_mgmt_id    = local.create_nsg_mgmt ? azurerm_network_security_group.mgmt[0].id : var.nsg_mgmt_id
+  nsg_wan_id     = local.create_nsg_wan ? azurerm_network_security_group.wan[0].id : var.nsg_wan_id
+  nsg_lan_id     = local.create_nsg_lan ? azurerm_network_security_group.lan[0].id : var.nsg_lan_id
+  nsg_test_vm_id = local.create_nsg_test_vm ? azurerm_network_security_group.test_vm[0].id : var.nsg_test_vm_id
 
   public_ip_mgmt_id = local.create_pip_mgmt ? azurerm_public_ip.mgmt[0].id : var.public_ip_mgmt_id
   public_ip_wan_id  = local.create_pip_wan ? azurerm_public_ip.wan[0].id : var.public_ip_wan_id
@@ -93,33 +88,13 @@ locals {
   vedge_lan_ipv6           = local.lan_ipv6 ? try([for c in azurerm_network_interface.lan[0].ip_configuration : c.private_ip_address if c.private_ip_address_version == "IPv6"][0], null) : null
 
   # cloud-init user data
-  cloud_init_production = <<-USERDATA
+  custom_data = base64encode(<<-USERDATA
     #cloud-config
 
     graphnos:
       token: ${var.token}
   USERDATA
-
-  cloud_init_devtest = <<-USERDATA
-    #cloud-config
-
-    graphnos:
-      onboarding-gw: ${var.onboarding_gateway}
-      onboarding-auth-url: ${var.onboarding_auth_url}
-      token: ${var.token}
-
-    users:
-      - name: ${var.cloud_init_username}
-        plain_text_passwd: '${var.cloud_init_password}'
-        sudo: ["ALL=(ALL) NOPASSWD:ALL"]
-        lock_passwd: false
-        groups: sudo
-        shell: /bin/bash
-        ssh-authorized-keys:
-          - ${var.ssh_public_key}
-  USERDATA
-
-  custom_data = base64encode(local.is_devtest ? local.cloud_init_devtest : local.cloud_init_production)
+  )
 
   # Use Shared Image Gallery image when source_image_id is provided (used for private Images not available in Azure marketplace)
   use_gallery_image = var.source_image_id != ""
@@ -153,14 +128,6 @@ resource "azurerm_virtual_network" "vnet" {
   address_space       = compact([var.vnet_address_space, var.vnet_address_space_v6])
 
   tags = local.tags
-}
-
-resource "azurerm_subnet" "cloud_init" {
-  count                = local.create_subnet_cloud_init ? 1 : 0
-  name                 = var.subnet_cloud_init_name
-  resource_group_name  = local.vnet_rg_resolved
-  virtual_network_name = local.new_vnet ? azurerm_virtual_network.vnet[0].name : local.vnet_name_resolved
-  address_prefixes     = [var.subnet_cloud_init_prefix]
 }
 
 resource "azurerm_subnet" "mgmt" {
@@ -304,28 +271,6 @@ resource "azurerm_route" "default_v6_via_vedge" {
 # Network Security Groups
 # -----------------------------------------------------------------------------
 
-# Cloud-init NSG — devtest only: SSH inbound from allowed CIDRs
-resource "azurerm_network_security_group" "cloud_init" {
-  count               = local.create_nsg_cloud_init ? 1 : 0
-  name                = "${var.vm_name}-cloudinit-nsg"
-  location            = local.rg_location
-  resource_group_name = local.rg_name
-
-  security_rule {
-    name                       = "AllowSSHIPv4"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = var.allowed_cidr
-    destination_address_prefix = "*"
-  }
-
-  tags = local.tags
-}
-
 # Mgmt NSG — HTTPS(443) denied inbound by default (customer modifies in portal to allow access)
 resource "azurerm_network_security_group" "mgmt" {
   count               = local.create_nsg_mgmt ? 1 : 0
@@ -455,17 +400,6 @@ resource "azurerm_network_security_group" "lan" {
 # -----------------------------------------------------------------------------
 # Public IPs
 # -----------------------------------------------------------------------------
-resource "azurerm_public_ip" "cloud_init" {
-  count               = local.is_create && local.is_devtest ? 1 : 0
-  name                = "${var.vm_name}-cloudinit-pip"
-  location            = local.rg_location
-  resource_group_name = local.rg_name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-
-  tags = local.tags
-}
-
 resource "azurerm_public_ip" "mgmt" {
   count               = local.create_pip_mgmt ? 1 : 0
   name                = "${var.vm_name}-mgmt-pip"
@@ -504,24 +438,6 @@ data "azurerm_public_ip" "wan" {
 # -----------------------------------------------------------------------------
 # Network Interfaces
 # -----------------------------------------------------------------------------
-
-# Cloud-init NIC — devtest only
-resource "azurerm_network_interface" "cloud_init" {
-  count               = local.is_create && local.is_devtest ? 1 : 0
-  name                = "${var.vm_name}-cloudinit-nic"
-  location            = local.rg_location
-  resource_group_name = local.rg_name
-
-  ip_configuration {
-    name                          = "ipconfig1"
-    subnet_id                     = local.subnet_cloud_init_id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.cloud_init[0].id
-    primary                       = true
-  }
-
-  tags = local.tags
-}
 
 resource "azurerm_network_interface" "mgmt" {
   count               = local.is_create ? 1 : 0
@@ -593,7 +509,7 @@ resource "azurerm_network_interface" "lan" {
 
   lifecycle {
     precondition {
-      condition     = local.use_existing_vnet || alltrue([for id in [var.subnet_cloud_init_id, var.subnet_mgmt_id, var.subnet_wan_id, var.subnet_lan_id] : id == ""])
+      condition     = local.use_existing_vnet || alltrue([for id in [var.subnet_mgmt_id, var.subnet_wan_id, var.subnet_lan_id] : id == ""])
       error_message = "Existing subnet IDs (subnet_*_id) require vnet_id of the VNet they belong to."
     }
     # An existing LAN subnet keeps its route table, so the default-via-vEdge route needs to know which one it is
@@ -607,12 +523,6 @@ resource "azurerm_network_interface" "lan" {
 # -----------------------------------------------------------------------------
 # NSG Associations
 # -----------------------------------------------------------------------------
-resource "azurerm_network_interface_security_group_association" "cloud_init" {
-  count                     = local.is_create && local.is_devtest ? 1 : 0
-  network_interface_id      = azurerm_network_interface.cloud_init[0].id
-  network_security_group_id = local.nsg_cloud_init_id
-}
-
 resource "azurerm_network_interface_security_group_association" "mgmt" {
   count                     = local.is_create ? 1 : 0
   network_interface_id      = azurerm_network_interface.mgmt[0].id
@@ -649,19 +559,14 @@ resource "azurerm_linux_virtual_machine" "vedge" {
   secure_boot_enabled = local.use_gallery_image
   vtpm_enabled        = true
 
-  # NIC ordering: devtest has cloud-init as primary (4 NICs), production has mgmt as primary (3 NICs)
-  network_interface_ids = local.is_devtest ? [
-    azurerm_network_interface.cloud_init[0].id,
-    azurerm_network_interface.mgmt[0].id,
-    azurerm_network_interface.wan[0].id,
-    azurerm_network_interface.lan[0].id,
-    ] : [
+  # NIC ordering: mgmt is primary
+  network_interface_ids = [
     azurerm_network_interface.mgmt[0].id,
     azurerm_network_interface.wan[0].id,
     azurerm_network_interface.lan[0].id,
   ]
 
-  # Marketplace image: plan + source_image_reference (production, or devtest without gallery image)
+  # Marketplace image: plan + source_image_reference (when source_image_id is not set)
   dynamic "plan" {
     for_each = local.use_gallery_image ? [] : [1]
     content {
@@ -689,7 +594,7 @@ resource "azurerm_linux_virtual_machine" "vedge" {
   }
 
   # Password auth disabled; SSH key required by Azure API
-  # Devtest: cloud-init creates gnos user with SSH key; Production: no SSH access, onboarding via token
+  # No interactive SSH access; onboarding via token
   disable_password_authentication = true
 
   admin_ssh_key {
@@ -703,7 +608,6 @@ resource "azurerm_linux_virtual_machine" "vedge" {
   tags = local.tags
 
   depends_on = [
-    azurerm_network_interface_security_group_association.cloud_init,
     azurerm_network_interface_security_group_association.mgmt,
     azurerm_network_interface_security_group_association.wan,
     azurerm_network_interface_security_group_association.lan,
