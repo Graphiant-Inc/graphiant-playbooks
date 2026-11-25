@@ -144,6 +144,47 @@ def test_device_diff_aggregation_match_and_mismatch() -> None:
     assert mgr._device_diff(payload, mismatch, action="add")[0] is True
 
 
+def test_aggregation_partial_update_is_sparse_and_no_reset() -> None:
+    """A partial update of an existing aggregation sends only the flags the config sets, so the
+    other flag is not reset, the diff shows no phantom change, and a matching flag is idempotent."""
+    mgr = _make_manager()
+    # Config sets only asSet (summaryOnly omitted); the aggregation already exists on the device.
+    cfg = {"lanSegment": "lan-1", "bgpAggregations": [{"prefix": "1.1.1.0/27", "asSet": True}]}
+    device_dict = _device_dict(aggregations=[{"prefix": "1.1.1.0/27", "asSet": True, "summaryOnly": True}])
+    payload = mgr._build_device_payload({"segments": [cfg]}, "add", device_dict=device_dict)
+
+    config = payload["segments"]["lan-1"]["bgpAggregations"]["1.1.1.0/27"]["config"]
+    assert config["asSet"] is True
+    assert "summaryOnly" not in config  # omitted -> the merge leaves the device's value alone
+
+    changed, before, after = mgr._device_diff(payload, device_dict, action="add")
+    assert changed is False  # asSet matches, summaryOnly not asserted
+    b = before["segments"]["lan-1"]["bgpAggregations"]["1.1.1.0/27"]
+    a = after["segments"]["lan-1"]["bgpAggregations"]["1.1.1.0/27"]
+    assert "summaryOnly" not in b and "summaryOnly" not in a  # no phantom deletion
+
+    # Changing the asserted flag is still detected.
+    flipped = mgr._build_device_payload(
+        {"segments": [{"lanSegment": "lan-1", "bgpAggregations": [{"prefix": "1.1.1.0/27", "asSet": False}]}]},
+        "add",
+        device_dict=device_dict,
+    )
+    assert mgr._device_diff(flipped, device_dict, action="add")[0] is True
+
+
+def test_build_aggregation_new_gets_both_flags() -> None:
+    """A new aggregation (not on the device) still gets both flags, defaulted."""
+    mgr = _make_manager()
+    device_dict = _device_dict(aggregations=[])
+    config = mgr._build_device_payload(
+        {"segments": [{"lanSegment": "lan-1", "bgpAggregations": [{"prefix": "9.9.9.0/27", "asSet": True}]}]},
+        "add",
+        device_dict=device_dict,
+    )["segments"]["lan-1"]["bgpAggregations"]["9.9.9.0/27"]["config"]
+    assert config["asSet"] is True
+    assert config["summaryOnly"] is False
+
+
 def test_device_diff_change_when_route_policy_not_attached() -> None:
     mgr = _make_manager()
     payload = _desired_payload(
@@ -326,6 +367,150 @@ def test_apply_no_push_when_all_match(mock_fetch) -> None:
     assert result["skipped_devices"] == ["edge-1"]
     assert result["configured_devices"] == []
     mgr.execute_concurrent_tasks.assert_not_called()
+
+
+# --- sparse payload for an existing neighbor (QA-13707) ---------------------
+
+def test_build_device_payload_existing_neighbor_is_sparse() -> None:
+    """A partial update of an EXISTING neighbor sends only the keys the user wrote --
+    no timer, BFD, community or scaffolding keys that would reset the neighbor."""
+    mgr = _make_manager()
+    config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 65001}]}]}
+    device_dict = _device_dict(neighbors=[_get_neighbor()])  # neighbor already on the device
+    neighbor = mgr._build_device_payload(config, "add", device_dict=device_dict)["segments"]["lan-1"][
+        "bgpNeighbors"
+    ]["10.1.1.1"]["neighbor"]
+    # Only the explicitly-written field plus the (empty) address-family skeleton go out.
+    assert neighbor["peerAsn"] == 65001
+    for untouched in (
+        "holdTimerValue",
+        "keepaliveTimerValue",
+        "ebgpMultihopTtl",
+        "bfd",
+        "sendCommunity",
+        "asOverride",
+        "removePrivateAs",
+        "enabled",
+        "state",
+        "bgpType",
+        "maxPrefixValue",
+        "md5Password",
+    ):
+        assert untouched not in neighbor
+
+
+def test_build_device_payload_new_neighbor_gets_defaults() -> None:
+    """A NEW neighbor (not on the device) still gets the full defaults and scaffolding."""
+    mgr = _make_manager()
+    config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 65001}]}]}
+    device_dict = _device_dict(neighbors=[])  # not present yet
+    neighbor = mgr._build_device_payload(config, "add", device_dict=device_dict)["segments"]["lan-1"][
+        "bgpNeighbors"
+    ]["10.1.1.1"]["neighbor"]
+    assert neighbor["holdTimerValue"] == {"timer": 90}
+    assert neighbor["keepaliveTimerValue"] == {"timer": 30}
+    assert neighbor["ebgpMultihopTtl"] == {"multiHop": 1}
+    assert neighbor["bfd"] == {"bfd": {"enabled": False}}
+    assert neighbor["sendCommunity"] is True
+    assert neighbor["enabled"] is True
+    assert neighbor["state"] == "UnknownBGPNeighborState"
+
+
+def test_device_diff_no_change_on_partial_update_of_existing_neighbor() -> None:
+    """A partial update that matches the device is a no-op even though timers/BFD differ
+    from the builder defaults -- the sparse payload never asserts them (QA-13707)."""
+    mgr = _make_manager()
+    config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 65001}]}]}
+    # Device has non-default timers/BFD the user never mentioned; only peerAs is asserted.
+    device_dict = _device_dict(
+        neighbors=[_get_neighbor(holdTimer=180, keepaliveTimer=60, bfd={"enabled": True, "minimumInterval": 300})]
+    )
+    payload = mgr._build_device_payload(config, "add", device_dict=device_dict)
+    changed, _before, _after = mgr._device_diff(payload, device_dict, action="add")
+    assert changed is False
+
+
+def test_device_diff_partial_bfd_minimum_interval_is_detected() -> None:
+    """Changing only a BFD sub-field (minimumInterval, no bfd: key) on a neighbor that has BFD
+    on is detected and pushed. The payload is the bare sparse form the portal UI sends --
+    ``bfd: {bfd: {minimumInterval: N}}`` with no ``enabled`` (the API merges it without turning
+    BFD off), and the sub-field is still compared (QA-13707)."""
+    mgr = _make_manager()
+    cfg = {"remoteIpv4Address": "10.1.1.1", "peerAs": 65001, "minimumInterval": 2000}
+    device_dict = _device_dict(
+        neighbors=[_get_neighbor(bfd={"enabled": True, "minimumInterval": 1000, "multiplier": 3})]
+    )
+    payload = mgr._build_device_payload(
+        {"segments": [{"lanSegment": "lan-1", "neighbors": [cfg]}]}, "add", device_dict=device_dict
+    )
+    # Matches the UI payload exactly: only the sub-field, no enabled.
+    bfd = payload["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]["neighbor"]["bfd"]["bfd"]
+    assert bfd == {"minimumInterval": 2000}
+
+    changed, before, after = mgr._device_diff(payload, device_dict, action="add")
+    assert changed is True
+    b = before["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]
+    a = after["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]
+    assert b["bfdMinimumInterval"] == 1000
+    assert a["bfdMinimumInterval"] == 2000
+
+    # Re-asserting the same interval the device already has is idempotent.
+    same = _device_dict(neighbors=[_get_neighbor(bfd={"enabled": True, "minimumInterval": 2000, "multiplier": 3})])
+    payload_same = mgr._build_device_payload(
+        {"segments": [{"lanSegment": "lan-1", "neighbors": [cfg]}]}, "add", device_dict=same
+    )
+    assert mgr._device_diff(payload_same, same, action="add")[0] is False
+
+
+def test_device_diff_new_entry_before_is_empty() -> None:
+    """A brand-new neighbor/aggregation (not on the device) shows an empty ``before`` -- "not
+    there" -- rather than every key set to null, so a create reads as additions (QA-13707)."""
+    mgr = _make_manager()
+    cfg = {
+        "lanSegment": "lan-1",
+        "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 65001, "ipv4InboundFilter": "absent"}],
+        "bgpAggregations": [{"prefix": "1.1.1.0/27", "asSet": True}],
+    }
+    device_dict = _device_dict(neighbors=[], aggregations=[])  # clean device
+    payload = mgr._build_device_payload({"segments": [cfg]}, "add", device_dict=device_dict)
+    changed, before, after = mgr._device_diff(payload, device_dict, action="add")
+    assert changed is True
+    seg_before = before["segments"]["lan-1"]
+    assert seg_before["bgpNeighbors"]["10.1.1.1"] == {}
+    assert seg_before["bgpAggregations"]["1.1.1.0/27"] == {}
+    # The create still shows the fields on the "after" side (incl. the detached inbound policy).
+    assert after["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]["ipv4Inbound"] is None
+
+
+def test_device_diff_partial_update_shows_only_asserted_fields() -> None:
+    """A partial update of an existing neighbor must not render untouched (merge-preserved)
+    fields as deletions: the diff before/after only contain the fields the config asserts."""
+    mgr = _make_manager()
+    cfg = {"remoteIpv4Address": "10.1.1.1", "peerAs": 65001, "ipv4InboundFilter": "absent"}
+    device_dict = _device_dict(
+        neighbors=[
+            _get_neighbor(
+                holdTimer=180,
+                keepaliveTimer=60,
+                bfd={"enabled": True, "minimumInterval": 1200, "multiplier": 4},
+                addressFamilies=[{"addressFamily": "ipv4", "inboundPolicy": "p1"}, {"addressFamily": "ipv6"}],
+            )
+        ]
+    )
+    payload = mgr._build_device_payload(
+        {"segments": [{"lanSegment": "lan-1", "neighbors": [cfg]}]}, "add", device_dict=device_dict
+    )
+    changed, before, after = mgr._device_diff(payload, device_dict, action="add")
+    assert changed is True  # detaching the inbound policy (p1 -> null) is a real change
+    b = before["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]
+    a = after["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]
+    # Fields the config never mentioned must not appear on either side (no phantom deletions).
+    for untouched in ("holdTimer", "keepaliveTimer", "bfdEnabled", "bfdMinimumInterval", "multiHop", "sendCommunity"):
+        assert untouched not in b
+        assert untouched not in a
+    assert set(b) == set(a)  # same keys on both sides -- only asserted fields shown
+    assert b["ipv4Inbound"] == "p1"  # the real change is still visible
+    assert a["ipv4Inbound"] is None
 
 
 # --- _build_device_payload (config entry -> edge PUT payload) ---------------
@@ -628,13 +813,15 @@ def test_build_device_payload_yaml_md5_wins_over_vault() -> None:
     assert neighbor["md5Password"] == {"md5Password": "y"}
 
 
-def test_build_device_payload_no_vault_leaves_md5_null() -> None:
+def test_build_device_payload_no_md5_omits_the_key() -> None:
+    """With no MD5 from config or vault, the key is omitted entirely so a configure never
+    overwrites an existing password with null (QA-13707/QA-13700)."""
     mgr = _make_manager()
     config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 1}]}]}
     neighbor = mgr._build_device_payload(config, "add")["segments"]["lan-1"]["bgpNeighbors"][
         "10.1.1.1"
     ]["neighbor"]
-    assert neighbor["md5Password"] == {"md5Password": None}
+    assert "md5Password" not in neighbor
 
 
 def test_device_diff_ebgp_multipath_change_only_when_state_differs() -> None:
