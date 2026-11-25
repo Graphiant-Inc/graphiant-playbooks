@@ -369,7 +369,7 @@ def test_apply_no_push_when_all_match(mock_fetch) -> None:
     mgr.execute_concurrent_tasks.assert_not_called()
 
 
-# --- sparse payload for an existing neighbor (QA-13707) ---------------------
+# --- sparse payload for an existing neighbor --------------------------------
 
 def test_build_device_payload_existing_neighbor_is_sparse() -> None:
     """A partial update of an EXISTING neighbor sends only the keys the user wrote --
@@ -418,7 +418,7 @@ def test_build_device_payload_new_neighbor_gets_defaults() -> None:
 
 def test_device_diff_no_change_on_partial_update_of_existing_neighbor() -> None:
     """A partial update that matches the device is a no-op even though timers/BFD differ
-    from the builder defaults -- the sparse payload never asserts them (QA-13707)."""
+    from the builder defaults -- the sparse payload never asserts them."""
     mgr = _make_manager()
     config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 65001}]}]}
     # Device has non-default timers/BFD the user never mentioned; only peerAs is asserted.
@@ -434,7 +434,7 @@ def test_device_diff_partial_bfd_minimum_interval_is_detected() -> None:
     """Changing only a BFD sub-field (minimumInterval, no bfd: key) on a neighbor that has BFD
     on is detected and pushed. The payload is the bare sparse form the portal UI sends --
     ``bfd: {bfd: {minimumInterval: N}}`` with no ``enabled`` (the API merges it without turning
-    BFD off), and the sub-field is still compared (QA-13707)."""
+    BFD off), and the sub-field is still compared."""
     mgr = _make_manager()
     cfg = {"remoteIpv4Address": "10.1.1.1", "peerAs": 65001, "minimumInterval": 2000}
     device_dict = _device_dict(
@@ -464,7 +464,7 @@ def test_device_diff_partial_bfd_minimum_interval_is_detected() -> None:
 
 def test_device_diff_new_entry_before_is_empty() -> None:
     """A brand-new neighbor/aggregation (not on the device) shows an empty ``before`` -- "not
-    there" -- rather than every key set to null, so a create reads as additions (QA-13707)."""
+    there" -- rather than every key set to null, so a create reads as additions."""
     mgr = _make_manager()
     cfg = {
         "lanSegment": "lan-1",
@@ -815,7 +815,7 @@ def test_build_device_payload_yaml_md5_wins_over_vault() -> None:
 
 def test_build_device_payload_no_md5_omits_the_key() -> None:
     """With no MD5 from config or vault, the key is omitted entirely so a configure never
-    overwrites an existing password with null (QA-13707/QA-13700)."""
+    overwrites an existing password with null."""
     mgr = _make_manager()
     config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 1}]}]}
     neighbor = mgr._build_device_payload(config, "add")["segments"]["lan-1"]["bgpNeighbors"][
