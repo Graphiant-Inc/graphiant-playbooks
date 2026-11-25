@@ -11,9 +11,8 @@
 # You can capture payloads directly from the Graphiant Portal UI developer tools
 # and use them in this configuration file.
 #
-# API Reference:
-# https://gitlab.com/graphiant/oss/gap/-/blob/dev/docs/swagger_output.json
-# Check: PUT /v1/devices/{deviceId}/config
+# API Reference (request body of PUT /v1/devices/{deviceId}/config):
+# https://github.com/Graphiant-Inc/graphiant-sdk-python/blob/main/docs/V1DevicesDeviceIdConfigPutRequest.md
 #
 # Key Features:
 # - Jinja2 templating support for dynamic value substitution
