@@ -1957,7 +1957,7 @@ class TestGraphiantPlaybooks(unittest.TestCase):
 
     def _deconfigure_static_routes_for_site_to_site_vpn(self, graphiant_config):
         """
-        Deconfigure static routes (QA-13397) before deleting the Site-to-Site VPN.
+        Deconfigure static routes before deleting the Site-to-Site VPN.
         """
         vpn_config = graphiant_config.site_to_site_vpn.render_config_file("sample_site_to_site_vpn.yaml")
         static_routes_cfg = []

@@ -70,7 +70,7 @@ class BGPManager(BaseManager):
 
     # Defaults applied only when a neighbor is NEW. For an existing neighbor we send
     # only the keys the user wrote, so a partial update never resets unspecified
-    # fields (BFD, timers, communities, ...) back to these values (QA-13707).
+    # fields (BFD, timers, communities, ...) back to these values.
     _NEIGHBOR_DEFAULTS = {
         "holdTimer": 90,
         "keepaliveTimer": 30,
@@ -195,7 +195,7 @@ class BGPManager(BaseManager):
             is_new (bool): True when the neighbor does not yet exist on the device. Only then
                 are the per-field defaults and the create-time scaffolding (``enabled``, ``state``,
                 ``bgpType``, ``maxPrefixValue``) sent. For an existing neighbor the payload carries
-                only the keys the user wrote, so a merge PUT leaves unspecified fields alone (QA-13707).
+                only the keys the user wrote, so a merge PUT leaves unspecified fields alone.
 
         Returns:
             dict: The neighbor payload ({"neighbor": None} when deleting).
@@ -279,7 +279,7 @@ class BGPManager(BaseManager):
         # BFD: send only the sub-fields present so a partial update doesn't reset the rest. This
         # matches the portal UI payload exactly -- e.g. changing just the interval sends
         # ``bfd: {bfd: {minimumInterval: N}}`` with no ``enabled``, which the API merges without
-        # turning BFD off (QA-13707).
+        # turning BFD off.
         if any(k in neighbor for k in ("bfd", "minimumInterval", "localMultiplier")):
             bfd = {}
             if "bfd" in neighbor:
@@ -291,7 +291,7 @@ class BGPManager(BaseManager):
             payload["bfd"] = {"bfd": bfd}
 
         # MD5 is write-only: send it only when we actually have a value, so a configure
-        # without a password never overwrites an existing one with null (QA-13707/QA-13700).
+        # without a password never overwrites an existing one with null.
         if md5_password is not None:
             payload["md5Password"] = {"md5Password": md5_password}
 
@@ -332,7 +332,7 @@ class BGPManager(BaseManager):
             action (str): One of "add", "delete", or "detach".
             is_new (bool): True when the aggregation does not yet exist on the device. Only then
                 are ``asSet``/``summaryOnly`` defaulted; for an existing aggregation only the flags
-                the user set are sent, so a partial update doesn't reset the other (QA-13707).
+                the user set are sent, so a partial update doesn't reset the other.
 
         Returns:
             dict: The aggregation payload ({"config": None} when deleting).
@@ -495,7 +495,7 @@ class BGPManager(BaseManager):
         Reduce a desired PUT neighbor payload (the dict under ``neighbor``) to normalized form.
 
         Only the keys actually present in the payload are emitted. For an existing neighbor the
-        payload is sparse, so the diff compares just the fields the user wrote (QA-13707).
+        payload is sparse, so the diff compares just the fields the user wrote.
         """
         normalized: Dict[str, Any] = {}
         if "holdTimerValue" in neighbor:
@@ -523,7 +523,7 @@ class BGPManager(BaseManager):
             if "enabled" in bfd:
                 normalized["bfdEnabled"] = bool(bfd.get("enabled"))
             # Emit the sub-fields whenever the config set them, regardless of ``enabled`` -- a partial
-            # update (e.g. only minimumInterval, no bfd key) must still be compared and pushed (QA-13707).
+            # update (e.g. only minimumInterval, no bfd key) must still be compared and pushed.
             if "minimumInterval" in bfd:
                 normalized["bfdMinimumInterval"] = bfd["minimumInterval"]
             if "localMultiplier" in bfd:
@@ -563,7 +563,7 @@ class BGPManager(BaseManager):
             normalized["allowAsIn"] = allow
 
         # Emit the sub-fields independently of ``enabled`` so they compare symmetrically with the
-        # desired side when the config asserts only a BFD sub-field (QA-13707).
+        # desired side when the config asserts only a BFD sub-field.
         bfd = neighbor.get("bfd") or {}
         if bfd.get("minimumInterval") is not None:
             normalized["bfdMinimumInterval"] = bfd["minimumInterval"]
@@ -584,7 +584,7 @@ class BGPManager(BaseManager):
     @staticmethod
     def _normalized_aggregation_from_desired(config: Dict[str, Any]) -> Dict[str, Any]:
         # Only the flags present in the (possibly sparse) payload, so the diff compares just
-        # what the config asserts for an existing aggregation (QA-13707).
+        # what the config asserts for an existing aggregation.
         normalized: Dict[str, Any] = {}
         if "asSet" in config:
             normalized["asSet"] = bool(config.get("asSet"))
@@ -696,10 +696,10 @@ class BGPManager(BaseManager):
                         # Show "before" only for the fields this run asserts. For an existing neighbor
                         # the desired payload is sparse (a merge PUT), so fields the config omits are
                         # left unchanged on the device -- restricting the diff to the asserted keys keeps
-                        # those untouched fields from rendering as deletions (QA-13707 display).
+                        # those untouched fields from rendering as deletions.
                         # New neighbor -> empty "before" (it doesn't exist). Existing neighbor ->
                         # only the asserted keys, so a partial update's merge-preserved fields aren't
-                        # rendered as deletions (QA-13707 display).
+                        # rendered as deletions.
                         before_n[address] = (
                             {key: existing_normalized.get(key) for key in desired_normalized} if existing else {}
                         )
@@ -726,7 +726,7 @@ class BGPManager(BaseManager):
                         desired_normalized = self._normalized_aggregation_from_desired(entry["config"])
                         existing_normalized = self._normalized_aggregation_from_get(existing) if existing else {}
                         # Show "before" only for the flags this run asserts (sparse merge), so an
-                        # omitted flag isn't rendered as a deletion (QA-13707 display).
+                        # omitted flag isn't rendered as a deletion.
                         # New aggregation -> empty "before"; existing -> only the asserted flags.
                         before_a[prefix] = (
                             {key: existing_normalized.get(key) for key in desired_normalized} if existing else {}
