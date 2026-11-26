@@ -24,8 +24,8 @@ project_name = "graphiant-vedge"
 # vm_name: Virtual machine name
 vm_name = "graphiant-vedge"
 
-# vm_size: Azure VM size (Standard_DS3_v2, Standard_DS4_v2, Standard_F8s_v2)
-vm_size = "Standard_DS3_v2"
+# vm_size: Azure VM size (Standard_D8s_v4, Standard_DS3_v2, Standard_DS4_v2, Standard_F8s_v2)
+vm_size = "Standard_D8s_v4"
 
 # source_image_id: Full ARM resource ID of a Shared Image Gallery image version (optional)
 # When set, overrides the Marketplace image below
@@ -44,6 +44,9 @@ image_version = "latest"
 ssh_public_key = ""
 
 # token: Edge Authentication token for Onboarding the vEdge into a specific Enterprise within Graphiant Portal
+# If token is left empty, the vEdge falls back to URL/QR code based onboarding.
+# The URL/QR code is shown on the vEdge serial console: Azure Portal -> VM -> Help -> Serial console (press Enter),
+# or: az serial-console connect -g <resource_group> -n <vm_name>
 token = ""
 
 # ================================================================
@@ -103,10 +106,22 @@ subnet_lan_prefix = "10.1.3.0/24"
 # ================================================================
 # deploy_test_vm = true
 # test_vm_name = "graphiant-vedge-test-vm"
-# test_vm_size = "Standard_B1s"
+# test_vm_size = "Standard_B2ts_v2"
 # test_vm_admin_username = "azureuser"
 # test_vm_admin_password = ""  # 12-123 chars via CLI, must meet 3 of 4 complexity requirements : Have lowercase, Have uppercase, Have a digit, Have a special char
 # nsg_test_vm_id = "/subscriptions/xxxx/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/test-vm-nsg"   # only with deploy_test_vm
+
+# ================================================================
+# Mgmt VM Configuration (Optional — desktop VM on mgmt subnet to access the vEdge local web server)
+# ================================================================
+# RDP to mgmt_vm_public_ip (allowed only from allowed_cidr), then browse to the vedge_local_web_server_url output
+# deploy_mgmt_vm = true
+# mgmt_vm_name = "graphiant-vedge-mgmt-vm"
+# mgmt_vm_size = "Standard_B2s_v2"
+# mgmt_vm_admin_username = "azureuser"
+# mgmt_vm_admin_password = ""  # 12-123 chars via CLI, must meet 3 of 4 complexity requirements : Have lowercase, Have uppercase, Have a digit, Have a special char
+# allowed_cidr: Public IPv4 (/32) allowed to RDP to the mgmt VM (required with deploy_mgmt_vm; 0.0.0.0/0 is rejected)
+# allowed_cidr = "YOUR_PUBLIC_IP/32"
 
 # tags: Additional tags to apply
 # tags = {
