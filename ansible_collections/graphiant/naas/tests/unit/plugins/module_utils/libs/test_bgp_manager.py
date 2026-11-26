@@ -315,6 +315,89 @@ def test_device_diff_detach_change_only_when_policy_attached() -> None:
     assert mgr._device_diff(payload, already_detached, action="detach")[0] is False
 
 
+def test_build_device_payload_detach_bare_neighbor_nulls_all_four() -> None:
+    """A bare neighbor (no filter fields) under detach nulls all four policies and
+    touches nothing else -- no timers/BFD/scaffolding."""
+    mgr = _make_manager()
+    config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1"}]}]}
+    neighbor = mgr._build_device_payload(config, "detach")["segments"]["lan-1"]["bgpNeighbors"][
+        "10.1.1.1"
+    ]["neighbor"]
+    assert set(neighbor) == {"remoteAddress", "addressFamilies"}
+    ipv4 = neighbor["addressFamilies"]["ipv4"]["family"]
+    ipv6 = neighbor["addressFamilies"]["ipv6"]["family"]
+    assert ipv4["inboundPolicy"] == {"policy": None}
+    assert ipv4["outboundPolicy"] == {"policy": None}
+    assert ipv6["inboundPolicy"] == {"policy": None}
+    assert ipv6["outboundPolicy"] == {"policy": None}
+
+
+def test_device_diff_detach_bare_neighbor_change_when_any_policy_attached() -> None:
+    """Regression: a bare-neighbor detach must detect an attached policy on
+    ANY family (incl. IPv6, which the old force_detach path skipped) and report a change."""
+    mgr = _make_manager()
+    config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1"}]}]}
+    payload = mgr._build_device_payload(config, "detach")
+
+    # Only an IPv6 outbound policy is attached; nothing else.
+    attached_ipv6 = _device_dict(
+        neighbors=[
+            _get_neighbor(
+                addressFamilies=[{"addressFamily": "ipv4"}, {"addressFamily": "ipv6", "outboundPolicy": "v6out"}]
+            )
+        ]
+    )
+    assert mgr._device_diff(payload, attached_ipv6, action="detach")[0] is True
+
+    # Nothing attached anywhere -> genuinely already detached.
+    none_attached = _device_dict(
+        neighbors=[_get_neighbor(addressFamilies=[{"addressFamily": "ipv4"}, {"addressFamily": "ipv6"}])]
+    )
+    assert mgr._device_diff(payload, none_attached, action="detach")[0] is False
+
+
+def test_detach_of_absent_neighbor_is_pruned_and_no_change() -> None:
+    """Detaching policies from a neighbor that isn't on the device is a no-op: the entry is
+    pruned so nothing is pushed, and the device reports no change."""
+    mgr = _make_manager()
+    config = {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.9.9.9"}]}]}
+    payload = mgr._build_device_payload(config, "detach")
+    device_dict = _device_dict(neighbors=[])  # target neighbor not present
+
+    pruned = mgr._prune_absent_noops(payload, device_dict, action="detach")
+    assert pruned["segments"] == {}  # empty segment dropped, nothing to push
+    assert mgr._device_diff(pruned, device_dict, action="detach")[0] is False
+
+
+def test_detach_does_not_build_aggregations() -> None:
+    """Detach touches only routing policies -- it must not build (and therefore cannot create)
+    aggregations, even when the detach config lists bgpAggregations not on the device."""
+    mgr = _make_manager()
+    config = {
+        "segments": [
+            {
+                "lanSegment": "lan-1",
+                "neighbors": [{"remoteIpv4Address": "10.1.1.1", "ipv4InboundFilter": "p1"}],
+                "bgpAggregations": [{"prefix": "1.1.1.0/27", "asSet": True}],
+            }
+        ]
+    }
+    device_dict = _device_dict(neighbors=[_get_neighbor()], aggregations=[])  # aggregation not on device
+    seg = mgr._build_device_payload(config, "detach", device_dict=device_dict)["segments"]["lan-1"]
+    assert "bgpAggregations" not in seg  # detach never emits aggregations
+
+
+def test_prune_keeps_new_neighbor_on_configure() -> None:
+    """A configure that adds a brand-new neighbor (not yet on the device) is NOT pruned."""
+    mgr = _make_manager()
+    payload = _desired_payload(
+        {"segments": [{"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 1}]}]}
+    )
+    device_dict = _device_dict(neighbors=[])  # new neighbor
+    pruned = mgr._prune_absent_noops(payload, device_dict, action="add")
+    assert "10.1.1.1" in pruned["segments"]["lan-1"]["bgpNeighbors"]
+
+
 # --- apply() end-to-end (mocked I/O) ---------------------------------------
 
 @patch("ansible_collections.graphiant.naas.plugins.module_utils.libs.bgp_manager.fetch_device_by_name")
@@ -370,6 +453,79 @@ def test_apply_no_push_when_all_match(mock_fetch) -> None:
 
 
 # --- sparse payload for an existing neighbor --------------------------------
+
+def test_explicit_null_numeric_resets_to_default_idempotently() -> None:
+    """An explicit null on a numeric field resets it to its default and stays idempotent:
+    holdTimer: null -> 90 (not {timer: null})."""
+    mgr = _make_manager()
+    cfg = {"lanSegment": "lan-1", "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 65001, "holdTimer": None}]}
+    # Device already at the default -> resetting to default is a no-op.
+    at_default = _device_dict(neighbors=[_get_neighbor()])
+    payload = mgr._build_device_payload({"segments": [cfg]}, "add", device_dict=at_default)
+    neighbor = payload["segments"]["lan-1"]["bgpNeighbors"]["10.1.1.1"]["neighbor"]
+    assert neighbor["holdTimerValue"] == {"timer": 90}  # not {"timer": None}
+    assert mgr._device_diff(payload, at_default, action="add")[0] is False
+    # Device at a non-default value -> the null reset is a real change (back to the default).
+    off = _device_dict(neighbors=[_get_neighbor(holdTimer=180)])
+    assert mgr._device_diff(
+        mgr._build_device_payload({"segments": [cfg]}, "add", device_dict=off), off, action="add"
+    )[0] is True
+
+
+def test_explicit_null_boolean_is_rejected() -> None:
+    """A boolean field has no meaningful null (usually an undefined Jinja variable), so an explicit
+    null is rejected -- omit the field to leave it unchanged, or write true/false. This avoids
+    bfd: null silently turning BFD off on a BFD-enabled neighbor."""
+    mgr = _make_manager()
+    for field in ("bfd", "sendCommunity", "asOverride", "remotePrivateAs"):
+        cfg = {"segments": [{"lanSegment": "lan-1",
+                             "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 1, field: None}]}]}
+        with pytest.raises(ConfigurationError, match="must be true or false, not null"):
+            mgr._build_device_payload(cfg, "add", device_dict=_device_dict(neighbors=[_get_neighbor()]))
+
+
+def test_explicit_null_non_timer_fields_are_left_unchanged() -> None:
+    """null on a non-timer, non-boolean field (allowAsIn, minimumInterval, localMultiplier) is
+    treated as omitting it -- it is never emitted, so it no longer sends {count: null} or an
+    empty bfd object."""
+    mgr = _make_manager()
+    cfg = {
+        "segments": [
+            {
+                "lanSegment": "lan-1",
+                "neighbors": [
+                    {"remoteIpv4Address": "10.1.1.1", "peerAs": 1, "allowAsIn": None,
+                     "minimumInterval": None, "localMultiplier": None}
+                ],
+            }
+        ]
+    }
+    neighbor = mgr._build_device_payload(cfg, "add", device_dict=_device_dict(neighbors=[_get_neighbor()]))[
+        "segments"
+    ]["lan-1"]["bgpNeighbors"]["10.1.1.1"]["neighbor"]
+    assert "allowAsIn" not in neighbor  # not {"count": None}
+    assert "bfd" not in neighbor  # no empty {"bfd": {}}
+
+
+def test_explicit_null_timer_on_new_neighbor_uses_default() -> None:
+    """holdTimer: null on a brand-new neighbor sends the default (90), not {timer: null}."""
+    mgr = _make_manager()
+    cfg = {"segments": [{"lanSegment": "lan-1",
+                         "neighbors": [{"remoteIpv4Address": "10.1.1.1", "peerAs": 1, "holdTimer": None}]}]}
+    neighbor = mgr._build_device_payload(cfg, "add", device_dict=_device_dict(neighbors=[]))[  # not on device
+        "segments"
+    ]["lan-1"]["bgpNeighbors"]["10.1.1.1"]["neighbor"]
+    assert neighbor["holdTimerValue"] == {"timer": 90}
+
+
+def test_device_diff_detects_allow_as_in_zero() -> None:
+    """allowAsIn: 0 is a value, not 'unset' -- a change to 0 is detected, and 0 == 0 is idempotent."""
+    mgr = _make_manager()
+    cfg = {"remoteIpv4Address": "10.1.1.1", "peerAs": 65001, "allowAsIn": 0}
+    payload = _desired_payload({"segments": [{"lanSegment": "lan-1", "neighbors": [cfg]}]})
+    assert mgr._device_diff(payload, _device_dict(neighbors=[_get_neighbor(allowAsIn=5)]), action="add")[0] is True
+    assert mgr._device_diff(payload, _device_dict(neighbors=[_get_neighbor(allowAsIn=0)]), action="add")[0] is False
+
 
 def test_build_device_payload_existing_neighbor_is_sparse() -> None:
     """A partial update of an EXISTING neighbor sends only the keys the user wrote --

@@ -976,11 +976,23 @@ class TestGraphiantPlaybooks(unittest.TestCase):
         """
         Detach policies from BGP peers.
 
-        Second run should be idempotent (changed=False) when policies are already detached.
+        Configures first so routing policies are attached regardless of test order, then asserts
+        the first detach reports a real change -- a regression guard for the case where detach
+        falsely reported "already detached" while a policy was still attached (it compared only
+        timers/BFD, which matched). The second detach must be idempotent (changed=False) once the
+        policies are gone.
         """
         graphiant_config = graphiant_config_from_read_config()
+        # Attach policies first so this test does not depend on test_configure_bgp_peering running first.
+        graphiant_config.bgp.configure("sample_bgp_peering.yaml")
         result = graphiant_config.bgp.detach_policies("sample_bgp_peering.yaml")
         LOG.info("Detach BGP policies result: %s", result)
+        assert result['changed'] is True, (
+            "First detach must report a change when policies are still attached"
+        )
+        assert result.get('configured_devices'), (
+            "First detach must list the device(s) whose policies were detached"
+        )
         result = graphiant_config.bgp.detach_policies("sample_bgp_peering.yaml")
         LOG.info("Detach BGP policies result (idempotency check): %s", result)
         assert result['changed'] is False, "Detach BGP policies idempotency failed"

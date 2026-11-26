@@ -158,18 +158,17 @@ class BGPManager(BaseManager):
         return isinstance(entry, dict) and str(entry.get("state", "")).lower() == "absent"
 
     @staticmethod
-    def _policy_ref(value, force_detach=False):
+    def _policy_ref(value):
         """
         Build a BGP address-family policy reference from a config filter field.
 
         Args:
             value: The filter field value (a policy name, ``absent``, or blank/None).
-            force_detach (bool): When True (the ``detach`` action), detach regardless of value.
 
         Returns:
             None when the field is absent/blank -- the caller omits the key so the
             policy is left unchanged on the merge PUT.
-            ``{"policy": None}`` to detach the policy (value ``absent`` or O(force_detach)).
+            ``{"policy": None}`` to detach the policy (value ``absent``).
             ``{"policy": <name>}`` to attach the named policy.
         """
         if value is None:
@@ -177,9 +176,35 @@ class BGPManager(BaseManager):
         text = str(value).strip()
         if text == "":
             return None
-        if force_detach or text.lower() == "absent":
+        if text.lower() == "absent":
             return {"policy": None}
         return {"policy": value}
+
+    # Config filter field -> (address family, PUT family key) for the detach action.
+    _DETACH_FILTERS = {
+        "ipv4InboundFilter": ("ipv4", "inboundPolicy"),
+        "ipv4OutboundFilter": ("ipv4", "outboundPolicy"),
+        "ipv6InboundFilter": ("ipv6", "inboundPolicy"),
+        "ipv6OutboundFilter": ("ipv6", "outboundPolicy"),
+    }
+
+    @staticmethod
+    def _build_detach_neighbor(neighbor):
+        """
+        Build a sparse detach payload for one neighbor that nulls only its policies.
+
+        The named filter fields are detached; a bare neighbor (no filter fields) detaches
+        all four. Nothing else (timers, BFD, communities) is touched, so detach can't reset
+        them and the diff compares only the policy fields.
+        """
+        named = [field for field in BGPManager._DETACH_FILTERS if neighbor.get(field)]
+        targets = named or list(BGPManager._DETACH_FILTERS)
+        families: Dict[str, Any] = {}
+        for field in targets:
+            family_name, policy_key = BGPManager._DETACH_FILTERS[field]
+            family = families.setdefault(family_name, {"family": {"addressFamily": family_name}})
+            family["family"][policy_key] = {"policy": None}
+        return {"neighbor": {"remoteAddress": neighbor["remoteIpv4Address"], "addressFamilies": families}}
 
     @staticmethod
     def _build_bgp_neighbor(neighbor, action, device_name=None, vault_md5_passwords=None, is_new=True):
@@ -208,18 +233,38 @@ class BGPManager(BaseManager):
         if action == "delete" or (action == "add" and BGPManager._is_absent(neighbor)):
             return {"neighbor": None}
 
+        # Detach is policy-only: build a sparse payload that nulls just the targeted
+        # filters and touches nothing else, so it can't reset timers/BFD and the diff
+        # compares only the policy fields.
+        if action == "detach":
+            return BGPManager._build_detach_neighbor(neighbor)
+
+        # An explicit null on a numeric field resets it to its default (vs omitting the key, which
+        # leaves the current value unchanged) -- e.g. holdTimer: null sends 90, keeping the push
+        # idempotent. A boolean (bfd/sendCommunity/asOverride/remotePrivateAs) has no meaningful
+        # null -- it is almost always an undefined Jinja variable -- so reject it: omit the field to
+        # leave it unchanged, or write true/false.
+        for key, default in BGPManager._NEIGHBOR_DEFAULTS.items():
+            if key in neighbor and neighbor[key] is None:
+                if isinstance(default, bool):
+                    raise ConfigurationError(
+                        f"BGP neighbor '{neighbor.get('remoteIpv4Address')}' field '{key}' must be "
+                        "true or false, not null; omit it to leave the current value unchanged."
+                    )
+                neighbor[key] = default
+
         # A new neighbor gets the full set of defaults; an existing one keeps only
         # the keys the user supplied (sparse merge).
         if is_new:
             neighbor = {**BGPManager._NEIGHBOR_DEFAULTS, **neighbor}
 
-        # Address-family policies: attach by name, detach with `absent` (or the
-        # detach action), or leave unchanged when the field is omitted.
+        # Address-family policies: attach by name, detach with `absent`, or leave
+        # unchanged when the field is omitted.
         ipv4_family = {"addressFamily": "ipv4"}
-        ipv4_inbound = BGPManager._policy_ref(neighbor.get("ipv4InboundFilter"), force_detach=action == "detach")
+        ipv4_inbound = BGPManager._policy_ref(neighbor.get("ipv4InboundFilter"))
         if ipv4_inbound is not None:
             ipv4_family["inboundPolicy"] = ipv4_inbound
-        ipv4_outbound = BGPManager._policy_ref(neighbor.get("ipv4OutboundFilter"), force_detach=action == "detach")
+        ipv4_outbound = BGPManager._policy_ref(neighbor.get("ipv4OutboundFilter"))
         if ipv4_outbound is not None:
             ipv4_family["outboundPolicy"] = ipv4_outbound
 
@@ -273,7 +318,7 @@ class BGPManager(BaseManager):
             payload["asOverride"] = bool(neighbor["asOverride"])
         if "remotePrivateAs" in neighbor:
             payload["removePrivateAs"] = bool(neighbor["remotePrivateAs"])
-        if "allowAsIn" in neighbor:
+        if neighbor.get("allowAsIn") is not None:
             payload["allowAsIn"] = {"count": neighbor["allowAsIn"]}
 
         # BFD: send only the sub-fields present so a partial update doesn't reset the rest. This
@@ -288,7 +333,9 @@ class BGPManager(BaseManager):
                 bfd["minimumInterval"] = neighbor["minimumInterval"]
             if neighbor.get("localMultiplier") is not None:
                 bfd["localMultiplier"] = neighbor["localMultiplier"]
-            payload["bfd"] = {"bfd": bfd}
+            # Don't emit an empty BFD object (e.g. minimumInterval: null and nothing else BFD-related).
+            if bfd:
+                payload["bfd"] = {"bfd": bfd}
 
         # MD5 is write-only: send it only when we actually have a value, so a configure
         # without a password never overwrites an existing one with null.
@@ -409,7 +456,9 @@ class BGPManager(BaseManager):
                         neighbor, action, device_name, vault_md5_passwords, is_new=address not in existing_neighbors
                     )
                 segment["bgpNeighbors"] = bgp_neighbors
-            if entry.get("bgpAggregations"):
+            # Aggregations are configure/deconfigure only; detach touches policies, not aggregations,
+            # so it leaves them alone (otherwise a detach file listing aggregations would create them).
+            if entry.get("bgpAggregations") and action in ("add", "delete"):
                 existing_aggregations = BGPManager._index_by(
                     BGPManager._get_existing_vrf(device_dict or {}, entry["lanSegment"]).get("bgpAggregations"),
                     "prefix",
@@ -515,7 +564,7 @@ class BGPManager(BaseManager):
         if "localInterface" in neighbor:
             normalized["localInterface"] = neighbor["localInterface"]["interface"]
         allow = (neighbor.get("allowAsIn") or {}).get("count")
-        if allow:
+        if allow is not None:
             normalized["allowAsIn"] = allow
 
         if "bfd" in neighbor:
@@ -559,7 +608,7 @@ class BGPManager(BaseManager):
         if neighbor.get("localInterface"):
             normalized["localInterface"] = neighbor["localInterface"]
         allow = neighbor.get("allowAsIn")
-        if allow:
+        if allow is not None:
             normalized["allowAsIn"] = allow
 
         # Emit the sub-fields independently of ``enabled`` so they compare symmetrically with the
@@ -599,15 +648,19 @@ class BGPManager(BaseManager):
             "summaryOnly": bool(aggregation.get("summaryOnly")),
         }
 
-    def _prune_absent_noops(self, payload: Dict[str, Any], device_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def _prune_absent_noops(
+        self, payload: Dict[str, Any], device_dict: Dict[str, Any], action: str = "add"
+    ) -> Dict[str, Any]:
         """
-        Remove delete markers for neighbors/aggregations that are not present on the device.
+        Drop no-op neighbor/aggregation entries that target objects not present on the device.
 
         A ``state: absent`` (or whole-device deconfigure) entry builds a null delete marker
-        (``{"neighbor": None}`` / ``{"config": None}``). Deleting an object the device does not
-        have is a no-op, but the API rejects it (500 "unable to delete ... error resolving BGP
-        instance"). Dropping those markers keeps the push to only real changes. Segments left
-        empty after pruning are removed too.
+        (``{"neighbor": None}`` / ``{"config": None}``), and a detach builds a policy-null
+        neighbor payload. Applying either to an object the device does not have is a no-op, but
+        the API rejects it (500 "unable to delete ... error resolving BGP instance"). Dropping
+        those entries keeps the push to only real changes. A real add of a new neighbor
+        (non-null payload under configure) is always kept so the neighbor can be created.
+        Segments left empty after pruning are removed too.
         """
         pruned_segments: Dict[str, Any] = {}
         for seg_name, seg in (payload.get("segments") or {}).items():
@@ -623,10 +676,13 @@ class BGPManager(BaseManager):
 
             neighbors = seg.get("bgpNeighbors")
             if neighbors:
+                # A neighbor entry is non-creating when it deletes (null payload) or detaches
+                # policies; applied to an address not on the device it is a no-op to drop. A
+                # configure with a real payload creates the neighbor, so it is always kept.
                 kept = {
                     address: entry
                     for address, entry in neighbors.items()
-                    if not (entry.get("neighbor") is None and address not in existing_neighbors)
+                    if address in existing_neighbors or (action != "detach" and entry.get("neighbor") is not None)
                 }
                 if kept:
                     new_seg["bgpNeighbors"] = kept
@@ -797,7 +853,7 @@ class BGPManager(BaseManager):
                         )
                         # Drop delete markers for neighbors/aggregations not present on the device;
                         # deleting a non-existent object is a no-op the API rejects (500).
-                        config_payload = self._prune_absent_noops(config_payload, device_dict)
+                        config_payload = self._prune_absent_noops(config_payload, device_dict, action)
 
                         changed, before, after = self._device_diff(config_payload, device_dict, action)
                         if not changed:
